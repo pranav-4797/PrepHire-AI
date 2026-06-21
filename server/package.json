@@ -1,0 +1,18 @@
+{
+  "name": "prephire-ai-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "ffmpeg-static": "^5.3.0",
+    "googleapis": "^148.0.0",
+    "multer": "^1.4.5-lts.2"
+  }
+}

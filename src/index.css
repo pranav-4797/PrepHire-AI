@@ -1,0 +1,264 @@
+:root {
+  /* Surface colors */
+  --color-bg:                    #f7f9fb;
+  --color-surface:               #ffffff;
+  --color-surface-low:           #f2f4f6;
+  --color-surface-mid:           #eceef0;
+  --color-surface-high:          #e6e8ea;
+
+  /* Text */
+  --color-on-surface:            #191c1e;
+  --color-on-surface-variant:    #43474f;
+  --color-outline:               #737780;
+  --color-outline-variant:       #c3c6d1;
+
+  /* Primary (navy) */
+  --color-primary:               #001e40;
+  --color-primary-fixed:         #d5e3ff;
+  --color-primary-fixed-dim:     #a7c8ff;
+  --color-on-primary-fixed:      #001b3c;
+  --color-on-primary-fixed-var:  #1f477b;
+
+  /* Secondary (gold) */
+  --color-secondary:             #855300;
+  --color-secondary-container:   #fea619;
+  --color-secondary-fixed:       #ffddb8;
+  --color-secondary-fixed-dim:   #ffb95f;
+  --color-on-secondary-container:#684000;
+
+  /* Card border */
+  --card-border:                 #E5E7EB;
+  --card-radius:                 12px;
+
+  /* Typography scale */
+  --text-heading-size:           18px;
+  --text-heading-weight:         600;
+  --text-heading-color:          var(--color-on-surface);
+  --text-body-size:              14px;
+  --text-body-weight:            400;
+  --text-body-lh:                1.6;
+  --text-body-color:             var(--color-on-surface);
+  --text-caption-size:           12px;
+  --text-caption-weight:         400;
+  --text-caption-color:          var(--color-outline);
+
+  /* Border radius */
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+
+  font-family: system-ui, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  min-height: 100vh;
+  color: var(--color-on-surface);
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-size: var(--text-heading-size);
+  font-weight: var(--text-heading-weight);
+  color: var(--color-primary);
+}
+
+p {
+  margin: 0;
+  font-size: var(--text-body-size);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-lh);
+  color: var(--text-body-color);
+}
+
+/* ── Typography utilities ─────────────────────────────────── */
+.text-heading {
+  font-size: var(--text-heading-size);
+  font-weight: var(--text-heading-weight);
+  color: var(--text-heading-color);
+}
+.text-body {
+  font-size: var(--text-body-size);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-lh);
+  color: var(--text-body-color);
+}
+.text-caption {
+  font-size: var(--text-caption-size);
+  font-weight: var(--text-caption-weight);
+  color: var(--text-caption-color);
+}
+
+input, textarea, select {
+  font-family: inherit;
+  color: var(--color-on-surface);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-outline);
+}
+
+/* ── Global focus ring (accessibility) ────────────────────── */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="switch"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #4F46E5;
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 4px; }
+
+/* Animations */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.domain-card {
+  transition: all 0.2s ease;
+}
+.domain-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.home-screen-content {
+  padding-bottom: 88px;
+}
+
+.start-interview-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-outline-variant);
+  padding: 12px 24px;
+}
+
+.start-interview-bar__inner {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.interview-session-header {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.interview-session-header__left,
+.interview-session-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.interview-session-header__left {
+  justify-content: flex-start;
+}
+
+.interview-session-header__center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.interview-session-header__right {
+  justify-content: flex-end;
+}
+
+/* ── Textarea focus ring ──────────────────────────────────── */
+textarea.interview-textarea:focus-visible {
+  outline: 2px solid #4F46E5;
+  outline-offset: 2px;
+}
+
+/* ── Mic recording pulse ──────────────────────────────────── */
+@keyframes micPulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+.mic-btn.recording {
+  border: 2px solid #EF4444 !important;
+  animation: micPulse 1s ease-in-out infinite;
+}
+
+/* ── Word count progress bar ──────────────────────────────── */
+.word-progress-track {
+  height: 4px;
+  background: #e6e8ea;
+  border-radius: 4px;
+  overflow: hidden;
+  flex: 1;
+}
+.word-progress-fill {
+  height: 100%;
+  background: #001e40;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* ── Domain selection layout grid ─────────────────────────── */
+.domain-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .domain-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
