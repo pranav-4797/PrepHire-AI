@@ -1153,6 +1153,7 @@ function LoginScreen() {
   const { login, register } = useAuth()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Student' as UserRole })
+  const [accessCode, setAccessCode] = useState('')
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -1164,6 +1165,12 @@ function LoginScreen() {
     if (!/\S+@\S+\.\S+/.test(form.email)) {
       setErr('Enter a valid email.')
       return
+    }
+    if (mode === 'register' && (form.role === 'Admin' || form.role === 'Faculty')) {
+      if (accessCode.trim() !== '2007') {
+        setErr('Invalid access code for Admin/Faculty account creation.')
+        return
+      }
     }
     setErr('')
     setLoading(true)
@@ -1244,7 +1251,11 @@ function LoginScreen() {
             {(['login', 'register'] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => {
+                  setMode(m)
+                  setErr('')
+                  setAccessCode('')
+                }}
                 style={{
                   flex: 1,
                   padding: '8px',
@@ -1297,6 +1308,15 @@ function LoginScreen() {
                   <option key={r}>{r}</option>
                 ))}
               </select>
+            )}
+            {mode === 'register' && (form.role === 'Admin' || form.role === 'Faculty') && (
+              <input
+                style={inp}
+                placeholder="Enter Access Code (2007)"
+                type="password"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+              />
             )}
             {err && (
               <div
