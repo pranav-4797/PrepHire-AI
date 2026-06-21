@@ -57,8 +57,15 @@ function readServiceAccount() {
     return { keyFile: saAbsolute }
   }
 
+  // Fallback for Render Secret Files
+  const renderSecretPath = '/etc/secrets/service-account.json'
+  if (fs.existsSync(renderSecretPath)) {
+    console.log('✅ Found Google Service Account in Render secrets at:', renderSecretPath)
+    return { keyFile: renderSecretPath }
+  }
+
   console.warn('⚠️ GOOGLE_SERVICE_ACCOUNT is required for production Google Drive integration.')
-  console.warn(`   Local fallback file was not found at: ${saAbsolute}`)
+  console.warn(`   Local fallback file was not found at: ${saAbsolute} or ${renderSecretPath}`)
   console.warn('   The server will run in MOCK UPLOAD mode (saved files will remain local).')
   return null
 }
@@ -191,6 +198,7 @@ app.get('/api/debug-env', (_req, res) => {
     SA_PARSED_EMAIL: saParsedEmail,
     FOLDER_ID_DEFINED: !!FOLDER_ID,
     FOLDER_ID: FOLDER_ID,
+    SECRET_FILE_EXISTS: fs.existsSync('/etc/secrets/service-account.json'),
     SERVICE_ACCOUNT_INITIALIZED: !!serviceAccount,
     DRIVE_CLIENT_INITIALIZED: !!drive
   })
