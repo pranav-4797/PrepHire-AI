@@ -167,6 +167,35 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// Temp Debug Env
+app.get('/api/debug-env', (_req, res) => {
+  let saJsonError = null
+  let saParsedEmail = null
+  if (SA_JSON) {
+    try {
+      const raw = SA_JSON.trim().startsWith('{')
+        ? SA_JSON
+        : Buffer.from(SA_JSON, 'base64').toString('utf8')
+      const parsed = JSON.parse(raw)
+      saParsedEmail = parsed.client_email
+    } catch (e) {
+      saJsonError = e.message
+    }
+  }
+
+  res.json({
+    SA_JSON_DEFINED: !!SA_JSON,
+    SA_JSON_LENGTH: SA_JSON ? SA_JSON.length : 0,
+    SA_JSON_STARTS_WITH_BRACE: SA_JSON ? SA_JSON.trim().startsWith('{') : false,
+    SA_JSON_ERROR: saJsonError,
+    SA_PARSED_EMAIL: saParsedEmail,
+    FOLDER_ID_DEFINED: !!FOLDER_ID,
+    FOLDER_ID: FOLDER_ID,
+    SERVICE_ACCOUNT_INITIALIZED: !!serviceAccount,
+    DRIVE_CLIENT_INITIALIZED: !!drive
+  })
+})
+
 // Upload interview video to Google Shared Drive (converts WebM → MP4)
 app.post('/api/upload', upload.single('video'), async (req, res) => {
   const file = req.file
