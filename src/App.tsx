@@ -1312,7 +1312,7 @@ function LoginScreen() {
             {mode === 'register' && (form.role === 'Admin' || form.role === 'Faculty') && (
               <input
                 style={inp}
-                placeholder="Enter Access Code (2007)"
+                placeholder="Enter Access Code"
                 type="password"
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value)}
