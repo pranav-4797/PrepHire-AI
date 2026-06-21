@@ -1536,7 +1536,7 @@ async function callClaude(prompt: string, sys: string): Promise<string> {
   }
   const baseUrl = import.meta.env.DEV ? '/gemini' : 'https://generativelanguage.googleapis.com'
   const res = await fetch(
-    `${baseUrl}/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`,
+    `${baseUrl}/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

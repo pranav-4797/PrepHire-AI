@@ -9,15 +9,26 @@ import cors from 'cors'
 import multer from 'multer'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFile } from 'node:child_process'
+import { execFile, execSync } from 'node:child_process'
 import { google } from 'googleapis'
-import ffmpegPath from 'ffmpeg-static'
+import ffmpegStatic from 'ffmpeg-static'
 import { fileURLToPath } from 'node:url'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT) || 3001
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173'
+
+// Dynamic ffmpeg path check: prefer system-level ffmpeg in Docker container, fallback to static
+let ffmpegPath = ffmpegStatic
+try {
+  execSync('ffmpeg -version', { stdio: 'ignore' })
+  ffmpegPath = 'ffmpeg'
+  console.log('✅ Using system-installed ffmpeg')
+} catch (e) {
+  console.log('ℹ️ System ffmpeg not found, using ffmpeg-static at:', ffmpegPath)
+}
+
 const SA_PATH = process.env.GOOGLE_SERVICE_ACCOUNT_PATH || './service-account.json'
 const SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT
 const FOLDER_ID = process.env.GOOGLE_SHARED_DRIVE_FOLDER_ID
@@ -77,7 +88,27 @@ if (serviceAccount) {
 
 const app = express()
 
-app.use(cors({ origin: CORS_ORIGIN }))
+const allowedOrigins = [
+  'https://prephire-ai.web.app',
+  'https://prephire-ai.firebaseapp.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:3001'
+]
+if (CORS_ORIGIN && !allowedOrigins.includes(CORS_ORIGIN)) {
+  allowedOrigins.push(CORS_ORIGIN)
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*') || origin.startsWith('http://localhost:')) {
+      callback(null, true)
+    } else {
+      callback(new Error(`CORS policy does not allow access from origin ${origin}`))
+    }
+  },
+  credentials: true
+}))
 app.use(express.json())
 
 // Multer: store uploads temporarily in server/uploads/ before sending to Drive
