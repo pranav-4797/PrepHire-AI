@@ -147,15 +147,16 @@ function convertToMp4(inputPath) {
     const args = [
       '-i', inputPath,
       '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '23',
+      '-preset', 'ultrafast',
+      '-crf', '28',
+      '-threads', '0',
       '-c:a', 'aac',
       '-b:a', '128k',
       '-movflags', '+faststart',
       '-y',
       outputPath,
     ]
-    console.log(`🔄 Converting to MP4: ${path.basename(inputPath)}`)
+    console.log(`🔄 Fast converting to MP4: ${path.basename(inputPath)}`)
     execFile(ffmpegPath, args, { timeout: 300_000 }, (err) => {
       if (err) {
         // Clean up partial output on failure
@@ -174,7 +175,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// Upload interview video to Google Shared Drive (converts WebM → MP4)
+// Upload interview video to Google Shared Drive (converts to MP4)
 app.post('/api/upload', upload.single('video'), async (req, res) => {
   const file = req.file
 
@@ -189,18 +190,27 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
   const sessionId = req.body.sessionId || Date.now().toString(36)
   const date = new Date().toISOString().split('T')[0]
 
-  const ext = path.extname(file.originalname || '') || '.webm'
-  const fileName = `${studentName}_${domain}_${level}_${date}${ext}`
+  const isMp4 = file.mimetype === 'video/mp4' || path.extname(file.originalname || '').toLowerCase() === '.mp4'
+  const fileName = `${studentName}_${domain}_${level}_${date}.mp4`
+
+  let mp4Path = null
 
   try {
-    console.log(`🔄 Uploading video directly (skipping transcoding for speed): ${fileName}`)
+    if (isMp4) {
+      console.log(`✅ File is already MP4, skipping transcoding: ${fileName}`)
+      mp4Path = file.path
+    } else {
+      // Convert to MP4 using optimized fast conversion parameters
+      mp4Path = await convertToMp4(file.path)
+      console.log(`✅ Converted to MP4: ${path.basename(mp4Path)}`)
+    }
 
     if (!drive || !serviceAccount) {
       const mockFileId = 'mock-file-id-' + sessionId
       const mockDriveLink = `https://drive.google.com/file/d/${mockFileId}/view?usp=drivesdk`
       const mockDest = path.join(uploadsDir, 'mock_' + fileName)
       try {
-        fs.copyFileSync(file.path, mockDest)
+        fs.copyFileSync(mp4Path, mockDest)
         console.log(`ℹ️ Saved local copy of interview video at: ${mockDest}`)
       } catch (copyErr) {
         console.error('⚠️ Failed to save local copy of mock interview:', copyErr.message)
@@ -219,11 +229,11 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
       requestBody: {
         name: fileName,
         parents: [FOLDER_ID],
-        mimeType: file.mimetype,
+        mimeType: 'video/mp4',
       },
       media: {
-        mimeType: file.mimetype,
-        body: fs.createReadStream(file.path),
+        mimeType: 'video/mp4',
+        body: fs.createReadStream(mp4Path),
       },
       fields: 'id, webViewLink',
     })
@@ -261,6 +271,9 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
   } finally {
     // Always clean up temporary files
     try { fs.unlinkSync(file.path) } catch {}
+    if (mp4Path && mp4Path !== file.path) {
+      try { fs.unlinkSync(mp4Path) } catch {}
+    }
   }
 })
 
