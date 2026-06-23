@@ -10,8 +10,6 @@ import { useAuth } from './hooks/useAuth'
 import {
   deleteUserProfile,
   listUserProfiles,
-  seedSessionRecords,
-  seedUserProfiles,
   updateUserProfile,
 } from './services/firestore.service'
 import type { UserProfile, UserRole } from './services/firestore.service'
@@ -2590,60 +2588,7 @@ export default function App() {
     setSpeaking(false)
   }, [])
 
-  const handleTimeUp = useCallback(async () => {
-    stopSpeaking()
-    setMessages((p) => [...p, { role: 'system', text: "Time's up! Moving to next question." }])
-    setSessionData((p) => [...p, { q: messages[messages.length - 1]?.text || '', a: '[Time expired]' }])
-    if (qCount >= 5) {
-      await generateReport(sessionData)
-      return
-    }
-    setLoading(true)
-    const reply = await callClaude(
-      `Time expired. Acknowledge briefly and ask question ${qCount + 1} of 5. Under 60 words.`,
-      `You are PrepHire AI. Domain: ${domain}, Level: ${level}.`
-    )
-    setMessages((p) => [...p, { role: 'ai', text: reply }])
-    setQCount((q) => q + 1)
-    setTimer(90)
-    setTimerActive(true)
-    setLoading(false)
-    aiSpeak(reply)
-  }, [stopSpeaking, messages, sessionData, qCount, domain, level, aiSpeak, generateReport])
-
-  const submitIntro = useCallback(async (text: string) => {
-    setIntroTimerActive(false)
-    if (introTimerRef.current) clearTimeout(introTimerRef.current)
-    await beginActualInterview(text)
-  }, [beginActualInterview])
-
-  // Main timer
-  useEffect(() => {
-    if (timerActive && timer > 0) {
-      timerRef.current = setTimeout(() => setTimer((t) => t - 1), 1000)
-    } else if (timer === 0 && timerActive) {
-      timerRef.current = setTimeout(() => {
-        handleTimeUp()
-      }, 0)
-    }
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  }, [timerActive, timer, handleTimeUp])
-
-  // Intro timer
-  useEffect(() => {
-    if (introTimerActive && introTimer > 0) {
-      introTimerRef.current = setTimeout(() => setIntroTimer((t) => t - 1), 1000)
-    } else if (introTimer === 0 && introTimerActive) {
-      introTimerRef.current = setTimeout(() => {
-        setIntroTimerActive(false)
-        submitIntro(introText)
-      }, 0)
-    }
-    return () => { if (introTimerRef.current) clearTimeout(introTimerRef.current) }
-  }, [introTimerActive, introTimer, introText, submitIntro])
-
-
-  function aiSpeak(text: string) {
+  const aiSpeak = useCallback((text: string) => {
     if (!voiceEnabled || !window.speechSynthesis) return
     window.speechSynthesis.cancel()
     const utt = new SpeechSynthesisUtterance(
@@ -2664,39 +2609,40 @@ export default function App() {
     utt.onend = () => setSpeaking(false)
     utt.onerror = () => setSpeaking(false)
     window.speechSynthesis.speak(utt)
-  }
+  }, [voiceEnabled])
 
-  const handleProcWarn = useCallback((w: string) => {
-    setProcWarnings((p) => [...p, { text: w, time: new Date().toLocaleTimeString() }])
-  }, [])
+  const uploadVideoToDrive = useCallback(async (videoBlob: Blob, sessionId: string, attempt = 1): Promise<string | null> => {
+    const MAX_RETRIES = 3
+    const domainObj = DOMAINS.find((d) => d.id === domain)
+    const formData = new FormData()
+    formData.append('video', videoBlob, 'interview.webm')
+    formData.append('studentName', user?.name || 'Unknown')
+    formData.append('domain', domainObj?.label || domain || 'General')
+    formData.append('level', level)
+    formData.append('sessionId', sessionId)
 
-  async function handleLogout() {
-    await firebaseLogout()
-    setUser(null)
-    setHistory([])
-    setScreen('landing')
-  }
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${apiUrl}/api/upload`, { method: 'POST', body: formData })
+      const resp = await res.json()
+      if (res.ok && resp.success) {
+        console.log(`✅ Interview video uploaded to Drive: ${resp.driveLink}`)
+        return resp.driveLink || null
+      } else {
+        throw new Error(resp.error || `HTTP ${res.status}`)
+      }
+    } catch (err) {
+      console.warn(`⚠️ Upload attempt ${attempt}/${MAX_RETRIES} failed:`, (err as Error).message)
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 2000))
+        return uploadVideoToDrive(videoBlob, sessionId, attempt + 1)
+      }
+      console.error('❌ All upload attempts failed. Video was not saved to Drive.')
+      return null
+    }
+  }, [domain, level, user])
 
-  async function startInterview() {
-    if (!domain) return
-    setMessages([])
-    setQCount(0)
-    setSessionData([])
-    setProcWarnings([])
-    setIntroText('')
-    setIntroTimer(120)
-    setIntroTimerActive(true)
-    stopSpeaking()
-    recordedChunksRef.current = []
-    setScreen('intro')
-  }
-
-  // ── Camera stream handler (for recording) ──────────────────────────────
-  const handleStreamReady = useCallback((stream: MediaStream) => {
-    cameraStreamRef.current = stream
-  }, [])
-
-  async function beginActualInterview(intro: string) {
+  const beginActualInterview = useCallback(async (intro: string) => {
     setScreen('interview')
     setLoading(true)
     stopSpeaking()
@@ -2739,78 +2685,9 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [domain, level, aiSpeak, stopSpeaking])
 
-  async function sendAnswer(ans: string) {
-    if (!ans?.trim() || loading) return
-    setTimerActive(false)
-    stopSpeaking()
-    const txt = ans.trim()
-    setInput('')
-    const newMsgs: Message[] = [...messages, { role: 'user', text: txt }]
-    setMessages(newMsgs)
-    const sd: QA[] = [...sessionData, { q: messages[messages.length - 1]?.text || '', a: txt }]
-    setSessionData(sd)
-    setLoading(true)
-
-    try {
-      if (qCount >= 5) {
-        await generateReport(sd)
-        return
-      }
-      const domainObj = DOMAINS.find((d) => d.id === domain)
-      const sys = `You are PrepHire AI. Domain: ${domainObj?.label || domain}, Level: ${level}. Give 1-line micro-feedback on the answer, then ask question ${qCount + 1} of 5. Under 80 words.`
-      const reply = await callClaude(
-        `Conversation:\n${newMsgs.map((m) => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: ${m.text}`).join('\n')}`,
-        sys
-      )
-      setMessages((p) => [...p, { role: 'ai', text: reply }])
-      setQCount((q) => q + 1)
-      setTimer(90)
-      setTimerActive(true)
-      aiSpeak(reply)
-    } catch (err) {
-      console.error(err)
-      setMessages((p) => [...p, { role: 'system', text: `⚠️ Error calling AI: ${(err as Error).message || 'Unknown error'}.` }])
-      setTimerActive(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ── Upload video to Google Drive (silent, auto-retry) ───────────────
-  async function uploadVideoToDrive(videoBlob: Blob, sessionId: string, attempt = 1): Promise<string | null> {
-    const MAX_RETRIES = 3
-    const domainObj = DOMAINS.find((d) => d.id === domain)
-    const formData = new FormData()
-    formData.append('video', videoBlob, 'interview.webm')
-    formData.append('studentName', user?.name || 'Unknown')
-    formData.append('domain', domainObj?.label || domain || 'General')
-    formData.append('level', level)
-    formData.append('sessionId', sessionId)
-
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || ''
-      const res = await fetch(`${apiUrl}/api/upload`, { method: 'POST', body: formData })
-      const resp = await res.json()
-      if (res.ok && resp.success) {
-        console.log(`✅ Interview video uploaded to Drive: ${resp.driveLink}`)
-        return resp.driveLink || null
-      } else {
-        throw new Error(resp.error || `HTTP ${res.status}`)
-      }
-    } catch (err) {
-      console.warn(`⚠️ Upload attempt ${attempt}/${MAX_RETRIES} failed:`, (err as Error).message)
-      if (attempt < MAX_RETRIES) {
-        await new Promise((r) => setTimeout(r, 2000))
-        return uploadVideoToDrive(videoBlob, sessionId, attempt + 1)
-      }
-      console.error('❌ All upload attempts failed. Video was not saved to Drive.')
-      return null
-    }
-  }
-
-  async function generateReport(data: QA[]) {
+  const generateReport = useCallback(async (data: QA[]) => {
     setScreen('loading')
     stopSpeaking()
     setTimerActive(false)
@@ -2896,6 +2773,125 @@ export default function App() {
         setAllSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, driveLink } : s)))
         updateSession(sessionId, { driveLink }).catch((error) => console.error('Failed to save drive link:', error))
       })
+    }
+  }, [domain, level, user, stopSpeaking, procWarnings, uploadVideoToDrive])
+
+  const handleTimeUp = useCallback(async () => {
+    stopSpeaking()
+    setMessages((p) => [...p, { role: 'system', text: "Time's up! Moving to next question." }])
+    setSessionData((p) => [...p, { q: messages[messages.length - 1]?.text || '', a: '[Time expired]' }])
+    if (qCount >= 5) {
+      await generateReport(sessionData)
+      return
+    }
+    setLoading(true)
+    const reply = await callClaude(
+      `Time expired. Acknowledge briefly and ask question ${qCount + 1} of 5. Under 60 words.`,
+      `You are PrepHire AI. Domain: ${domain}, Level: ${level}.`
+    )
+    setMessages((p) => [...p, { role: 'ai', text: reply }])
+    setQCount((q) => q + 1)
+    setTimer(90)
+    setTimerActive(true)
+    setLoading(false)
+    aiSpeak(reply)
+  }, [stopSpeaking, messages, sessionData, qCount, domain, level, aiSpeak, generateReport])
+
+  const submitIntro = useCallback(async (text: string) => {
+    setIntroTimerActive(false)
+    if (introTimerRef.current) clearTimeout(introTimerRef.current)
+    await beginActualInterview(text)
+  }, [beginActualInterview])
+
+  // Main timer
+  useEffect(() => {
+    if (timerActive && timer > 0) {
+      timerRef.current = setTimeout(() => setTimer((t) => t - 1), 1000)
+    } else if (timer === 0 && timerActive) {
+      timerRef.current = setTimeout(() => {
+        handleTimeUp()
+      }, 0)
+    }
+    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [timerActive, timer, handleTimeUp])
+
+  // Intro timer
+  useEffect(() => {
+    if (introTimerActive && introTimer > 0) {
+      introTimerRef.current = setTimeout(() => setIntroTimer((t) => t - 1), 1000)
+    } else if (introTimer === 0 && introTimerActive) {
+      introTimerRef.current = setTimeout(() => {
+        setIntroTimerActive(false)
+        submitIntro(introText)
+      }, 0)
+    }
+    return () => { if (introTimerRef.current) clearTimeout(introTimerRef.current) }
+  }, [introTimerActive, introTimer, introText, submitIntro])
+
+  const handleProcWarn = useCallback((w: string) => {
+    setProcWarnings((p) => [...p, { text: w, time: new Date().toLocaleTimeString() }])
+  }, [])
+
+  async function handleLogout() {
+    await firebaseLogout()
+    setUser(null)
+    setHistory([])
+    setScreen('landing')
+  }
+
+  async function startInterview() {
+    if (!domain) return
+    setMessages([])
+    setQCount(0)
+    setSessionData([])
+    setProcWarnings([])
+    setIntroText('')
+    setIntroTimer(120)
+    setIntroTimerActive(true)
+    stopSpeaking()
+    recordedChunksRef.current = []
+    setScreen('intro')
+  }
+
+  // ── Camera stream handler (for recording) ──────────────────────────────
+  const handleStreamReady = useCallback((stream: MediaStream) => {
+    cameraStreamRef.current = stream
+  }, [])
+
+  async function sendAnswer(ans: string) {
+    if (!ans?.trim() || loading) return
+    setTimerActive(false)
+    stopSpeaking()
+    const txt = ans.trim()
+    setInput('')
+    const newMsgs: Message[] = [...messages, { role: 'user', text: txt }]
+    setMessages(newMsgs)
+    const sd: QA[] = [...sessionData, { q: messages[messages.length - 1]?.text || '', a: txt }]
+    setSessionData(sd)
+    setLoading(true)
+
+    try {
+      if (qCount >= 5) {
+        await generateReport(sd)
+        return
+      }
+      const domainObj = DOMAINS.find((d) => d.id === domain)
+      const sys = `You are PrepHire AI. Domain: ${domainObj?.label || domain}, Level: ${level}. Give 1-line micro-feedback on the answer, then ask question ${qCount + 1} of 5. Under 80 words.`
+      const reply = await callClaude(
+        `Conversation:\n${newMsgs.map((m) => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: ${m.text}`).join('\n')}`,
+        sys
+      )
+      setMessages((p) => [...p, { role: 'ai', text: reply }])
+      setQCount((q) => q + 1)
+      setTimer(90)
+      setTimerActive(true)
+      aiSpeak(reply)
+    } catch (err) {
+      console.error(err)
+      setMessages((p) => [...p, { role: 'system', text: `⚠️ Error calling AI: ${(err as Error).message || 'Unknown error'}.` }])
+      setTimerActive(true)
+    } finally {
+      setLoading(false)
     }
   }
 
