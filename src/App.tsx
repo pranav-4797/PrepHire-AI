@@ -3244,7 +3244,7 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '2rem 1rem', animation: 'fadeIn 0.4s ease' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem 1rem', animation: 'fadeIn 0.4s ease' }}>
 
           <h2 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 1.5rem', color: T.primary }}>Self Introduction</h2>
 
@@ -3355,7 +3355,7 @@ export default function App() {
         <div className="interview-session-header__right" />
       </div>
 
-      <div style={{ maxWidth: 760, margin: '0 auto', padding: '1.5rem 1rem', animation: 'fadeIn 0.3s ease' }}>
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '1.5rem 1rem', animation: 'fadeIn 0.3s ease' }}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3504,7 +3504,7 @@ export default function App() {
     return (
       <div style={{ minHeight: '100vh', background: T.bg }}>
         <Navbar user={user} onLogout={handleLogout} onHome={() => setScreen('home')} inInterview={false} />
-        <div style={{ maxWidth: 760, margin: '0 auto', padding: '2rem 1rem', animation: 'fadeIn 0.4s ease' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem 1rem', animation: 'fadeIn 0.4s ease' }}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: 10 }}>
           <div>
