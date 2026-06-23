@@ -2951,7 +2951,7 @@ export default function App() {
       <div style={{ minHeight: '100vh', background: T.bg }}>
         <Navbar user={user} onLogout={handleLogout} onHome={() => setScreen('home')} inInterview={false} />
 
-      <div className="home-screen-content" style={{ maxWidth: 780, margin: '0 auto', padding: '0 24px 88px 24px', animation: 'fadeIn 0.4s ease' }}>
+      <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 88px 24px', animation: 'fadeIn 0.4s ease' }}>
 
         {/* Welcome */}
         <section
@@ -2960,8 +2960,6 @@ export default function App() {
             paddingBottom: '1.5rem',
             marginBottom: 16,
             borderBottom: `1px solid ${T.border}`,
-            maxWidth: 680,
-            margin: '0 auto',
             textAlign: 'left',
           }}
         >
@@ -2977,8 +2975,7 @@ export default function App() {
         {perms.checked && (
           <GlassCard
             style={{
-              maxWidth: 680,
-              margin: '0 auto 16px auto',
+              marginBottom: 16,
               padding: '10px 16px',
               display: 'flex',
               gap: 20,
@@ -3006,123 +3003,130 @@ export default function App() {
           </GlassCard>
         )}
 
-        {/* Domain selection */}
-        <GlassCard style={{ marginBottom: 16 }}>
-          <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem' }}>
-            Interview Domain
-          </div>
-          <div className="domain-grid">
-            {DOMAINS.map((d) => (
+        {/* 2-Column Dashboard Layout */}
+        <div className="dashboard-layout">
+          {/* Left Column: Domain Selection */}
+          <GlassCard style={{ marginBottom: 0 }}>
+            <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem', fontWeight: 700 }}>
+              Interview Domain
+            </div>
+            <div className="domain-grid">
+              {DOMAINS.map((d) => (
+                <div
+                  key={d.id}
+                  className="domain-card"
+                  onClick={() => setDomain(d.id)}
+                  style={{
+                    border: `2px solid ${domain === d.id ? T.primary : T.outlineVar}`,
+                    borderRadius: 12,
+                    padding: 16,
+                    cursor: 'pointer',
+                    background: domain === d.id ? '#F0F2FF' : T.bgWhite,
+                    minHeight: 120,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: `${DOMAIN_ICON_COLORS[d.id]}1A`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 10px auto',
+                      color: DOMAIN_ICON_COLORS[d.id],
+                    }}
+                  >
+                    {d.icon}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: T.primary }}>{d.label}</div>
+                  <div className="text-caption" style={{ fontSize: 11, color: T.txtMut, marginTop: 4, lineHeight: 1.3 }}>{d.desc}</div>
+                </div>
+              ))}
+            </div>
+          </GlassCard>
+
+          {/* Right Column: Difficulty and Voice toggle stacked */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Difficulty */}
+            <GlassCard style={{ marginBottom: 0 }}>
+              <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem', fontWeight: 700 }}>
+                Difficulty Level
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {LEVELS.map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => setLevel(l)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 0',
+                      borderRadius: 10,
+                      border: `2px solid ${level === l ? T.primary : T.outlineVar}`,
+                      background: level === l ? '#F0F2FF' : T.bgWhite,
+                      color: level === l ? T.primary : T.txtSec,
+                      fontWeight: level === l ? 700 : 500,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      transition: 'border 0.15s ease, background 0.15s ease',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </GlassCard>
+
+            {/* Voice toggle */}
+            <GlassCard style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `3px solid ${T.gold}` }}>
+              <div>
+                <div className="text-body" style={{ fontWeight: 600, color: T.txtPri }}>AI Voice Responses</div>
+                <div className="text-caption" style={{ marginTop: 2, fontSize: 11 }}>Questions read aloud by PrepHire AI</div>
+                <div className="text-caption" style={{ marginTop: 2, fontSize: 11 }}>Turn off for text-only mode</div>
+              </div>
               <div
-                key={d.id}
-                className="domain-card"
-                onClick={() => setDomain(d.id)}
+                role="switch"
+                aria-checked={voiceEnabled}
+                aria-label="AI voice responses"
+                tabIndex={0}
+                onClick={() => setVoiceEnabled((v) => !v)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVoiceEnabled((v) => !v) } }}
                 style={{
-                  border: `2px solid ${domain === d.id ? T.primary : T.outlineVar}`,
-                  borderRadius: 12,
-                  padding: 20,
+                  width: 48,
+                  height: 28,
+                  borderRadius: 14,
+                  background: voiceEnabled ? T.primary : T.bgHigh,
+                  border: `1.5px solid ${voiceEnabled ? T.primary : T.outlineVar}`,
                   cursor: 'pointer',
-                  background: domain === d.id ? '#F0F2FF' : T.bgWhite,
-                  minHeight: 120,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
+                  position: 'relative',
+                  transition: 'background 0.2s, border-color 0.2s',
+                  flexShrink: 0,
                 }}
               >
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
+                    position: 'absolute',
+                    top: 3,
+                    left: voiceEnabled ? 23 : 3,
+                    width: 22,
+                    height: 22,
                     borderRadius: '50%',
-                    background: `${DOMAIN_ICON_COLORS[d.id]}1A`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 10px auto',
-                    color: DOMAIN_ICON_COLORS[d.id],
+                    background: voiceEnabled ? '#fff' : T.outline,
+                    transition: 'left 0.2s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                   }}
-                >
-                  {d.icon}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: T.primary }}>{d.label}</div>
-                <div className="text-caption" style={{ fontSize: 12, color: T.txtMut, marginTop: 3, lineHeight: 1.3 }}>{d.desc}</div>
+                />
               </div>
-            ))}
+            </GlassCard>
           </div>
-        </GlassCard>
-
-        {/* Difficulty */}
-        <GlassCard style={{ marginBottom: 16 }}>
-          <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-            Difficulty Level
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            {LEVELS.map((l) => (
-              <button
-                key={l}
-                onClick={() => setLevel(l)}
-                style={{
-                  flex: 1,
-                  padding: '10px 0',
-                  borderRadius: 10,
-                  border: `2px solid ${level === l ? T.primary : T.outlineVar}`,
-                  background: level === l ? '#F0F2FF' : T.bgWhite,
-                  color: level === l ? T.primary : T.txtSec,
-                  fontWeight: level === l ? 700 : 500,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  transition: 'border 0.15s ease, background 0.15s ease',
-                  fontFamily: 'inherit',
-                }}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-        </GlassCard>
-
-        {/* Voice toggle */}
-        <GlassCard style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `3px solid ${T.gold}` }}>
-          <div>
-            <div className="text-body" style={{ fontWeight: 600, color: T.txtPri }}>AI Voice Responses</div>
-            <div className="text-caption" style={{ marginTop: 2 }}>Questions read aloud by PrepHire AI</div>
-            <div className="text-caption" style={{ marginTop: 4 }}>Turn off for text-only mode</div>
-          </div>
-          <div
-            role="switch"
-            aria-checked={voiceEnabled}
-            aria-label="AI voice responses"
-            tabIndex={0}
-            onClick={() => setVoiceEnabled((v) => !v)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVoiceEnabled((v) => !v) } }}
-            style={{
-              width: 48,
-              height: 28,
-              borderRadius: 14,
-              background: voiceEnabled ? T.primary : T.bgHigh,
-              border: `1.5px solid ${voiceEnabled ? T.primary : T.outlineVar}`,
-              cursor: 'pointer',
-              position: 'relative',
-              transition: 'background 0.2s, border-color 0.2s',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: 3,
-                left: voiceEnabled ? 23 : 3,
-                width: 22,
-                height: 22,
-                borderRadius: '50%',
-                background: voiceEnabled ? '#fff' : T.outline,
-                transition: 'left 0.2s',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-              }}
-            />
-          </div>
-        </GlassCard>
+        </div>
 
         {/* Session history */}
         {history.length > 0 && (
@@ -3161,23 +3165,21 @@ export default function App() {
         )}
       </div>
 
-      <div className="start-interview-bar">
-        <div className="start-interview-bar__inner">
+      <div className="start-interview-bar" style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="start-interview-bar__inner" style={{ maxWidth: 360 }}>
           <button
             onClick={() => domain && startInterview()}
             style={{
               width: '100%',
-              padding: '15px',
-              borderRadius: 14,
+              padding: '12px 24px',
+              borderRadius: 10,
               border: 'none',
-              background: domain ? T.primary : T.bgHigh,
+              background: domain ? T.primary : '#E5E7EB',
               color: domain ? '#fff' : T.txtMut,
-              fontSize: 16,
-              fontWeight: 800,
-              cursor: domain ? 'pointer' : 'not-allowed',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: domain ? 'pointer' : 'default',
               transition: 'all 0.18s',
-              letterSpacing: '-0.2px',
-              boxShadow: domain ? '0 4px 16px rgba(0,30,64,0.25)' : 'none',
               fontFamily: 'inherit',
               display: 'inline-flex',
               alignItems: 'center',
