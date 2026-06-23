@@ -2483,7 +2483,7 @@ function AdminDashboard({
 
 // ── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const { profile, logout: firebaseLogout } = useAuth()
+  const { profile, loading: authLoading, logout: firebaseLogout } = useAuth()
   const [screen, setScreen] = useState<
     'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report'
   >('landing')
@@ -2562,11 +2562,12 @@ export default function App() {
         }))
       setHistory(studentHistory)
       if (screen === 'auth' || screen === 'landing') {
-        const p = await requestPermissions()
-        if (!cancelled) {
-          setPerms({ ...p, checked: true })
-          setScreen('home')
-        }
+        setScreen('home')
+        requestPermissions().then((p) => {
+          if (!cancelled) {
+            setPerms({ ...p, checked: true })
+          }
+        })
       }
     }
 
@@ -2900,6 +2901,15 @@ export default function App() {
 
   const tc = timer > 60 ? T.green : timer > 30 ? T.amber : T.error
   const activeDomain = DOMAINS.find((d) => d.id === domain)
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', border: `4px solid ${T.primaryFix}`, borderTop: `4px solid ${T.primary}`, animation: 'spin 1s linear infinite' }} />
+        <p className="text-heading" style={{ color: T.primary }}>Loading portal...</p>
+      </div>
+    )
+  }
 
   // ── LANDING ─────────────────────────────────────────────────────────────
   if (screen === 'landing') return <LandingPage onEnterPortal={() => setScreen('auth')} />
