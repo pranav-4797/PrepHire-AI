@@ -13,6 +13,8 @@ import { execFile, execSync } from 'node:child_process'
 import { google } from 'googleapis'
 import ffmpegStatic from 'ffmpeg-static'
 import { fileURLToPath } from 'node:url'
+import { db, FieldValue } from './firebase.js'
+import { initCleanup } from './cleanupService.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -90,6 +92,9 @@ if (serviceAccount) {
 } else {
   console.log('ℹ️ Running in Mock Upload mode. Uploaded videos will not be pushed to Google Drive.')
 }
+
+// Initialize scheduled video cleanup service
+initCleanup(drive)
 
 // ── Express Setup ───────────────────────────────────────────────────────────
 
@@ -215,6 +220,20 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
       } catch (copyErr) {
         console.error('⚠️ Failed to save local copy of mock interview:', copyErr.message)
       }
+
+      if (db && sessionId) {
+        try {
+          await db.collection('sessions').doc(sessionId).set({
+            driveFileId: mockFileId,
+            driveUploadAt: FieldValue.serverTimestamp(),
+            driveLink: mockDriveLink,
+          }, { merge: true })
+          console.log(`💾 Saved Mock Drive File ID and upload timestamp to session ${sessionId}`)
+        } catch (dbErr) {
+          console.error(`⚠️ Failed to save mock upload metadata to DB for session ${sessionId}:`, dbErr.message)
+        }
+      }
+
       return res.json({
         success: true,
         fileId: mockFileId,
@@ -242,6 +261,19 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
     const driveLink = response.data.webViewLink
 
     console.log(`✅ Uploaded: ${fileName} → ${fileId}`)
+
+    if (db && sessionId) {
+      try {
+        await db.collection('sessions').doc(sessionId).set({
+          driveFileId: fileId,
+          driveUploadAt: FieldValue.serverTimestamp(),
+          driveLink: driveLink,
+        }, { merge: true })
+        console.log(`💾 Saved Drive File ID and upload timestamp to session ${sessionId}`)
+      } catch (dbErr) {
+        console.error(`⚠️ Failed to save upload metadata to DB for session ${sessionId}:`, dbErr.message)
+      }
+    }
 
     return res.json({
       success: true,
