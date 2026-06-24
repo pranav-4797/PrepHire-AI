@@ -29,6 +29,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  useEffect(() => {
+    if (!user) return
+
+    const TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
+    const LAST_ACTIVE_KEY = 'prephire_last_active'
+
+    const checkSession = async () => {
+      const lastActive = localStorage.getItem(LAST_ACTIVE_KEY)
+      if (lastActive) {
+        const timeElapsed = Date.now() - parseInt(lastActive, 10)
+        if (timeElapsed >= TIMEOUT_MS) {
+          console.log('[Auth] User inactive for more than 30 minutes. Auto-logging out.')
+          localStorage.removeItem(LAST_ACTIVE_KEY)
+          await logoutUser()
+          return true
+        }
+      }
+      return false
+    }
+
+    checkSession().then((isLoggedOut) => {
+      if (isLoggedOut) return
+
+      localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString())
+
+      let timeoutId: number
+
+      const resetTimer = () => {
+        if (timeoutId) window.clearTimeout(timeoutId)
+
+        const lastActive = localStorage.getItem(LAST_ACTIVE_KEY)
+        const now = Date.now()
+        if (!lastActive || now - parseInt(lastActive, 10) > 5000) {
+          localStorage.setItem(LAST_ACTIVE_KEY, now.toString())
+        }
+
+        timeoutId = window.setTimeout(async () => {
+          console.log('[Auth] User inactive for 30 minutes. Auto-logging out.')
+          localStorage.removeItem(LAST_ACTIVE_KEY)
+          await logoutUser()
+        }, TIMEOUT_MS)
+      }
+
+      const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart']
+      events.forEach((event) => window.addEventListener(event, resetTimer))
+
+      resetTimer()
+
+      return () => {
+        if (timeoutId) window.clearTimeout(timeoutId)
+        events.forEach((event) => window.removeEventListener(event, resetTimer))
+      }
+    })
+  }, [user])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
