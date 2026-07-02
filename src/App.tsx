@@ -1154,6 +1154,40 @@ function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
   )
 }
 
+// ── TOAST NOTIFICATION ───────────────────────────────────────────────────────
+function ToastNotification({ toast }: { toast: { message: string; type: 'success' | 'error' | 'info' } | null }) {
+  if (!toast) return null
+  const bg = toast.type === 'success' ? '#ECFDF5' : toast.type === 'error' ? '#FEF2F2' : '#F3F4F6'
+  const border = toast.type === 'success' ? '#10B981' : toast.type === 'error' ? '#EF4444' : '#9CA3AF'
+  const color = toast.type === 'success' ? '#065F46' : toast.type === 'error' ? '#991B1B' : '#374151'
+  const icon = toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : 'ℹ️'
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: 24,
+      right: 24,
+      background: bg,
+      border: `1.5px solid ${border}`,
+      color: color,
+      padding: '12px 20px',
+      borderRadius: 12,
+      boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
+      zIndex: 9999,
+      fontSize: 14,
+      fontWeight: 600,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      animation: 'slideIn 0.3s ease',
+      fontFamily: 'inherit',
+    }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <span>{toast.message}</span>
+    </div>
+  )
+}
+
 // ── LOGIN SCREEN ─────────────────────────────────────────────────────────────
 function LoginScreen() {
   const { login, register } = useAuth()
@@ -1199,17 +1233,15 @@ function LoginScreen() {
     }
   }
 
-
-
   const inp: React.CSSProperties = {
     width: '100%',
     boxSizing: 'border-box',
-    padding: '10px 14px',
+    padding: '12px 14px',
     borderRadius: 10,
     border: `1.5px solid ${T.outlineVar}`,
     background: T.bgWhite,
     color: T.txtPri,
-    fontSize: 13,
+    fontSize: 15,
     fontFamily: 'inherit',
   }
 
@@ -1267,7 +1299,7 @@ function LoginScreen() {
                   padding: '8px',
                   borderRadius: 8,
                   border: 'none',
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 700,
                   cursor: 'pointer',
                   background: mode === m ? T.primary : 'transparent',
@@ -1343,12 +1375,12 @@ function LoginScreen() {
               disabled={loading}
               style={{
                 width: '100%',
-                padding: '13px',
+                padding: '14px',
                 borderRadius: 12,
                 border: 'none',
                 background: T.primary,
                 color: '#fff',
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: 700,
                 cursor: loading ? 'not-allowed' : 'pointer',
                 marginTop: 4,
@@ -1395,7 +1427,7 @@ function LoginScreen() {
               style={{ height: 20, objectFit: 'contain' }}
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
-            <span style={{ fontSize: 12, fontWeight: 600, color: T.onPrimFx }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.onPrimFx }}>
               Powered by MIT AoE Placement Cell
             </span>
           </div>
@@ -1575,18 +1607,20 @@ async function callClaude(prompt: string, sys: string): Promise<string> {
   const d = await res.json()
   return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
 }
-// ── FACULTY DASHBOARD ────────────────────────────────────────────────────────
 function FacultyDashboard({
   user,
   allSessions,
   onUpdateSession,
   onLogout,
+  showToast,
 }: {
   user: User
   allSessions: SessionRecord[]
   onUpdateSession: (id: string, updates: Partial<SessionRecord>) => void
   onLogout: () => void
+  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
+
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDomain, setSelectedDomain] = useState('All')
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null)
@@ -1787,10 +1821,10 @@ const addResource = (chapterIndex: number) => {
       if (editingCourseId) {
         await updateCourse(editingCourseId, payload)
         setEditingCourseId(null)
-        alert('Course updated and submitted for approval!')
+        showToast('Course updated and submitted for approval!', 'success')
       } else {
         await createCourse(payload)
-        alert('Course created and submitted for approval!')
+        showToast('Course created and submitted for approval!', 'success')
       }
       // Reset form
       setCourseForm({
@@ -1805,7 +1839,7 @@ const addResource = (chapterIndex: number) => {
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to save course:', error)
-      alert('Failed to save course: ' + (error.message || error))
+      showToast('Failed to save course: ' + (error.message || error), 'error')
     }
   }
 
@@ -2468,7 +2502,6 @@ const addResource = (chapterIndex: number) => {
     </div>
   )
 }
-
 // ── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 function AdminDashboard({
   user,
@@ -2477,6 +2510,7 @@ function AdminDashboard({
   onRoleChange,
   onDeleteUser,
   onLogout,
+  showToast,
 }: {
   user: User
   allSessions: SessionRecord[]
@@ -2484,6 +2518,7 @@ function AdminDashboard({
   onRoleChange: (userId: string, role: UserRole) => Promise<void>
   onDeleteUser: (userId: string) => Promise<void>
   onLogout: () => void
+  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'config' | 'courses'>('overview')
   const [strictProctoring, setStrictProctoring] = useState(true)
@@ -2515,22 +2550,22 @@ function AdminDashboard({
   const handleApproveCourse = async (id: string) => {
     try {
       await updateCourse(id, { status: 'approved' })
-      alert('Course approved successfully!')
+      showToast('Course approved successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to approve course:', error)
-      alert('Failed to approve course: ' + (error.message || error))
+      showToast('Failed to approve course: ' + (error.message || error), 'error')
     }
   }
 
   const handleRejectCourse = async (id: string) => {
     try {
       await updateCourse(id, { status: 'rejected' })
-      alert('Course rejected successfully!')
+      showToast('Course rejected successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to reject course:', error)
-      alert('Failed to reject course: ' + (error.message || error))
+      showToast('Failed to reject course: ' + (error.message || error), 'error')
     }
   }
 
@@ -3003,7 +3038,7 @@ function AdminDashboard({
                   </div>
                 </div>
 
-                <Btn variant="navy" style={{ alignSelf: 'flex-start', marginTop: 12 }} onClick={() => alert('Configurations saved successfully!')}>
+                <Btn variant="navy" style={{ alignSelf: 'flex-start', marginTop: 12 }} onClick={() => showToast('Configurations saved successfully!', 'success')}>
                   Save Configurations
                 </Btn>
               </GlassCard>
@@ -3209,6 +3244,40 @@ export default function App() {
   const [screen, setScreen] = useState<
     'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report'
   >('landing')
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type })
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const tId = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(tId)
+  }, [toast])
+
+  const [studentTab, setStudentTab] = useState<'interview' | 'courses'>('interview')
+  const [studentCourses, setStudentCourses] = useState<Course[]>([])
+  const [loadingStudentCourses, setLoadingStudentCourses] = useState(false)
+  const [expandedStudentCourseId, setExpandedStudentCourseId] = useState<string | null>(null)
+
+  const loadStudentCourses = async () => {
+    setLoadingStudentCourses(true)
+    try {
+      const list = await listCourses()
+      setStudentCourses(list.filter((c) => (c.status || 'approved').toLowerCase() === 'approved'))
+    } catch (error) {
+      console.error('Failed to load courses for student:', error)
+    } finally {
+      setLoadingStudentCourses(false)
+    }
+  }
+
+  useEffect(() => {
+    if (studentTab === 'courses') {
+      loadStudentCourses()
+    }
+  }, [studentTab])
 
   const [user, setUser] = useState<User | null>(null)
   const [domain, setDomain] = useState<string | null>(null)
@@ -3643,294 +3712,526 @@ export default function App() {
 
     if (user.role.toLowerCase() === 'faculty') {
       return (
-        <FacultyDashboard
-          user={user}
-          allSessions={allSessions}
-          onUpdateSession={(id, updates) => {
-            setAllSessions((prev) => {
-              const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-              return next
-            })
-            updateSession(id, updates).catch((error) => console.error('Failed to update session:', error))
-          }}
-          onLogout={handleLogout}
-        />
+        <>
+          <FacultyDashboard
+            user={user}
+            allSessions={allSessions}
+            onUpdateSession={(id, updates) => {
+              setAllSessions((prev) => {
+                const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+                return next
+              })
+              updateSession(id, updates).catch((error) => console.error('Failed to update session:', error))
+            }}
+            onLogout={handleLogout}
+            showToast={showToast}
+          />
+          <ToastNotification toast={toast} />
+        </>
       )
     }
 
     if (user.role.toLowerCase() === 'admin') {
       return (
-        <AdminDashboard
-          user={user}
-          allSessions={allSessions}
-          users={users}
-          onRoleChange={async (userId, role) => {
-            await updateUserProfile(userId, { role })
-            setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
-          }}
-          onDeleteUser={async (userId) => {
-            await deleteUserProfile(userId)
-            setUsers((prev) => prev.filter((u) => u.id !== userId))
-          }}
-          onLogout={handleLogout}
-        />
+        <>
+          <AdminDashboard
+            user={user}
+            allSessions={allSessions}
+            users={users}
+            onRoleChange={async (userId, role) => {
+              await updateUserProfile(userId, { role })
+              setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
+            }}
+            onDeleteUser={async (userId) => {
+              await deleteUserProfile(userId)
+              setUsers((prev) => prev.filter((u) => u.id !== userId))
+            }}
+            onLogout={handleLogout}
+            showToast={showToast}
+          />
+          <ToastNotification toast={toast} />
+        </>
       )
     }
 
     return (
-      <div style={{ minHeight: '100vh', background: T.bg }}>
-        <Navbar user={user} onLogout={handleLogout} onHome={() => setScreen('home')} inInterview={false} />
+      <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', flexDirection: 'column' }}>
+        <Navbar user={user} onLogout={handleLogout} onHome={() => { setStudentTab('interview'); setScreen('home') }} inInterview={false} />
 
-      <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 88px 24px', animation: 'fadeIn 0.4s ease' }}>
-
-        {/* Welcome */}
-        <section
-          style={{
-            paddingTop: 40,
-            paddingBottom: '1.5rem',
-            marginBottom: 16,
-            borderBottom: `1px solid ${T.border}`,
-            textAlign: 'left',
-          }}
-        >
-          <h1 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 8px', color: T.primary, letterSpacing: '-0.4px' }}>
-            Welcome back, {user?.name}. Ready to ace your placement interviews?
-          </h1>
-          <p className="text-body" style={{ color: T.txtSec }}>
-            Select your interview domain and difficulty level to begin your AI-powered mock session.
-          </p>
-        </section>
-
-        {/* Permissions */}
-        {perms.checked && (
-          <GlassCard
+        <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 60px)', flex: 1 }}>
+          {/* Sidebar */}
+          <aside
             style={{
-              marginBottom: 16,
-              padding: '10px 16px',
+              background: T.bgWhite,
+              borderRight: `1px solid ${T.border}`,
+              padding: 20,
               display: 'flex',
-              gap: 20,
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              borderRadius: 12,
+              flexDirection: 'column',
+              gap: 8,
             }}
           >
-            {([['Camera', perms.camera], ['Microphone', perms.microphone]] as [string, boolean][]).map(([label, ok]) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: ok ? T.green : T.error, display: 'inline-block' }} />
-                <span style={{ color: ok ? T.green : T.error }}>{ok ? `${label} ready` : `${label} blocked`}</span>
-              </div>
-            ))}
-            {(!perms.camera || !perms.microphone) && (
-              <Btn
-                onClick={async () => { const p = await requestPermissions(); setPerms({ ...p, checked: true }) }}
-                variant="ghost"
-                size="sm"
-                style={{ marginLeft: 'auto' }}
-              >
-                Fix permissions
-              </Btn>
-            )}
-          </GlassCard>
-        )}
-
-        {/* 2-Column Dashboard Layout */}
-        <div className="dashboard-layout">
-          {/* Left Column: Domain Selection */}
-          <GlassCard style={{ marginBottom: 0 }}>
-            <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem', fontWeight: 700 }}>
-              Interview Domain
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.08em' }}>
+              Student Portal
             </div>
-            <div className="domain-grid">
-              {DOMAINS.map((d) => (
-                <div
-                  key={d.id}
-                  className="domain-card"
-                  onClick={() => setDomain(d.id)}
+            {[
+              { id: 'interview', label: 'Mock Interview' },
+              { id: 'courses', label: 'Resource Library' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setStudentTab(tab.id as typeof studentTab)}
+                style={{
+                  textAlign: 'left',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: studentTab === tab.id ? T.primaryFix : 'transparent',
+                  color: studentTab === tab.id ? T.primary : T.txtSec,
+                  transition: 'all 0.2s',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </aside>
+
+          {/* Main Content */}
+          <main style={{ overflowY: 'auto', position: 'relative', height: 'calc(100vh - 60px)' }}>
+            {studentTab === 'interview' ? (
+              <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 88px 24px', animation: 'fadeIn 0.4s ease' }}>
+                {/* Welcome */}
+                <section
                   style={{
-                    border: `2px solid ${domain === d.id ? T.primary : T.outlineVar}`,
-                    borderRadius: 12,
-                    padding: 16,
-                    cursor: 'pointer',
-                    background: domain === d.id ? '#F0F2FF' : T.bgWhite,
-                    minHeight: 120,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    textAlign: 'center',
+                    paddingTop: 40,
+                    paddingBottom: '1.5rem',
+                    marginBottom: 16,
+                    borderBottom: `1px solid ${T.border}`,
+                    textAlign: 'left',
                   }}
                 >
-                  <div
+                  <h1 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 8px', color: T.primary, letterSpacing: '-0.4px' }}>
+                    Welcome back, {user?.name}. Ready to ace your placement interviews?
+                  </h1>
+                  <p className="text-body" style={{ color: T.txtSec }}>
+                    Select your interview domain and difficulty level to begin your AI-powered mock session.
+                  </p>
+                </section>
+
+                {/* Permissions */}
+                {perms.checked && (
+                  <GlassCard
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: `${DOMAIN_ICON_COLORS[d.id]}1A`,
+                      marginBottom: 16,
+                      padding: '10px 16px',
                       display: 'flex',
+                      gap: 20,
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      borderRadius: 12,
+                    }}
+                  >
+                    {([['Camera', perms.camera], ['Microphone', perms.microphone]] as [string, boolean][]).map(([label, ok]) => (
+                      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: ok ? T.green : T.error, display: 'inline-block' }} />
+                        <span style={{ color: ok ? T.green : T.error }}>{ok ? `${label} ready` : `${label} blocked`}</span>
+                      </div>
+                    ))}
+                    {(!perms.camera || !perms.microphone) && (
+                      <Btn
+                        onClick={async () => { const p = await requestPermissions(); setPerms({ ...p, checked: true }) }}
+                        variant="ghost"
+                        size="sm"
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        Fix permissions
+                      </Btn>
+                    )}
+                  </GlassCard>
+                )}
+
+                {/* 2-Column Dashboard Layout */}
+                <div className="dashboard-layout">
+                  {/* Left Column: Domain Selection */}
+                  <GlassCard style={{ marginBottom: 0 }}>
+                    <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem', fontWeight: 700 }}>
+                      Interview Domain
+                    </div>
+                    <div className="domain-grid">
+                      {DOMAINS.map((d) => (
+                        <div
+                          key={d.id}
+                          className="domain-card"
+                          onClick={() => setDomain(d.id)}
+                          style={{
+                            border: `2px solid ${domain === d.id ? T.primary : T.outlineVar}`,
+                            borderRadius: 12,
+                            padding: 16,
+                            cursor: 'pointer',
+                            background: domain === d.id ? '#F0F2FF' : T.bgWhite,
+                            minHeight: 120,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              background: `${DOMAIN_ICON_COLORS[d.id]}1A`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              margin: '0 auto 10px auto',
+                              color: DOMAIN_ICON_COLORS[d.id],
+                            }}
+                          >
+                            {d.icon}
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: T.primary }}>{d.label}</div>
+                          <div className="text-caption" style={{ fontSize: 11, color: T.txtMut, marginTop: 4, lineHeight: 1.3 }}>{d.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </GlassCard>
+
+                  {/* Right Column: Difficulty and Voice toggle stacked */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Difficulty */}
+                    <GlassCard style={{ marginBottom: 0 }}>
+                      <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem', fontWeight: 700 }}>
+                        Difficulty Level
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {LEVELS.map((l) => (
+                          <button
+                            key={l}
+                            onClick={() => setLevel(l)}
+                            style={{
+                              flex: 1,
+                              padding: '10px 0',
+                              borderRadius: 10,
+                              border: `2px solid ${level === l ? T.primary : T.outlineVar}`,
+                              background: level === l ? '#F0F2FF' : T.bgWhite,
+                              color: level === l ? T.primary : T.txtSec,
+                              fontWeight: level === l ? 700 : 500,
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              transition: 'border 0.15s ease, background 0.15s ease',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </GlassCard>
+
+                    {/* Voice toggle */}
+                    <GlassCard style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `3px solid ${T.gold}` }}>
+                      <div>
+                        <div className="text-body" style={{ fontWeight: 600, color: T.txtPri }}>AI Voice Responses</div>
+                        <div className="text-caption" style={{ marginTop: 2, fontSize: 11 }}>Questions read aloud by PrepHire AI</div>
+                        <div className="text-caption" style={{ marginTop: 2, fontSize: 11 }}>Turn off for text-only mode</div>
+                      </div>
+                      <div
+                        role="switch"
+                        aria-checked={voiceEnabled}
+                        aria-label="AI voice responses"
+                        tabIndex={0}
+                        onClick={() => setVoiceEnabled((v) => !v)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVoiceEnabled((v) => !v) } }}
+                        style={{
+                          width: 48,
+                          height: 28,
+                          borderRadius: 14,
+                          background: voiceEnabled ? T.primary : T.bgHigh,
+                          border: `1.5px solid ${voiceEnabled ? T.primary : T.outlineVar}`,
+                          cursor: 'pointer',
+                          position: 'relative',
+                          transition: 'background 0.2s, border-color 0.2s',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 3,
+                            left: voiceEnabled ? 23 : 3,
+                            width: 22,
+                            height: 22,
+                            borderRadius: '50%',
+                            background: voiceEnabled ? '#fff' : T.outline,
+                            transition: 'left 0.2s',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          }}
+                        />
+                      </div>
+                    </GlassCard>
+                  </div>
+                </div>
+
+                {/* Session history */}
+                {history.length > 0 && (
+                  <div style={{ marginTop: '2rem' }}>
+                    <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+                      Recent Sessions
+                    </div>
+                    {history.slice(-4).reverse().map((h, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '12px 16px',
+                          background: T.bgWhite,
+                          borderRadius: 12,
+                          border: `1px solid ${T.border}`,
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>{h.domain}</span>
+                          <span className="text-caption" style={{ marginLeft: 8 }}>{h.level}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {h.warnings > 0 && <Pill color={T.amber} bg={T.amberBg}><AlertTriangle size={11} /> {h.warnings}</Pill>}
+                          <span className="text-caption">{h.date}</span>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: h.score >= 75 ? T.green : h.score >= 55 ? T.amber : T.error }}>
+                            {h.score}<span style={{ fontSize: 11, fontWeight: 500 }}>/100</span>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
+                {/* Approved Courses Library */}
+                <section
+                  style={{
+                    paddingTop: 40,
+                    paddingBottom: '1.5rem',
+                    marginBottom: 16,
+                    borderBottom: `1px solid ${T.border}`,
+                    textAlign: 'left',
+                  }}
+                >
+                  <h1 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 8px', color: T.primary, letterSpacing: '-0.4px' }}>
+                    Learning Resource Library
+                  </h1>
+                  <p className="text-body" style={{ color: T.txtSec }}>
+                    Expand any approved course below to view syllabus details and study resources.
+                  </p>
+                </section>
+
+                {loadingStudentCourses ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: T.txtSec }}>
+                    Loading library courses...
+                  </div>
+                ) : studentCourses.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: T.txtSec }}>
+                    No courses are currently available in the library.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {studentCourses.map((course) => {
+                      const isExpanded = expandedStudentCourseId === course.id
+                      return (
+                        <div
+                          key={course.id}
+                          style={{
+                            background: T.bgWhite,
+                            border: `1px solid ${T.border}`,
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          {/* Header info */}
+                          <div
+                            onClick={() => setExpandedStudentCourseId(isExpanded ? null : course.id)}
+                            style={{
+                              padding: '16px 20px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              background: isExpanded ? T.bgLow : 'transparent',
+                              transition: 'background 0.2s',
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <span style={{ fontSize: 16, fontWeight: 700, color: T.primary }}>
+                                {course.name}
+                              </span>
+                              <div style={{ fontSize: 12, color: T.txtSec }}>
+                                {course.hours} hours &bull; {course.chapters.length} chapters &bull; {course.externalUrl ? 'External Link' : 'Custom Built'}
+                              </div>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: 14, color: T.txtMut, fontWeight: 600 }}>
+                                {isExpanded ? 'Collapse ▲' : 'Expand ▼'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Expanded details */}
+                          {isExpanded && (
+                            <div style={{ padding: '20px', borderTop: `1px solid ${T.border}`, background: T.bgWhite }}>
+                              <h4 style={{ fontSize: 13, fontWeight: 700, color: T.txtPri, marginBottom: 6 }}>
+                                Description
+                              </h4>
+                              <p style={{ fontSize: 12, color: T.txtSec, marginBottom: 16, lineHeight: 1.5 }}>
+                                {course.description}
+                              </p>
+
+                              {course.externalUrl ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                  <strong style={{ color: T.txtPri }}>External Course URL:</strong>
+                                  <a
+                                    href={course.externalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      color: '#fff',
+                                      background: T.primary,
+                                      padding: '8px 16px',
+                                      borderRadius: 8,
+                                      fontWeight: 700,
+                                      textDecoration: 'none',
+                                      fontSize: 12,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 6
+                                    }}
+                                  >
+                                    Go to Course <ArrowRight size={14} />
+                                  </a>
+                                </div>
+                              ) : (
+                                <div>
+                                  <h4 style={{ fontSize: 13, fontWeight: 700, color: T.txtPri, marginBottom: 10 }}>
+                                    Syllabus ({course.chapters.length} Chapters)
+                                  </h4>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {course.chapters.map((ch, idx) => (
+                                      <div key={idx} style={{ padding: 12, background: T.bgLow, borderRadius: 8 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, marginBottom: 6 }}>
+                                          Chapter {idx + 1}: {ch.name}
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                          {ch.resources.map((res, resIdx) => (
+                                            <div key={resIdx} style={{ fontSize: 11, color: T.txtSec, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                              <span>📹 {res.videoTitle}</span>
+                                              <div style={{ display: 'flex', gap: 10 }}>
+                                                <a
+                                                  href={res.videoUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  style={{
+                                                    color: T.primary,
+                                                    fontWeight: 600,
+                                                    textDecoration: 'underline'
+                                                  }}
+                                                >
+                                                  Watch Video
+                                                </a>
+                                                {res.pdfUrl && (
+                                                  <a
+                                                    href={res.pdfUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{
+                                                      color: T.green,
+                                                      fontWeight: 600,
+                                                      textDecoration: 'underline'
+                                                    }}
+                                                  >
+                                                    View PDF
+                                                  </a>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {studentTab === 'interview' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  zIndex: 40,
+                  background: T.bg,
+                  borderTop: `1px solid ${T.border}`,
+                  padding: '16px 24px',
+                  display: 'flex',
+                  justifyContent: 'center'
+                }}
+              >
+                <div style={{ width: '100%', maxWidth: 360 }}>
+                  <button
+                    onClick={() => domain && startInterview()}
+                    style={{
+                      width: '100%',
+                      padding: '12px 24px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: domain ? T.primary : '#E5E7EB',
+                      color: domain ? '#fff' : T.txtMut,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: domain ? 'pointer' : 'default',
+                      transition: 'all 0.18s',
+                      fontFamily: 'inherit',
+                      display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      margin: '0 auto 10px auto',
-                      color: DOMAIN_ICON_COLORS[d.id],
+                      gap: 6,
                     }}
                   >
-                    {d.icon}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: T.primary }}>{d.label}</div>
-                  <div className="text-caption" style={{ fontSize: 11, color: T.txtMut, marginTop: 4, lineHeight: 1.3 }}>{d.desc}</div>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
-
-          {/* Right Column: Difficulty and Voice toggle stacked */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Difficulty */}
-            <GlassCard style={{ marginBottom: 0 }}>
-              <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem', fontWeight: 700 }}>
-                Difficulty Level
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {LEVELS.map((l) => (
-                  <button
-                    key={l}
-                    onClick={() => setLevel(l)}
-                    style={{
-                      flex: 1,
-                      padding: '10px 0',
-                      borderRadius: 10,
-                      border: `2px solid ${level === l ? T.primary : T.outlineVar}`,
-                      background: level === l ? '#F0F2FF' : T.bgWhite,
-                      color: level === l ? T.primary : T.txtSec,
-                      fontWeight: level === l ? 700 : 500,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      transition: 'border 0.15s ease, background 0.15s ease',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    {l}
+                    {domain && activeDomain ? (
+                      <>
+                        Start Interview — {activeDomain.icon} {activeDomain.label} <ArrowRight size={16} />
+                      </>
+                    ) : (
+                      'Select a domain to begin'
+                    )}
                   </button>
-                ))}
-              </div>
-            </GlassCard>
-
-            {/* Voice toggle */}
-            <GlassCard style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `3px solid ${T.gold}` }}>
-              <div>
-                <div className="text-body" style={{ fontWeight: 600, color: T.txtPri }}>AI Voice Responses</div>
-                <div className="text-caption" style={{ marginTop: 2, fontSize: 11 }}>Questions read aloud by PrepHire AI</div>
-                <div className="text-caption" style={{ marginTop: 2, fontSize: 11 }}>Turn off for text-only mode</div>
-              </div>
-              <div
-                role="switch"
-                aria-checked={voiceEnabled}
-                aria-label="AI voice responses"
-                tabIndex={0}
-                onClick={() => setVoiceEnabled((v) => !v)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVoiceEnabled((v) => !v) } }}
-                style={{
-                  width: 48,
-                  height: 28,
-                  borderRadius: 14,
-                  background: voiceEnabled ? T.primary : T.bgHigh,
-                  border: `1.5px solid ${voiceEnabled ? T.primary : T.outlineVar}`,
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'background 0.2s, border-color 0.2s',
-                  flexShrink: 0,
-                }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 3,
-                    left: voiceEnabled ? 23 : 3,
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    background: voiceEnabled ? '#fff' : T.outline,
-                    transition: 'left 0.2s',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }}
-                />
-              </div>
-            </GlassCard>
-          </div>
-        </div>
-
-        {/* Session history */}
-        {history.length > 0 && (
-          <div style={{ marginTop: '2rem' }}>
-            <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-              Recent Sessions
-            </div>
-            {history.slice(-4).reverse().map((h, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px 16px',
-                  background: T.bgWhite,
-                  borderRadius: 12,
-                  border: `1px solid ${T.border}`,
-                  marginBottom: 8,
-                }}
-              >
-                <div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>{h.domain}</span>
-                  <span className="text-caption" style={{ marginLeft: 8 }}>{h.level}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {h.warnings > 0 && <Pill color={T.amber} bg={T.amberBg}><AlertTriangle size={11} /> {h.warnings}</Pill>}
-                  <span className="text-caption">{h.date}</span>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: h.score >= 75 ? T.green : h.score >= 55 ? T.amber : T.error }}>
-                    {h.score}<span style={{ fontSize: 11, fontWeight: 500 }}>/100</span>
-                  </span>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="start-interview-bar" style={{ display: 'flex', justifyContent: 'center' }}>
-        <div className="start-interview-bar__inner" style={{ maxWidth: 360 }}>
-          <button
-            onClick={() => domain && startInterview()}
-            style={{
-              width: '100%',
-              padding: '12px 24px',
-              borderRadius: 10,
-              border: 'none',
-              background: domain ? T.primary : '#E5E7EB',
-              color: domain ? '#fff' : T.txtMut,
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: domain ? 'pointer' : 'default',
-              transition: 'all 0.18s',
-              fontFamily: 'inherit',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
-          >
-            {domain && activeDomain ? (
-              <>
-                Start Interview — {activeDomain.icon} {activeDomain.label} <ArrowRight size={16} />
-              </>
-            ) : (
-              'Select a domain to begin'
             )}
-          </button>
+          </main>
         </div>
+        <ToastNotification toast={toast} />
       </div>
-    </div>
-  )
-}
-
+    )
+  }
 
   // ── INTRO ───────────────────────────────────────────────────────────────
   if (screen === 'intro') {

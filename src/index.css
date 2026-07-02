@@ -31,14 +31,14 @@
   --card-radius:                 12px;
 
   /* Typography scale */
-  --text-heading-size:           18px;
+  --text-heading-size:           20px;
   --text-heading-weight:         600;
   --text-heading-color:          var(--color-on-surface);
-  --text-body-size:              14px;
+  --text-body-size:              15px;
   --text-body-weight:            400;
   --text-body-lh:                1.6;
   --text-body-color:             var(--color-on-surface);
-  --text-caption-size:           12px;
+  --text-caption-size:           13px;
   --text-caption-weight:         400;
   --text-caption-color:          var(--color-outline);
 
