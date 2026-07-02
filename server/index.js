@@ -309,6 +309,65 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
   }
 })
 
+// ── Courses CRUD API ──────────────────────────────────────────────────────────
+
+
+
+// --- Local JSON File Database for Courses (Bypass IAM issues) ---
+const coursesFile = path.resolve(serverDir, 'uploads', 'courses.json')
+function readCourses() {
+  if (!fs.existsSync(coursesFile)) return []
+  try {
+    return JSON.parse(fs.readFileSync(coursesFile, 'utf8'))
+  } catch (e) {
+    return []
+  }
+}
+function writeCourses(courses) {
+  fs.writeFileSync(coursesFile, JSON.stringify(courses, null, 2))
+}
+
+app.get('/api/courses', (req, res) => {
+  const courses = readCourses()
+  res.json(courses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)))
+})
+
+app.get('/api/courses/:id', (req, res) => {
+  const courses = readCourses()
+  const course = courses.find(c => c.id === req.params.id)
+  if (!course) return res.status(404).json({ error: 'Course not found' })
+  res.json(course)
+})
+
+app.post('/api/courses', (req, res) => {
+  const courses = readCourses()
+  const newCourse = {
+    ...req.body,
+    id: Date.now().toString(),
+    createdAt: new Date().toISOString()
+  }
+  courses.push(newCourse)
+  writeCourses(courses)
+  res.json({ id: newCourse.id })
+})
+
+app.put('/api/courses/:id', (req, res) => {
+  const courses = readCourses()
+  const index = courses.findIndex(c => c.id === req.params.id)
+  if (index === -1) return res.status(404).json({ error: 'Course not found' })
+  
+  courses[index] = { ...courses[index], ...req.body }
+  writeCourses(courses)
+  res.json({ success: true })
+})
+
+app.delete('/api/courses/:id', (req, res) => {
+  let courses = readCourses()
+  courses = courses.filter(c => c.id !== req.params.id)
+  writeCourses(courses)
+  res.json({ success: true })
+})
+
 // ── Error Handling ──────────────────────────────────────────────────────────
 
 // Multer error handler (file too large, invalid type, etc.)

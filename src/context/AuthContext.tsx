@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import type { User as FirebaseUser } from 'firebase/auth'
@@ -13,6 +13,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const pendingRegistrationEmailRef = useRef<string | null>(null)
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (nextUser) => {
@@ -21,6 +22,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!nextUser?.email) {
         setProfile(null)
         setLoading(false)
+        return
+      }
+      if (pendingRegistrationEmailRef.current === nextUser.email.toLowerCase()) {
         return
       }
       const nextProfile = await ensureUserProfile(nextUser.uid, nextUser.email, nextUser.displayName)
@@ -94,7 +98,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loginWithEmail(email, password)
       },
       register: async (input) => {
-        await registerWithEmail(input)
+        pendingRegistrationEmailRef.current = input.email.toLowerCase()
+        setLoading(true)
+        try {
+          const { credential, profile: nextProfile } = await registerWithEmail(input)
+          setUser(credential.user)
+          setProfile(nextProfile)
+        } finally {
+          pendingRegistrationEmailRef.current = null
+          setLoading(false)
+        }
       },
       logout: logoutUser,
     }),

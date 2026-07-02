@@ -1,18 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { 
-  Settings, User, Calculator, MessageSquare, CameraOff, 
-  AlertTriangle, Square, Mic, Clock, Volume2, 
-  CornerDownLeft, CheckCircle, Info, Check, 
-  TrendingUp, Lightbulb, ArrowLeft, ArrowRight 
+import {
+  Settings, User, Calculator, MessageSquare, CameraOff,
+  AlertTriangle, Square, Mic, Clock, Volume2,
+  CornerDownLeft, CheckCircle, Info, Check,
+  TrendingUp, Lightbulb, ArrowLeft, ArrowRight,
+  Link, BookOpen
 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import {
   deleteUserProfile,
   listUserProfiles,
   updateUserProfile,
+  listCourses,
+  createCourse,
+  updateCourse,
+  deleteCourse,
 } from './services/firestore.service'
-import type { UserProfile, UserRole } from './services/firestore.service'
+import type { UserProfile, UserRole, Course } from './services/firestore.service'
 import { loadSessions, saveSession, updateSession } from './services/session.service'
 
 // ── THEME TOKENS ────────────────────────────────────────────────────────────
@@ -450,6 +455,7 @@ function Btn({
   disabled = false,
   variant = 'primary',
   size = 'md',
+  type = 'button',
   style = {},
 }: {
   children: React.ReactNode
@@ -457,6 +463,7 @@ function Btn({
   disabled?: boolean
   variant?: BtnVariant
   size?: BtnSize
+  type?: React.ButtonHTMLAttributes<HTMLButtonElement>['type']
   style?: React.CSSProperties
 }) {
   const pad = size === 'sm' ? '6px 16px' : size === 'lg' ? '13px 28px' : '9px 20px'
@@ -477,6 +484,7 @@ function Btn({
 
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       style={{
@@ -1584,6 +1592,18 @@ function FacultyDashboard({
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null)
   const [remarkInput, setRemarkInput] = useState('')
   const [placementReadyToggle, setPlacementReadyToggle] = useState(false)
+  const [activeTab, setActiveTab] = useState<'overview' | 'courses'>('overview')
+  const [courses, setCourses] = useState<Course[]>([])
+  const [loadingCourses, setLoadingCourses] = useState(false)
+  const [courseForm, setCourseForm] = useState<Omit<Course, 'id' | 'createdAt'>>({
+    name: '',
+    description: '',
+    hours: 0,
+    chapters: [{ name: '', resources: [] }],
+    externalUrl: ''
+  })
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
+  const [courseType, setCourseType] = useState<'build' | 'import'>('build')
 
   const filteredSessions = allSessions.filter((s) => {
     const matchesSearch =
@@ -1619,362 +1639,832 @@ function FacultyDashboard({
     setSelectedSession(null)
   }
 
+  // Course form helpers
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseForm(prev => ({ ...prev, name: e.target.value }))
+  }
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCourseForm(prev => ({ ...prev, description: e.target.value }))
+  }
+
+  const handleHoursChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseForm(prev => ({ ...prev, hours: parseInt(e.target.value) || 0 }))
+  }
+
+  const handleExternalUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseForm(prev => ({ ...prev, externalUrl: e.target.value }))
+  }
+
+  const handleCourseTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseType(e.target.value as 'build' | 'import')
+    // Reset form when switching types
+    if (e.target.value === 'import') {
+      setCourseForm(prev => ({ ...prev, chapters: [{ name: '', resources: [] }] }))
+    } else {
+      setCourseForm(prev => ({ ...prev, externalUrl: '' }))
+    }
+  }
+
+  const addChapter = () => {
+    setCourseForm(prev => ({
+      ...prev,
+      chapters: [...prev.chapters, { name: '', resources: [] }]
+    }))
+  }
+
+  const removeChapter = (index: number) => {
+    if (courseForm.chapters.length <= 1) return
+    setCourseForm(prev => ({
+      ...prev,
+      chapters: prev.chapters.filter((_, i) => i !== index)
+    }))
+  }
+
+  // Add resource to chapter - fixed the missing bracket
+const addResource = (chapterIndex: number) => {
+  setCourseForm((prev) => ({
+    ...prev,
+    chapters: prev.chapters.map((chapter, index) =>
+      index === chapterIndex
+        ? {
+            ...chapter,
+            resources: [
+              ...chapter.resources,
+              {
+                videoTitle: '',
+                videoUrl: '',
+                pdfUrl: '',
+              },
+            ],
+          }
+        : chapter
+    ),
+  }))
+}
+
+  const removeResource = (chapterIndex: number, resourceIndex: number) => {
+    setCourseForm(prev => ({
+      ...prev,
+      chapters: prev.chapters.map((chapter, index) =>
+        index === chapterIndex
+          ? { ...chapter, resources: chapter.resources.filter((_, i) => i !== resourceIndex) }
+          : chapter
+      )
+    }))
+  }
+
+  const handleChapterNameChange = (chapterIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseForm(prev => ({
+      ...prev,
+      chapters: prev.chapters.map((chapter, index) =>
+        index === chapterIndex ? { ...chapter, name: e.target.value } : chapter
+      )
+    }))
+  }
+
+  const handleResourceTitleChange = (chapterIndex: number, resourceIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseForm(prev => ({
+      ...prev,
+      chapters: prev.chapters.map((chapter, index) =>
+        index === chapterIndex
+          ? {
+              ...chapter,
+              resources: chapter.resources.map((resource, i) =>
+                i === resourceIndex
+                  ? { ...resource, videoTitle: e.target.value }
+                  : resource
+              )
+            }
+          : chapter
+      )
+    }))
+  }
+
+  const handleResourceUrlChange = (chapterIndex: number, resourceIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseForm(prev => ({
+      ...prev,
+      chapters: prev.chapters.map((chapter, index) =>
+        index === chapterIndex
+          ? {
+              ...chapter,
+              resources: chapter.resources.map((resource, i) =>
+                i === resourceIndex
+                  ? { ...resource, videoUrl: e.target.value }
+                  : resource
+              )
+            }
+          : chapter
+      )
+    }))
+  }
+
+  const handlePdfUrlChange = (chapterIndex: number, resourceIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    setCourseForm(prev => ({
+      ...prev,
+      chapters: prev.chapters.map((chapter, index) =>
+        index === chapterIndex
+          ? {
+              ...chapter,
+              resources: chapter.resources.map((resource, i) =>
+                i === resourceIndex
+                  ? { ...resource, pdfUrl: e.target.value || undefined }
+                  : resource
+              )
+            }
+          : chapter
+      )
+    }))
+  }
+
+  const handleSubmitCourse = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const payload = {
+        ...courseForm,
+        status: 'pending' as const
+      }
+      if (editingCourseId) {
+        await updateCourse(editingCourseId, payload)
+        setEditingCourseId(null)
+        alert('Course updated and submitted for approval!')
+      } else {
+        await createCourse(payload)
+        alert('Course created and submitted for approval!')
+      }
+      // Reset form
+      setCourseForm({
+        name: '',
+        description: '',
+        hours: 0,
+        chapters: [{ name: '', resources: [] }],
+        externalUrl: ''
+      })
+      setCourseType('build')
+      // Reload courses
+      await loadCourses()
+    } catch (error: any) {
+      console.error('Failed to save course:', error)
+      alert('Failed to save course: ' + (error.message || error))
+    }
+  }
+
+  const handleEditCourse = (course: Course) => {
+    setEditingCourseId(course.id)
+    setCourseForm({
+      name: course.name,
+      description: course.description,
+      hours: course.hours,
+      chapters: course.chapters,
+      externalUrl: course.externalUrl || ''
+    })
+    setCourseType(course.externalUrl ? 'import' : 'build')
+  }
+
+  const handleDeleteCourse = async (id: string) => {
+    try {
+      await deleteCourse(id)
+      await loadCourses()
+    } catch (error) {
+      console.error('Failed to delete course:', error)
+    }
+  }
+
+  const loadCourses = async () => {
+    setLoadingCourses(true)
+    try {
+      const courseList = await listCourses()
+      setCourses(courseList)
+    } catch (error) {
+      console.error('Failed to load courses:', error)
+    } finally {
+      setLoadingCourses(false)
+    }
+  }
+
+  // Load courses when component mounts or when tab changes to courses
+  useEffect(() => {
+    if (activeTab === 'courses') {
+      loadCourses()
+    }
+  }, [activeTab])
+
   return (
     <div style={{ minHeight: '100vh', background: T.bg }}>
       <Navbar user={user} onLogout={onLogout} onHome={() => {}} inInterview={false} />
 
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px', animation: 'fadeIn 0.4s ease' }}>
-        
-        {/* Welcome */}
-        <section style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: T.primary, marginBottom: 6 }}>
-            Faculty Assessment & Monitoring Portal
-          </h1>
-          <p className="text-body" style={{ color: T.txtSec }}>
-            Review student interview performance, analyze skills gaps, and approve placement readiness.
-          </p>
-        </section>
+      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 60px)' }}>
 
-        {/* Stats Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-          <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Active Students</span>
-            <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{totalStudentsCount}</span>
-          </GlassCard>
-          <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Average Score</span>
-            <span style={{ fontSize: 24, fontWeight: 800, color: T.green }}>{avgScore}%</span>
-          </GlassCard>
-          <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Evaluated Sessions</span>
-            <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{totalReviewed} / {allSessions.length}</span>
-          </GlassCard>
-          <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6, borderLeft: `3px solid ${T.error}` }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Integrity Flags</span>
-            <span style={{ fontSize: 24, fontWeight: 800, color: flagSessions > 0 ? T.error : T.green }}>{flagSessions}</span>
-          </GlassCard>
-        </div>
-
-        {/* Filters and List */}
-        <GlassCard style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {['All', 'Technical', 'HR', 'Aptitude', 'GD'].map((dom) => (
-                <button
-                  key={dom}
-                  onClick={() => setSelectedDomain(dom)}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 20,
-                    border: `1.5px solid ${selectedDomain === dom ? T.primary : T.outlineVar}`,
-                    background: selectedDomain === dom ? T.primary : 'transparent',
-                    color: selectedDomain === dom ? '#fff' : T.txtSec,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {dom}
-                </button>
-              ))}
-            </div>
-
-            <input
-              type="text"
-              placeholder="Search by student name…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                padding: '8px 14px',
-                borderRadius: 10,
-                border: `1.5px solid ${T.outlineVar}`,
-                fontSize: 12,
-                minWidth: 240,
-              }}
-            />
-          </div>
-
-          {/* Table */}
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${T.border}`, color: T.txtMut, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
-                  <th style={{ padding: '12px 8px' }}>Student</th>
-                  <th style={{ padding: '12px 8px' }}>Domain</th>
-                  <th style={{ padding: '12px 8px' }}>Level</th>
-                  <th style={{ padding: '12px 8px' }}>Score</th>
-                  <th style={{ padding: '12px 8px' }}>Warnings</th>
-                  <th style={{ padding: '12px 8px' }}>Status</th>
-                  <th style={{ padding: '12px 8px' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSessions.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: T.txtMut, fontSize: 13 }}>
-                      No sessions found matching filters.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredSessions.map((session) => (
-                    <tr
-                      key={session.id}
-                      style={{
-                        borderBottom: `1px solid ${T.border}`,
-                        fontSize: 13,
-                        color: T.txtPri,
-                        background: session.warnings > 2 ? 'rgba(186, 26, 26, 0.03)' : 'transparent',
-                      }}
-                    >
-                      <td style={{ padding: '12px 8px' }}>
-                        <div style={{ fontWeight: 600 }}>{session.studentName}</div>
-                        <div style={{ fontSize: 10, color: T.txtMut }}>{session.studentEmail}</div>
-                      </td>
-                      <td style={{ padding: '12px 8px' }}>{session.domain}</td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: T.bgLow }}>
-                          {session.level}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <span style={{ fontWeight: 700, color: scoreColor(session.score) }}>
-                          {session.score}%
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <span style={{ fontWeight: 600, color: session.warnings > 2 ? T.error : T.txtSec }}>
-                          {session.warnings}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 8px' }}>
-                        {session.placementReady === true ? (
-                          <Pill color={T.green} bg={T.greenBg}>PLACEMENT READY</Pill>
-                        ) : session.placementReady === false ? (
-                          <Pill color={T.error} bg={T.errCont}>REASSESSMENT REQ.</Pill>
-                        ) : (
-                          <Pill color={T.outline} bg={T.bgMid}>PENDING</Pill>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <Btn size="sm" onClick={() => handleOpenReport(session)}>
-                          Evaluate
-                        </Btn>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Report Modal */}
-      {selectedSession && (
-        <div
+        {/* Sidebar */}
+        <aside
           style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,30,64,0.4)',
-            backdropFilter: 'blur(4px)',
+            background: T.bgWhite,
+            borderRight: `1px solid ${T.border}`,
+            padding: 20,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 16,
-            animation: 'fadeIn 0.2s ease',
+            flexDirection: 'column',
+            gap: 8,
           }}
         >
-          <div
-            style={{
-              background: T.bgWhite,
-              borderRadius: 16,
-              width: '100%',
-              maxWidth: 900,
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              padding: 24,
-              position: 'relative',
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, borderBottom: `1px solid ${T.border}`, paddingBottom: 16 }}>
-              <div>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: T.primary }}>
-                  Detailed Performance Report: {selectedSession.studentName}
-                </h2>
-                <div style={{ fontSize: 12, color: T.txtSec, marginTop: 4 }}>
-                  {selectedSession.studentEmail} · {selectedSession.domain} ({selectedSession.level}) on {selectedSession.date}
-                </div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.08em' }}>
+            Faculty Portal
+          </div>
+          {[
+            { id: 'overview', label: 'Assessment Overview' },
+            { id: 'courses', label: 'Courses Management' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '10px 14px',
+                borderRadius: 8,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: activeTab === tab.id ? T.primaryFix : 'transparent',
+                color: activeTab === tab.id ? T.primary : T.txtSec,
+                transition: 'all 0.15s',
+                fontFamily: 'inherit',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </aside>
+
+        {/* Main Content Area */}
+        <main style={{ padding: 24, overflowY: 'auto' }}>
+          {activeTab === 'overview' && (
+            <>
+              {/* Welcome */}
+              <section style={{ marginBottom: 24 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 700, color: T.primary, marginBottom: 6 }}>
+                  Faculty Assessment & Monitoring Portal
+                </h1>
+                <p className="text-body" style={{ color: T.txtSec }}>
+                  Review student interview performance, analyze skills gaps, and approve placement readiness.
+                </p>
+              </section>
+
+              {/* Stats Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Active Students</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{totalStudentsCount}</span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Average Score</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.green }}>{avgScore}%</span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Evaluated Sessions</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{totalReviewed} / {allSessions.length}</span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6, borderLeft: `3px solid ${T.error}` }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Integrity Flags</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: flagSessions > 0 ? T.error : T.green }}>{flagSessions}</span>
+                </GlassCard>
               </div>
-              <button
-                onClick={() => setSelectedSession(null)}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  fontSize: 20,
-                  cursor: 'pointer',
-                  color: T.txtMut,
-                  fontWeight: 800,
-                }}
-              >
-                &times;
-              </button>
-            </div>
 
-            {/* Modal Body */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
-              
-              {/* Left Side: Score & Radar Chart */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                
-                {/* Metrics */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-                  <div style={{ background: scoreColor(selectedSession.score) + '11', padding: 8, borderRadius: 8, textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(selectedSession.score) }}>{selectedSession.score}</div>
-                    <div style={{ fontSize: 8, color: T.txtSec, marginTop: 2 }}>Overall</div>
+              {/* Filters and List */}
+              <GlassCard style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {['All', 'Technical', 'HR', 'Aptitude', 'GD'].map((dom) => (
+                      <button
+                        key={dom}
+                        onClick={() => setSelectedDomain(dom)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 20,
+                          border: `1.5px solid ${selectedDomain === dom ? T.primary : T.outlineVar}`,
+                          background: selectedDomain === dom ? T.primary : 'transparent',
+                          color: selectedDomain === dom ? '#fff' : T.txtSec,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {dom}
+                      </button>
+                    ))}
                   </div>
-                  <div style={{ background: scoreColor(selectedSession.report.technical) + '11', padding: 8, borderRadius: 8, textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(selectedSession.report.technical) }}>{selectedSession.report.technical}</div>
-                    <div style={{ fontSize: 8, color: T.txtSec, marginTop: 2 }}>Tech</div>
-                  </div>
-                  <div style={{ background: scoreColor(selectedSession.report.communication) + '11', padding: 8, borderRadius: 8, textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(selectedSession.report.communication) }}>{selectedSession.report.communication}</div>
-                    <div style={{ fontSize: 8, color: T.txtSec, marginTop: 2 }}>Comms</div>
-                  </div>
-                  <div style={{ background: scoreColor(selectedSession.report.confidence) + '11', padding: 8, borderRadius: 8, textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(selectedSession.report.confidence) }}>{selectedSession.report.confidence}</div>
-                    <div style={{ fontSize: 8, color: T.txtSec, marginTop: 2 }}>Confidence</div>
-                  </div>
-                  <div style={{ background: scoreColor(selectedSession.report.clarity) + '11', padding: 8, borderRadius: 8, textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(selectedSession.report.clarity) }}>{selectedSession.report.clarity}</div>
-                    <div style={{ fontSize: 8, color: T.txtSec, marginTop: 2 }}>Clarity</div>
-                  </div>
-                </div>
 
-                {/* Radar Chart */}
-                <div style={{ background: T.bgLow, padding: 12, borderRadius: 12, display: 'flex', justifyContent: 'center' }}>
-                  <RadarChart
-                    scores={{
-                      Technical: selectedSession.report.technical,
-                      Comms: selectedSession.report.communication,
-                      Confidence: selectedSession.report.confidence,
-                      Clarity: selectedSession.report.clarity,
-                      Relevance: selectedSession.report.relevance || 70,
+                  <input
+                    type="text"
+                    placeholder="Search by student name…"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 10,
+                      border: `1.5px solid ${T.outlineVar}`,
+                      fontSize: 12,
+                      minWidth: 240,
                     }}
                   />
                 </div>
 
-                {/* Proctoring log */}
-                <div style={{ background: selectedSession.warnings > 2 ? T.errCont : T.bgLow, padding: 12, borderRadius: 12, borderLeft: `3px solid ${selectedSession.warnings > 2 ? T.error : T.outlineVar}` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: selectedSession.warnings > 2 ? T.error : T.primary, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <AlertTriangle size={12} /> Proctoring Status ({selectedSession.warnings} warning(s))
-                  </div>
-                  <div style={{ fontSize: 11, color: T.txtSec, marginTop: 4 }}>
-                    {selectedSession.report.proctoringNote || "No flag logs recorded."}
-                  </div>
+                {/* Table */}
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${T.border}`, color: T.txtMut, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
+                        <th style={{ padding: '12px 8px' }}>Student</th>
+                        <th style={{ padding: '12px 8px' }}>Domain</th>
+                        <th style={{ padding: '12px 8px' }}>Level</th>
+                        <th style={{ padding: '12px 8px' }}>Score</th>
+                        <th style={{ padding: '12px 8px' }}>Warnings</th>
+                        <th style={{ padding: '12px 8px' }}>Status</th>
+                        <th style={{ padding: '12px 8px' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSessions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: T.txtMut, fontSize: 13 }}>
+                            No sessions found matching filters.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredSessions.map((session) => (
+                          <tr
+                            key={session.id}
+                            style={{
+                              borderBottom: `1px solid ${T.border}`,
+                              fontSize: 13,
+                              color: T.txtPri,
+                              background: session.warnings > 2 ? 'rgba(186, 26, 26, 0.03)' : 'transparent',
+                            }}
+                          >
+                            <td style={{ padding: '12px 8px' }}>
+                              <div style={{ fontWeight: 600 }}>{session.studentName}</div>
+                              <div style={{ fontSize: 10, color: T.txtMut }}>{session.studentEmail}</div>
+                            </td>
+                            <td style={{ padding: '12px 8px' }}>{session.domain}</td>
+                            <td style={{ padding: '12px 8px' }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: T.bgLow }}>
+                                {session.level}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 8px' }}>
+                              <span style={{ fontWeight: 700, color: scoreColor(session.score) }}>
+                                {session.score}%
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 8px' }}>
+                              <span style={{ fontWeight: 600, color: session.warnings > 2 ? T.error : T.txtSec }}>
+                                {session.warnings}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 8px' }}>
+                              {session.placementReady === true ? (
+                                <Pill color={T.green} bg={T.greenBg}>PLACEMENT READY</Pill>
+                              ) : session.placementReady === false ? (
+                                <Pill color={T.error} bg={T.errCont}>REASSESSMENT REQ.</Pill>
+                              ) : (
+                                <Pill color={T.outline} bg={T.bgMid}>PENDING</Pill>
+                              )}
+                            </td>
+                            <td style={{ padding: '12px 8px' }}>
+                              <Btn size="sm" onClick={() => handleOpenReport(session)}>
+                                Evaluate
+                              </Btn>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
+              </GlassCard>
+            </>
+          )}
 
-                {/* Interview recording link */}
-                {selectedSession.driveLink && (
-                  <div style={{
-                    background: T.bgWhite,
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 12,
-                    padding: 12,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginTop: 4
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: T.primary }}>
-                        Recorded Interview
-                      </div>
-                      <div style={{ fontSize: 10, color: T.txtSec, marginTop: 2 }}>
-                        Click to watch candidate video.
-                      </div>
-                    </div>
-                    <a href={selectedSession.driveLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-                      <Btn variant="navy" size="sm" style={{ padding: '6px 12px', fontSize: 11 }}>
-                        Watch Video
-                      </Btn>
-                    </a>
-                  </div>
-                )}
+          {activeTab === 'courses' && (
+            <>
+              {/* Welcome */}
+              <section style={{ marginBottom: 24 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 700, color: T.primary, marginBottom: 6 }}>
+                  Courses Management Portal
+                </h1>
+                <p className="text-body" style={{ color: T.txtSec }}>
+                  Create, edit, and manage courses for faculty and students.
+                </p>
+              </section>
+
+              {/* Stats */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Total Courses</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{courses.length}</span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Built from Scratch</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>
+                    {courses.filter(c => !c.externalUrl).length}
+                  </span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Imported Courses</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>
+                    {courses.filter(c => !!c.externalUrl).length}
+                  </span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6, borderLeft: `3px solid ${T.primary}` }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Total Chapters</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>
+                    {courses.reduce((total, course) => total + course.chapters.length, 0)}
+                  </span>
+                </GlassCard>
               </div>
 
-              {/* Right Side: Strengths/Improvements & Feedback */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                
-                {/* Strengths & Improvements */}
-                <div style={{ background: T.greenBg, padding: 12, borderRadius: 12, borderLeft: `3px solid ${T.green}` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: T.green, marginBottom: 6 }}>Strengths</div>
-                  {selectedSession.report.strengths.map((str, i) => (
-                    <div key={i} style={{ fontSize: 11, color: T.txtSec, marginBottom: 4 }}>✓ {str}</div>
-                  ))}
-                </div>
-                
-                <div style={{ background: T.amberBg, padding: 12, borderRadius: 12, borderLeft: `3px solid ${T.amber}` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: T.amber, marginBottom: 6 }}>Areas of Improvement</div>
-                  {selectedSession.report.improvements.map((imp, i) => (
-                    <div key={i} style={{ fontSize: 11, color: T.txtSec, marginBottom: 4 }}>⚠ {imp}</div>
-                  ))}
-                </div>
-
-                {/* Faculty remarks card */}
-                <div style={{ border: `1.5px solid ${T.primary}33`, padding: 16, borderRadius: 12, background: T.bgWhite }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, marginBottom: 12 }}>
-                    Faculty Remarks & Action
+              {/* Course Form */}
+              <GlassCard style={{ marginBottom: 24 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 600, color: T.primary, marginBottom: 16 }}>
+                  {editingCourseId ? 'Edit Course' : 'Create New Course'}
+                </h2>
+                <form onSubmit={handleSubmitCourse} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label htmlFor="courseName" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: T.txtPri }}>
+                      Course Name
+                    </label>
+                    <input
+                      id="courseName"
+                      type="text"
+                      value={courseForm.name}
+                      onChange={handleNameChange}
+                      placeholder="Enter course name"
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: `1.5px solid ${T.outlineVar}`,
+                        fontSize: 13,
+                      }}
+                    />
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, color: T.txtSec, fontWeight: 600 }}>Approve for Placements?</span>
-                    <button
-                      onClick={() => setPlacementReadyToggle(!placementReadyToggle)}
+                  <div>
+                    <label htmlFor="courseDescription" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: T.txtPri }}>
+                      Course Description
+                    </label>
+                    <textarea
+                      id="courseDescription"
+                      value={courseForm.description}
+                      onChange={handleDescriptionChange}
+                      placeholder="Enter course description"
+                      rows={4}
                       style={{
-                        padding: '4px 12px',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        borderRadius: 20,
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: placementReadyToggle ? T.greenBg : T.errCont,
-                        color: placementReadyToggle ? T.green : T.error,
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: `1.5px solid ${T.outlineVar}`,
+                        fontSize: 13,
+                        resize: 'vertical',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="courseHours" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: T.txtPri }}>
+                      Course Hours
+                    </label>
+                    <input
+                      id="courseHours"
+                      type="number"
+                      value={courseForm.hours}
+                      onChange={handleHoursChange}
+                      placeholder="Enter course hours"
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: `1.5px solid ${T.outlineVar}`,
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="courseType" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: T.txtPri }}>
+                      Course Type
+                    </label>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="radio"
+                          id="courseTypeBuild"
+                          name="courseType"
+                          value="build"
+                          checked={courseType === 'build'}
+                          onChange={handleCourseTypeChange}
+                        />
+                        <span>Build from Scratch</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="radio"
+                          id="courseTypeImport"
+                          name="courseType"
+                          value="import"
+                          checked={courseType === 'import'}
+                          onChange={handleCourseTypeChange}
+                        />
+                        <span>Import External Course</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {courseType === 'import' && (
+                    <div>
+                      <label htmlFor="externalUrl" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: T.txtPri }}>
+                        External Course URL
+                      </label>
+                      <input
+                        id="externalUrl"
+                        type="text"
+                        value={courseForm.externalUrl}
+                        onChange={handleExternalUrlChange}
+                        placeholder="Enter external course URL (e.g., Coursera, Udemy, YouTube playlist)"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: 10,
+                          border: `1.5px solid ${T.outlineVar}`,
+                          fontSize: 13,
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {courseType === 'build' && (
+                    <>
+                      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 600, color: T.primary, marginBottom: 12 }}>
+                          Chapters
+                        </h3>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                          <Btn variant="outline" size="sm" onClick={addChapter}>
+                            Add Chapter
+                          </Btn>
+                        </div>
+                        {courseForm.chapters.map((chapter, chapterIndex) => (
+                          <div key={chapterIndex} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <div>
+                                <label htmlFor={`chapterName-${chapterIndex}`} style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: T.txtPri }}>
+                                  Chapter Name
+                                </label>
+                                <input
+                                  id={`chapterName-${chapterIndex}`}
+                                  type="text"
+                                  value={chapter.name}
+                                  onChange={(e) => handleChapterNameChange(chapterIndex, e)}
+                                  placeholder="Enter chapter name"
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    borderRadius: 6,
+                                    border: `1.5px solid ${T.outlineVar}`,
+                                    fontSize: 12,
+                                  }}
+                                />
+                              </div>
+                              {courseForm.chapters.length > 1 && (
+                                <Btn
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => removeChapter(chapterIndex)}
+                                  style={{ padding: '4px 10px', fontSize: 11 }}
+                                  >Remove Chapter
+                                </Btn>
+                              )}
+                            </div>
+
+                            {chapter.resources.length > 0 && (
+                              <div style={{ marginBottom: 8 }}>
+                                <h4 style={{ fontSize: 14, fontWeight: 600, color: T.primary, marginBottom: 8 }}>
+                                  Resources
+                                </h4>
+                                <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                                  <Btn variant="outline" size="sm" onClick={() => addResource(chapterIndex)}>
+                                    Add Resource
+                                  </Btn>
+                                </div>
+                                {chapter.resources.map((resource, resourceIndex) => (
+                                  <div key={resourceIndex} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                      <div>
+                                        <label htmlFor={`resourceTitle-${chapterIndex}-${resourceIndex}`} style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 2, color: T.txtPri }}>
+                                          Video Title
+                                        </label>
+                                        <input
+                                          id={`resourceTitle-${chapterIndex}-${resourceIndex}`}
+                                          type="text"
+                                          value={resource.videoTitle}
+                                          onChange={(e) => handleResourceTitleChange(chapterIndex, resourceIndex, e)}
+                                          placeholder="Enter video title"
+                                          style={{
+                                            width: '100%',
+                                            padding: '6px 10px',
+                                            borderRadius: 4,
+                                            border: `1px solid ${T.outlineVar}`,
+                                            fontSize: 11,
+                                          }}
+                                        />
+                                      </div>
+                                      <button
+                                        onClick={() => removeResource(chapterIndex, resourceIndex)}
+                                        style={{ padding: '4px 8px', fontSize: 10, background: 'transparent', border: `1px solid ${T.error}`, color: T.error, borderRadius: 4 }}
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+
+                                    <div>
+                                      <label htmlFor={`resourceUrl-${chapterIndex}-${resourceIndex}`} style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 2, color: T.txtPri }}>
+                                        Video URL (YouTube or other)
+                                      </label>
+                                      <input
+                                        id={`resourceUrl-${chapterIndex}-${resourceIndex}`}
+                                        type="text"
+                                        value={resource.videoUrl}
+                                        onChange={(e) => handleResourceUrlChange(chapterIndex, resourceIndex, e)}
+                                        placeholder="Enter video URL"
+                                        style={{
+                                          width: '100%',
+                                          padding: '6px 10px',
+                                          borderRadius: 4,
+                                          border: `1px solid ${T.outlineVar}`,
+                                          fontSize: 11,
+                                        }}
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label htmlFor={`pdfUrl-${chapterIndex}-${resourceIndex}`} style={{ display: 'block', fontSize: 11, fontWeight: 600, marginBottom: 2, color: T.txtPri }}>
+                                        PDF/Notes URL (Optional)
+                                      </label>
+                                      <input
+                                        id={`pdfUrl-${chapterIndex}-${resourceIndex}`}
+                                        type="text"
+                                        value={resource.pdfUrl || ''}
+                                        onChange={(e) => handlePdfUrlChange(chapterIndex, resourceIndex, e)}
+                                        placeholder="Enter PDF or notes URL"
+                                        style={{
+                                          width: '100%',
+                                          padding: '6px 10px',
+                                          borderRadius: 4,
+                                          border: `1px solid ${T.outlineVar}`,
+                                          fontSize: 11,
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {chapter.resources.length === 0 && (
+                              <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                                <Btn variant="outline" size="sm" onClick={() => addResource(chapterIndex)}>
+                                  Add Resource
+                                </Btn>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 24 }}>
+                    <Btn
+                      variant="outline"
+                      onClick={() => {
+                        setCourseForm({
+                          name: '',
+                          description: '',
+                          hours: 0,
+                          chapters: [{ name: '', resources: [] }],
+                          externalUrl: ''
+                        })
+                        setEditingCourseId(null)
+                        setCourseType('build')
                       }}
                     >
-                      {placementReadyToggle ? 'READY' : 'REASSESS'}
-                    </button>
+                      Cancel
+                    </Btn>
+                    <Btn variant="navy" type="submit" disabled={loadingCourses}>
+                      {editingCourseId ? 'Update Course' : 'Get Approval by Admin'}
+                    </Btn>
                   </div>
+                </form>
+              </GlassCard>
 
-                  <textarea
-                    placeholder="Enter assessment remarks..."
-                    value={remarkInput}
-                    onChange={(e) => setRemarkInput(e.target.value)}
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      padding: 10,
-                      fontSize: 12,
-                      borderRadius: 8,
-                      border: `1.5px solid ${T.outlineVar}`,
-                      resize: 'none',
-                      marginBottom: 12,
-                    }}
-                  />
+              {/* Courses List */}
+              <GlassCard>
+                <h2 style={{ fontSize: 18, fontWeight: 600, color: T.primary, marginBottom: 16 }}>
+                  Course Library
+                </h2>
 
-                  <Btn onClick={handleSaveRemark} variant="navy" style={{ width: '100%', justifyContent: 'center' }}>
-                    Save & Submit Evaluation
-                  </Btn>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                {loadingCourses ? (
+                  <div style={{ textAlign: 'center', padding: '24px', color: T.txtMut }}>
+                    Loading courses...
+                  </div>
+                ) : (
+                  courses.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '24px', color: T.txtMut }}>
+                      No courses found. Create your first course above!
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                      {courses.map((course) => (
+                        <GlassCard key={course.id} style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                              <h3 style={{ fontSize: 16, fontWeight: 600, color: T.primary, margin: 0 }}>
+                                {course.name}
+                              </h3>
+                              {course.status === 'rejected' ? (
+                                <Pill color={T.error} bg={T.errCont}>REJECTED</Pill>
+                              ) : course.status === 'pending' ? (
+                                <Pill color={T.onGold} bg={T.goldFixed}>PENDING</Pill>
+                              ) : (
+                                <Pill color={T.green} bg={T.greenBg}>APPROVED</Pill>
+                              )}
+                            </div>
+                            <p style={{ fontSize: 12, color: T.txtSec, marginBottom: 8, lineHeight: 1.4 }}>
+                              {course.description}
+                            </p>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: T.txtMut }}>
+                                {course.hours} hours
+                              </span>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: T.txtMut }}>
+                                {course.chapters.length} chapters
+                              </span>
+                              {course.externalUrl ? (
+                                <span style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: T.primary
+                                }}>
+                                  <Link size={12} />
+                                  External Course
+                                </span>
+                              ) : (
+                                <span style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: T.green
+                                }}>
+                                  <BookOpen size={12} />
+                                  Built from Scratch
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ marginTop: 'auto' }}>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <Btn
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditCourse(course)}
+                              >
+                                Edit
+                              </Btn>
+                              <Btn
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteCourse(course.id)}
+                                style={{ color: T.error, borderColor: T.error }}
+                              >
+                                Delete
+                              </Btn>
+                            </div>
+                          </div>
+                        </GlassCard>
+                      ))}
+                    </div>
+                  ))}
+                </GlassCard>
+              </>
+          )}
+        </main>
+      </div>
     </div>
   )
 }
@@ -1995,9 +2485,54 @@ function AdminDashboard({
   onDeleteUser: (userId: string) => Promise<void>
   onLogout: () => void
 }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'config'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'config' | 'courses'>('overview')
   const [strictProctoring, setStrictProctoring] = useState(true)
   const [sessionTimeLimit, setSessionTimeLimit] = useState(90)
+
+  const [courses, setCourses] = useState<Course[]>([])
+  const [loadingCourses, setLoadingCourses] = useState(false)
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All')
+  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null)
+
+  const loadCourses = async () => {
+    setLoadingCourses(true)
+    try {
+      const courseList = await listCourses()
+      setCourses(courseList)
+    } catch (error) {
+      console.error('Failed to load courses:', error)
+    } finally {
+      setLoadingCourses(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'courses') {
+      loadCourses()
+    }
+  }, [activeTab])
+
+  const handleApproveCourse = async (id: string) => {
+    try {
+      await updateCourse(id, { status: 'approved' })
+      alert('Course approved successfully!')
+      await loadCourses()
+    } catch (error: any) {
+      console.error('Failed to approve course:', error)
+      alert('Failed to approve course: ' + (error.message || error))
+    }
+  }
+
+  const handleRejectCourse = async (id: string) => {
+    try {
+      await updateCourse(id, { status: 'rejected' })
+      alert('Course rejected successfully!')
+      await loadCourses()
+    } catch (error: any) {
+      console.error('Failed to reject course:', error)
+      alert('Failed to reject course: ' + (error.message || error))
+    }
+  }
 
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('All')
@@ -2081,6 +2616,7 @@ function AdminDashboard({
           {[
             { id: 'overview', label: 'Analytics Overview' },
             { id: 'users', label: 'User Management' },
+            { id: 'courses', label: 'Course Approvals' },
             { id: 'logs', label: 'System Audit Logs' },
             { id: 'config', label: 'Global Configurations' },
           ].map((tab) => (
@@ -2473,6 +3009,194 @@ function AdminDashboard({
               </GlassCard>
             </div>
           )}
+
+          {activeTab === 'courses' && (
+            <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <section>
+                <h1 style={{ fontSize: 20, fontWeight: 700, color: T.primary, marginBottom: 4 }}>
+                  Course Approvals Dashboard
+                </h1>
+                <p className="text-body" style={{ color: T.txtSec }}>
+                  Review and approve or reject courses created by the faculty. Approved courses are made available to the library.
+                </p>
+              </section>
+
+              {/* Status Filter buttons */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setSelectedStatusFilter(filter)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 20,
+                      border: `1.5px solid ${selectedStatusFilter === filter ? T.primary : T.outlineVar}`,
+                      background: selectedStatusFilter === filter ? T.primary : 'transparent',
+                      color: selectedStatusFilter === filter ? '#fff' : T.txtSec,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+
+              {/* Course list */}
+              <GlassCard>
+                {loadingCourses ? (
+                  <div style={{ textAlign: 'center', padding: '24px', color: T.txtMut }}>
+                    Loading courses...
+                  </div>
+                ) : (
+                  (() => {
+                    const filteredCourses = courses.filter((c) => {
+                      if (selectedStatusFilter === 'All') return true
+                      return (c.status || 'approved').toLowerCase() === selectedStatusFilter.toLowerCase()
+                    })
+
+                    if (filteredCourses.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '24px', color: T.txtMut }}>
+                          No courses found matching "{selectedStatusFilter}" status.
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {filteredCourses.map((course) => {
+                          const isExpanded = expandedCourseId === course.id
+                          return (
+                            <div
+                              key={course.id}
+                              style={{
+                                border: `1px solid ${T.border}`,
+                                borderRadius: 12,
+                                background: T.bgWhite,
+                                overflow: 'hidden',
+                                transition: 'all 0.2s',
+                              }}
+                            >
+                              {/* Header info */}
+                              <div
+                                onClick={() => setExpandedCourseId(isExpanded ? null : course.id)}
+                                style={{
+                                  padding: '16px 20px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  background: isExpanded ? T.bgLow : 'transparent',
+                                  transition: 'background 0.2s',
+                                }}
+                              >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 16, fontWeight: 700, color: T.primary }}>
+                                      {course.name}
+                                    </span>
+                                    {course.status === 'rejected' ? (
+                                      <Pill color={T.error} bg={T.errCont}>REJECTED</Pill>
+                                    ) : course.status === 'pending' ? (
+                                      <Pill color={T.onGold} bg={T.goldFixed}>PENDING APPROVAL</Pill>
+                                    ) : (
+                                      <Pill color={T.green} bg={T.greenBg}>APPROVED</Pill>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: T.txtSec }}>
+                                    {course.hours} hours &bull; {course.chapters.length} chapters &bull; {course.externalUrl ? 'External Link' : 'Custom Built'}
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: 8 }} onClick={(e) => e.stopPropagation()}>
+                                  {(course.status === 'pending' || course.status === 'rejected') && (
+                                    <Btn
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => handleApproveCourse(course.id)}
+                                      style={{ background: T.green, color: '#fff' }}
+                                    >
+                                      Approve
+                                    </Btn>
+                                  )}
+                                  {(course.status === 'pending' || course.status === 'approved' || !course.status) && (
+                                    <Btn
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleRejectCourse(course.id)}
+                                      style={{ borderColor: T.error, color: T.error }}
+                                    >
+                                      Reject
+                                    </Btn>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Expanded details */}
+                              {isExpanded && (
+                                <div style={{ padding: '20px', borderTop: `1px solid ${T.border}`, background: T.bgWhite }}>
+                                  <h4 style={{ fontSize: 13, fontWeight: 700, color: T.txtPri, marginBottom: 6 }}>
+                                    Description
+                                  </h4>
+                                  <p style={{ fontSize: 12, color: T.txtSec, marginBottom: 16, lineHeight: 1.5 }}>
+                                    {course.description}
+                                  </p>
+
+                                  {course.externalUrl ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                                      <strong style={{ color: T.txtPri }}>External URL:</strong>
+                                      <a href={course.externalUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.primary, textDecoration: 'underline' }}>
+                                        {course.externalUrl}
+                                      </a>
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <h4 style={{ fontSize: 13, fontWeight: 700, color: T.txtPri, marginBottom: 10 }}>
+                                        Syllabus ({course.chapters.length} Chapters)
+                                      </h4>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {course.chapters.map((ch, idx) => (
+                                          <div key={idx} style={{ padding: 12, background: T.bgLow, borderRadius: 8 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, marginBottom: 6 }}>
+                                              Chapter {idx + 1}: {ch.name}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                              {ch.resources.map((res, resIdx) => (
+                                                <div key={resIdx} style={{ fontSize: 11, color: T.txtSec, display: 'flex', justifyContent: 'space-between' }}>
+                                                  <span>📹 {res.videoTitle}</span>
+                                                  <div style={{ display: 'flex', gap: 10 }}>
+                                                    <a href={res.videoUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.primary }}>
+                                                      Watch Video
+                                                    </a>
+                                                    {res.pdfUrl && (
+                                                      <a href={res.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.green }}>
+                                                        View PDF
+                                                      </a>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()
+                )}
+              </GlassCard>
+            </div>
+          )}
         </main>
       </div>
     </div>
@@ -2622,7 +3346,7 @@ export default function App() {
     formData.append('sessionId', sessionId)
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || ''
+      const apiUrl = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
       const res = await fetch(`${apiUrl}/api/upload`, { method: 'POST', body: formData })
       const resp = await res.json()
       if (res.ok && resp.success) {

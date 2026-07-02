@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -153,4 +154,70 @@ export async function updateSessionRecord(id: string, updates: Partial<SessionRe
 
 export async function deleteSessionRecord(id: string) {
   await deleteDoc(doc(db, 'sessions', id))
+}
+
+// ===== COURSE OPERATIONS =====
+
+export interface Resource {
+  videoTitle: string
+  videoUrl: string
+  pdfUrl?: string   // optional
+}
+
+export interface Chapter {
+  name: string
+  resources: Resource[]
+}
+
+export interface Course {
+  id: string
+  name: string
+  description: string
+  hours: number
+  chapters: Chapter[]
+  externalUrl?: string
+  createdAt?: unknown
+  status?: 'approved' | 'pending' | 'rejected'
+}
+
+const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
+
+export async function getCourse(id: string): Promise<Course | null> {
+  const res = await fetch(`${API_URL}/api/courses/${id}`)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error('Failed to fetch course')
+  return res.json()
+}
+
+export async function listCourses(): Promise<Course[]> {
+  const res = await fetch(`${API_URL}/api/courses`)
+  if (!res.ok) throw new Error('Failed to list courses')
+  return res.json()
+}
+
+export async function createCourse(course: Omit<Course, 'id'>): Promise<string> {
+  const res = await fetch(`${API_URL}/api/courses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(course)
+  })
+  if (!res.ok) throw new Error('Failed to create course')
+  const data = await res.json()
+  return data.id
+}
+
+export async function updateCourse(id: string, updates: Partial<Course>): Promise<void> {
+  const res = await fetch(`${API_URL}/api/courses/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates)
+  })
+  if (!res.ok) throw new Error('Failed to update course')
+}
+
+export async function deleteCourse(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/courses/${id}`, {
+    method: 'DELETE'
+  })
+  if (!res.ok) throw new Error('Failed to delete course')
 }

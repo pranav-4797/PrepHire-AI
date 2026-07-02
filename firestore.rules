@@ -15,15 +15,15 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return role() == 'Admin';
+      return role() == 'Admin' || role() == 'admin';
     }
 
     function isFaculty() {
-      return role() == 'Faculty';
+      return role() == 'Faculty' || role() == 'faculty';
     }
 
     function isStudent() {
-      return role() == 'Student';
+      return role() == 'Student' || role() == 'student';
     }
 
     match /users/{userId} {
@@ -52,6 +52,11 @@ service cloud.firestore {
       );
       allow update: if signedIn() && (isAdmin() || isFaculty());
       allow delete: if signedIn() && isAdmin();
+    }
+
+    match /courses/{courseId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && (isAdmin() || isFaculty());
     }
 
     match /{document=**} {
