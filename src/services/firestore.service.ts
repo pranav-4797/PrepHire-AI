@@ -181,6 +181,7 @@ export interface Course {
   externalUrl?: string
   createdAt?: unknown
   status?: 'approved' | 'pending' | 'rejected'
+  createdByEmail?: string
 }
 
 const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
@@ -198,10 +199,13 @@ export async function listCourses(): Promise<Course[]> {
   return res.json()
 }
 
-export async function createCourse(course: Omit<Course, 'id'>): Promise<string> {
+export async function createCourse(course: Omit<Course, 'id'>, email?: string, role?: string): Promise<string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (email) headers['x-user-email'] = email
+  if (role) headers['x-user-role'] = role
   const res = await fetch(`${API_URL}/api/courses`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(course)
   })
   if (!res.ok) throw new Error('Failed to create course')
@@ -209,18 +213,25 @@ export async function createCourse(course: Omit<Course, 'id'>): Promise<string> 
   return data.id
 }
 
-export async function updateCourse(id: string, updates: Partial<Course>): Promise<void> {
+export async function updateCourse(id: string, updates: Partial<Course>, email?: string, role?: string): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (email) headers['x-user-email'] = email
+  if (role) headers['x-user-role'] = role
   const res = await fetch(`${API_URL}/api/courses/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(updates)
   })
   if (!res.ok) throw new Error('Failed to update course')
 }
 
-export async function deleteCourse(id: string): Promise<void> {
+export async function deleteCourse(id: string, email?: string, role?: string): Promise<void> {
+  const headers: Record<string, string> = {}
+  if (email) headers['x-user-email'] = email
+  if (role) headers['x-user-role'] = role
   const res = await fetch(`${API_URL}/api/courses/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers
   })
   if (!res.ok) throw new Error('Failed to delete course')
 }

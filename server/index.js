@@ -340,11 +340,13 @@ app.get('/api/courses/:id', (req, res) => {
 })
 
 app.post('/api/courses', (req, res) => {
+  const userEmail = req.headers['x-user-email']
   const courses = readCourses()
   const newCourse = {
     ...req.body,
     id: Date.now().toString(),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    createdByEmail: userEmail || null
   }
   courses.push(newCourse)
   writeCourses(courses)
@@ -352,19 +354,58 @@ app.post('/api/courses', (req, res) => {
 })
 
 app.put('/api/courses/:id', (req, res) => {
+  const userEmail = req.headers['x-user-email']
+  const userRole = req.headers['x-user-role']
+
   const courses = readCourses()
   const index = courses.findIndex(c => c.id === req.params.id)
   if (index === -1) return res.status(404).json({ error: 'Course not found' })
-  
-  courses[index] = { ...courses[index], ...req.body }
+
+  const course = courses[index]
+
+  // Enforce access control: Admin can edit anything. Faculty can edit if they are the creator or if it has no creator
+  const isAuthorized =
+    userRole?.toLowerCase() === 'admin' ||
+    !course.createdByEmail ||
+    course.createdByEmail === userEmail
+
+  if (!isAuthorized) {
+    return res.status(403).json({ error: 'Unauthorized to edit this course' })
+  }
+
+  // Preserve creator on update if it exists
+  const updatedCourse = {
+    ...course,
+    ...req.body
+  }
+  if (course.createdByEmail) {
+    updatedCourse.createdByEmail = course.createdByEmail
+  }
+
+  courses[index] = updatedCourse
   writeCourses(courses)
   res.json({ success: true })
 })
 
 app.delete('/api/courses/:id', (req, res) => {
-  let courses = readCourses()
-  courses = courses.filter(c => c.id !== req.params.id)
-  writeCourses(courses)
+  const userEmail = req.headers['x-user-email']
+  const userRole = req.headers['x-user-role']
+
+  const courses = readCourses()
+  const course = courses.find(c => c.id === req.params.id)
+  if (!course) return res.status(404).json({ error: 'Course not found' })
+
+  const isAuthorized =
+    userRole?.toLowerCase() === 'admin' ||
+    !course.createdByEmail ||
+    course.createdByEmail === userEmail
+
+  if (!isAuthorized) {
+    return res.status(403).json({ error: 'Unauthorized to delete this course' })
+  }
+
+  const filteredCourses = courses.filter(c => c.id !== req.params.id)
+  writeCourses(filteredCourses)
   res.json({ success: true })
 })
 

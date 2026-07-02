@@ -886,7 +886,7 @@ function MicButton({
     rec.continuous = false
     rec.interimResults = false
     rec.onstart = () => setListening(true)
-    rec.onresult = (e) => onTranscript?.(e.results[0][0].transcript)
+    rec.onresult = (e: SpeechRecognitionEvent) => onTranscript?.(e.results[0][0].transcript)
     rec.onerror = () => setListening(false)
     rec.onend = () => setListening(false)
     rec.start()
@@ -1819,11 +1819,11 @@ const addResource = (chapterIndex: number) => {
         status: 'pending' as const
       }
       if (editingCourseId) {
-        await updateCourse(editingCourseId, payload)
+        await updateCourse(editingCourseId, payload, user.email, user.role)
         setEditingCourseId(null)
         showToast('Course updated and submitted for approval!', 'success')
       } else {
-        await createCourse(payload)
+        await createCourse(payload, user.email, user.role)
         showToast('Course created and submitted for approval!', 'success')
       }
       // Reset form
@@ -1857,7 +1857,7 @@ const addResource = (chapterIndex: number) => {
 
   const handleDeleteCourse = async (id: string) => {
     try {
-      await deleteCourse(id)
+      await deleteCourse(id, user.email, user.role)
       await loadCourses()
     } catch (error) {
       console.error('Failed to delete course:', error)
@@ -2413,87 +2413,118 @@ const addResource = (chapterIndex: number) => {
                     Loading courses...
                   </div>
                 ) : (
-                  courses.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '24px', color: T.txtMut }}>
-                      No courses found. Create your first course above!
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-                      {courses.map((course) => (
-                        <GlassCard key={course.id} style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
-                          <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
-                              <h3 style={{ fontSize: 16, fontWeight: 600, color: T.primary, margin: 0 }}>
-                                {course.name}
-                              </h3>
-                              {course.status === 'rejected' ? (
-                                <Pill color={T.error} bg={T.errCont}>REJECTED</Pill>
-                              ) : course.status === 'pending' ? (
-                                <Pill color={T.onGold} bg={T.goldFixed}>PENDING</Pill>
-                              ) : (
-                                <Pill color={T.green} bg={T.greenBg}>APPROVED</Pill>
-                              )}
-                            </div>
-                            <p style={{ fontSize: 12, color: T.txtSec, marginBottom: 8, lineHeight: 1.4 }}>
-                              {course.description}
-                            </p>
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: T.txtMut }}>
-                                {course.hours} hours
-                              </span>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: T.txtMut }}>
-                                {course.chapters.length} chapters
-                              </span>
-                              {course.externalUrl ? (
-                                <span style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  color: T.primary
-                                }}>
-                                  <Link size={12} />
-                                  External Course
-                                </span>
-                              ) : (
-                                <span style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  color: T.green
-                                }}>
-                                  <BookOpen size={12} />
-                                  Built from Scratch
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{ marginTop: 'auto' }}>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <Btn
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEditCourse(course)}
-                              >
-                                Edit
-                              </Btn>
-                              <Btn
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteCourse(course.id)}
-                                style={{ color: T.error, borderColor: T.error }}
-                              >
-                                Delete
-                              </Btn>
-                            </div>
-                          </div>
-                        </GlassCard>
-                      ))}
-                    </div>
-                  ))}
+                  (() => {
+                    const visibleCourses = courses.filter((course) => {
+                      if (course.createdByEmail === user.email) return true
+                      return (course.status || 'approved') === 'approved'
+                    })
+
+                    if (visibleCourses.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '24px', color: T.txtMut }}>
+                          No courses found in the library. Create your first course above!
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                        {visibleCourses.map((course) => {
+                          const canEdit = !course.createdByEmail || course.createdByEmail === user.email
+                          return (
+                            <GlassCard key={course.id} style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                                  <h3 style={{ fontSize: 16, fontWeight: 600, color: T.primary, margin: 0 }}>
+                                    {course.name}
+                                  </h3>
+                                  {course.status === 'rejected' ? (
+                                    <Pill color={T.error} bg={T.errCont}>REJECTED</Pill>
+                                  ) : course.status === 'pending' ? (
+                                    <Pill color={T.onGold} bg={T.goldFixed}>PENDING</Pill>
+                                  ) : (
+                                    <Pill color={T.green} bg={T.greenBg}>APPROVED</Pill>
+                                  )}
+                                </div>
+                                <p style={{ fontSize: 12, color: T.txtSec, marginBottom: 8, lineHeight: 1.4 }}>
+                                  {course.description}
+                                </p>
+                                <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: T.txtMut }}>
+                                    {course.hours} hours
+                                  </span>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: T.txtMut }}>
+                                    {course.chapters.length} chapters
+                                  </span>
+                                  {course.externalUrl ? (
+                                    <span style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: T.primary
+                                    }}>
+                                      <Link size={12} />
+                                      External Course
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: T.green
+                                    }}>
+                                      <BookOpen size={12} />
+                                      Built from Scratch
+                                    </span>
+                                  )}
+                                  {course.createdByEmail && (
+                                    <span style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: T.primary,
+                                      background: T.primaryFix,
+                                      padding: '2px 6px',
+                                      borderRadius: 4
+                                    }}>
+                                      By: {course.createdByEmail === user.email ? 'You' : course.createdByEmail.split('@')[0]}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ marginTop: 'auto' }}>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  {canEdit && (
+                                    <>
+                                      <Btn
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleEditCourse(course)}
+                                      >
+                                        Edit
+                                      </Btn>
+                                      <Btn
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleDeleteCourse(course.id)}
+                                        style={{ color: T.error, borderColor: T.error }}
+                                      >
+                                        Delete
+                                      </Btn>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </GlassCard>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()
+                )}
                 </GlassCard>
               </>
           )}
@@ -2549,7 +2580,7 @@ function AdminDashboard({
 
   const handleApproveCourse = async (id: string) => {
     try {
-      await updateCourse(id, { status: 'approved' })
+      await updateCourse(id, { status: 'approved' }, user.email, user.role)
       showToast('Course approved successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
@@ -2560,7 +2591,7 @@ function AdminDashboard({
 
   const handleRejectCourse = async (id: string) => {
     try {
-      await updateCourse(id, { status: 'rejected' })
+      await updateCourse(id, { status: 'rejected' }, user.email, user.role)
       showToast('Course rejected successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
