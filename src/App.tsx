@@ -18,7 +18,7 @@ import {
   deleteCourse,
 } from './services/firestore.service'
 import type { UserProfile, UserRole, Course } from './services/firestore.service'
-import { loadSessions, saveSession, updateSession } from './services/session.service'
+import { loadSessions, loadStudentSessions, saveSession, updateSession } from './services/session.service'
 
 // ── THEME TOKENS ────────────────────────────────────────────────────────────
 const T = {
@@ -3343,21 +3343,47 @@ export default function App() {
   const introTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    if (!profile) {
+      setAllSessions([])
+      setUsers([])
+      return
+    }
+
     let cancelled = false
 
     async function loadFirestoreData() {
-      const [nextSessions, nextUsers] = await Promise.all([loadSessions(), listUserProfiles()])
-      if (!cancelled) {
-        setAllSessions(nextSessions as SessionRecord[])
-        setUsers(nextUsers)
+      const userProfile = profile
+      if (!userProfile) return
+
+      try {
+        const role = userProfile.role.toLowerCase()
+        if (role === 'admin' || role === 'faculty') {
+          const [nextSessions, nextUsers] = await Promise.all([
+            loadSessions(),
+            listUserProfiles(),
+          ])
+          if (!cancelled) {
+            setAllSessions(nextSessions as SessionRecord[])
+            setUsers(nextUsers)
+          }
+        } else {
+          // Student loads only their own sessions
+          const nextSessions = await loadStudentSessions(userProfile.email)
+          if (!cancelled) {
+            setAllSessions(nextSessions as SessionRecord[])
+            setUsers([])
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load user-specific Firestore data:', error)
       }
     }
 
-    loadFirestoreData().catch((error) => console.error('Failed to load Firestore data:', error))
+    loadFirestoreData()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [profile])
 
   useEffect(() => {
     let cancelled = false
