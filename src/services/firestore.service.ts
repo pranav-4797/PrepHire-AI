@@ -45,9 +45,12 @@ export interface SessionRecordData {
 }
 
 export function normalizeRole(role?: string): UserRole {
-  if (role === 'Admin' || role === 'Faculty') return role
+  const r = role?.toLowerCase()
+  if (r === 'admin') return 'Admin'
+  if (r === 'faculty') return 'Faculty'
   return 'Student'
 }
+
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, 'users', uid))
