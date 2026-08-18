@@ -2706,7 +2706,7 @@ function AdminDashboard({
   allSessions: SessionRecord[]
   users: UserProfile[]
   onRoleChange: (userId: string, role: UserRole) => Promise<void>
-  onDeleteUser: (userId: string) => Promise<void>
+  onDeleteUser: (userId: string, email?: string) => Promise<void>
   onDepartmentChange: (userId: string, department: string) => Promise<void>
   onLogout: () => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -2808,8 +2808,17 @@ function AdminDashboard({
     await onRoleChange(userId, newRole as UserRole)
   }
 
-  async function handleDeleteUser(userId: string) {
-    await onDeleteUser(userId)
+  async function handleDeleteUser(userId: string, email?: string) {
+    const targetUser = users.find((u) => u.id === userId)
+    const userLabel = targetUser?.name || 'this user'
+    if (window.confirm(`Delete ${userLabel} and all their session records from database to free space?`)) {
+      try {
+        await onDeleteUser(userId, email || targetUser?.email)
+        showToast('User and associated session records deleted.', 'success')
+      } catch (err: any) {
+        showToast('Failed to delete user: ' + (err.message || err), 'error')
+      }
+    }
   }
 
   async function handleDepartmentChange(userId: string, newDept: string) {
@@ -3144,7 +3153,7 @@ function AdminDashboard({
                           <td style={{ padding: '12px 8px', color: T.txtMut, fontSize: 11 }}>{u.registeredAt}</td>
                           <td style={{ padding: '12px 8px', textAlign: 'right' }}>
                             <button
-                              onClick={() => handleDeleteUser(u.id)}
+                              onClick={() => handleDeleteUser(u.id, u.email)}
                               style={{
                                 padding: '4px 10px',
                                 border: `1px solid ${T.error}`,
@@ -3562,7 +3571,7 @@ export default function App() {
   const [timer, setTimer] = useState(90)
   const [sessionTimeLimit, _setSessionTimeLimit] = useState(90)
   const [timerActive, setTimerActive] = useState(false)
-  const [allSessions, setAllSessions] = useState<SessionRecord[]>(() => getInitialSessions())
+  const [allSessions, setAllSessions] = useState<SessionRecord[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [procWarnings, setProcWarnings] = useState<{ text: string; time: string }[]>([])
@@ -4143,9 +4152,14 @@ export default function App() {
               await updateUserProfile(userId, { role })
               setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
             }}
-            onDeleteUser={async (userId) => {
-              await deleteUserProfile(userId)
+            onDeleteUser={async (userId, email) => {
+              const targetUser = users.find((u) => u.id === userId)
+              const userEmail = email || targetUser?.email
+              await deleteUserProfile(userId, userEmail)
               setUsers((prev) => prev.filter((u) => u.id !== userId))
+              if (userEmail) {
+                setAllSessions((prev) => prev.filter((s) => s.studentEmail.toLowerCase() !== userEmail.toLowerCase()))
+              }
             }}
             onDepartmentChange={async (userId, department) => {
               await updateUserProfile(userId, { department })

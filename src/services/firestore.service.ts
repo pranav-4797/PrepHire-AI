@@ -125,8 +125,22 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
   await updateDoc(doc(db, 'users', uid), safeUpdates)
 }
 
-export async function deleteUserProfile(uid: string) {
+export async function deleteSessionsForStudent(email: string) {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'sessions'), where('studentEmail', '==', email))
+    )
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
+  } catch (err) {
+    console.warn('Failed to delete student sessions:', err)
+  }
+}
+
+export async function deleteUserProfile(uid: string, email?: string) {
   await deleteDoc(doc(db, 'users', uid))
+  if (email) {
+    await deleteSessionsForStudent(email)
+  }
 }
 
 export async function listSessions(): Promise<SessionRecordData[]> {
