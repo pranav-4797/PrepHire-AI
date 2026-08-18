@@ -149,16 +149,38 @@ export async function listSessions(): Promise<SessionRecordData[]> {
 }
 
 export async function listSessionsForStudent(email: string): Promise<SessionRecordData[]> {
-  const snap = await getDocs(
-    query(collection(db, 'sessions'), where('studentEmail', '==', email), orderBy('createdAt', 'desc')),
-  )
-  return snap.docs.map((item) => ({ ...(item.data() as Omit<SessionRecordData, 'id'>), id: item.id }))
+  try {
+    const cleanEmail = (email || '').trim().toLowerCase()
+    const snap = await getDocs(
+      query(collection(db, 'sessions'), where('studentEmail', '==', cleanEmail))
+    )
+    let docs = snap.docs.map((item) => ({ ...(item.data() as Omit<SessionRecordData, 'id'>), id: item.id }))
+    if (docs.length === 0 && email && email.trim() !== cleanEmail) {
+      const altSnap = await getDocs(
+        query(collection(db, 'sessions'), where('studentEmail', '==', email.trim()))
+      )
+      docs = altSnap.docs.map((item) => ({ ...(item.data() as Omit<SessionRecordData, 'id'>), id: item.id }))
+    }
+    return docs.sort((a, b) => {
+      const tA = (a.createdAt as any)?.toMillis?.() || (a.date ? new Date(a.date).getTime() : 0)
+      const tB = (b.createdAt as any)?.toMillis?.() || (b.date ? new Date(b.date).getTime() : 0)
+      return tB - tA
+    })
+  } catch (err) {
+    console.error('Failed to list sessions for student:', err)
+    return []
+  }
 }
 
 export async function addSessionRecord(session: Omit<SessionRecordData, 'createdAt'>) {
   const { id, ...payload } = session
+  const cleanPayload = {
+    ...payload,
+    studentEmail: (payload.studentEmail || '').trim().toLowerCase(),
+    createdAt: serverTimestamp(),
+  }
   const ref = id ? doc(db, 'sessions', id) : doc(collection(db, 'sessions'))
-  await setDoc(ref, { ...payload, createdAt: serverTimestamp() }, { merge: true })
+  await setDoc(ref, cleanPayload, { merge: true })
   return ref.id
 }
 

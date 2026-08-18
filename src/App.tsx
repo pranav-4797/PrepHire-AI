@@ -4265,11 +4265,12 @@ export default function App() {
     // Create session record
     const sessionId = uid()
     setActiveSessionId(sessionId)
+    const studentEmail = (user?.email || profile?.email || '').trim().toLowerCase()
     const newSession: SessionRecord = {
       id: sessionId,
-      studentName: user?.name || 'Anonymous',
-      studentEmail: user?.email || '',
-      department: user?.department || 'General',
+      studentName: user?.name || profile?.name || 'Student',
+      studentEmail,
+      department: user?.department || profile?.department || 'General',
       domain: domainObj?.label || domain || '',
       level,
       score: r.overallScore,
@@ -4278,7 +4279,7 @@ export default function App() {
       report: r,
     }
 
-    setAllSessions((prev) => [...prev, newSession])
+    setAllSessions((prev) => [newSession, ...prev.filter(s => s.id !== sessionId)])
     saveSession(newSession).catch((error) => {
       console.error('Failed to save session:', error)
       showToast('Failed to save interview session', 'error')
