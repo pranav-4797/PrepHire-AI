@@ -52,21 +52,22 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **End Interview confirmation modal**: Clicking "End Interview" shows a modal with context-aware warning (0 / partial / all questions) and confirm/cancel buttons
 - **Skip video upload on empty session**: No Drive upload attempted when zero questions were answered
 
-## Recent fixes (2026-08-16)
+## Recent fixes (2026-08-18)
 
-- **Resume-driven interviews**: New "Profile" tab in student portal (student-only; faculty/admin dashboards don't include it). Student uploads a PDF resume once → `extractResumeText` (pdfjs-dist, client-side) → `analyzeResume` (Gemini) → `ResumeProfile` JSON stored in `users/{uid}.resumeProfile` + optional `resumeNotes` textarea. Loaded on login and reused for every interview. Raw PDF never persisted.
-- **Resume context injected into interview prompt**: `beginActualInterview` appends `buildResumeContext(profile, notes, domain)` to the system prompt — Technical drills into listed tech stacks/projects; HR bases behavioral questions on experience; Aptitude/GD ignore resume. Report/evaluator untouched (v1 scope).
-- **Tab-switch false positive fixed**: `ProctoredCamera` blur listener now ignores blurs caused by file pickers — on window focus, if `document.activeElement` is an `INPUT[type=file]` the blur count is rolled back. Also removed `blurCount` from the effect deps (was re-subscribing on every blur).
-- **Intro screen**: resume upload UI removed (was triggering proctoring); now shows a status banner only — green "Resume profile loaded" or amber "Tip: upload in Profile".
-- **Resume upload handler** (`handleResumeUpload` in App.tsx): validates `.pdf`, saves both `resumeProfile` + trimmed `resumeNotes` via `updateUserProfile`, shows toast/error; `handleResumeRemove` clears profile (notes kept).
+- **Branch-specific institutional governance**: 9 MIT AoE engineering programs supported via `src/constants/branches.ts`. Students select branch during registration; Faculty view is scoped to students from their department (`branchSessions`); Admins have full access with branch filter and real-time branch reassignment.
+- **Student Profile security**: Department is read-only on the student profile; `firestore.rules` strictly prevents self-modification of `department`, `role`, and `disabled` fields.
+- **Cascading session cleanup**: Deleting a user in Admin Console automatically deletes all associated session records from Firestore (`sessions` collection) to free storage space.
+- **Authentication UX & Password Visibility Toggle**: Added `Eye`/`EyeOff` toggle button to password input, Enter-key form submission wrapper, autocomplete attributes, and client-side password length validation.
+- **Deep Subpage Routing & Browser Back/Forward History**: Two-way synchronization between React state and browser History API (`pushState` / `popstate`). Clicking the browser Back button or mouse back key navigates to the previous subpage/tab (`/dashboard/interview`, `/dashboard/coding`, `/dashboard/profile`, `/admin/users`, `/faculty/assessments`, etc.) without exiting the website. Direct linking/refreshing to subpaths restored on initial mount.
+- **Zero build/lint errors**: Fixed all pre-existing TypeScript and ESLint errors. `npm run build` (`tsc -b && vite build`) and `npm run lint` pass cleanly with 0 errors.
 
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit
 - Service account JSON (`server/service-account.json`) is gitignored — server falls back to mock mode without it
-- `App.tsx` is ~5200 lines — edits need careful oldString matching; prefer multi-line context in oldString
-- **Pre-existing typecheck/lint failures** (not from resume work): `tsc -b --noEmit` reports ~18 errors — `debounce`/`getNextQuestionIndex` in App.tsx (~line 108) reference state outside the component, implicit-any params at App.tsx ~761/2051/2971, orphaned filter fragment in `AdminProblemsManager.tsx` (~line 43 `if (statusFilter === 'All') return true`), unused `addDoc` import + `handleSaveRemark` in firestore.service.ts/App.tsx. `npm run build` fails on these — use `npx vite build` to verify bundling only.
+- `App.tsx` is ~5500 lines — edits need careful oldString matching; prefer multi-line context in oldString
 - pdfjs-dist worker: `src/utils/resume.ts` imports `pdf.worker.min.mjs?url` and sets `GlobalWorkerOptions.workerSrc` — Vite handles it; don't switch to CDN worker URLs
 - No test files exist in the repo; no test runner configured
 - The Courses feature trusts `x-user-email` / `x-user-role` headers (legacy); the Coding platform uses server-verified Firebase tokens — do not copy the legacy pattern to new features
 - Piston API URL defaults to public demo instance — self-host for production traffic
+- SPA rewrites: `firebase.json` routes `**` to `/index.html` to support deep URL paths without 404s on refresh.

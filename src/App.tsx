@@ -1757,6 +1757,8 @@ function FacultyDashboard({
   onUpdateSession,
   onLogout,
   showToast,
+  activeTab: activeTabProp,
+  onTabChange,
 }: {
   user: User
   allSessions: SessionRecord[]
@@ -1764,6 +1766,8 @@ function FacultyDashboard({
   onUpdateSession: (id: string, updates: Partial<SessionRecord>) => void
   onLogout: () => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  activeTab?: 'overview' | 'ranking' | 'courses' | 'coding'
+  onTabChange?: (tab: 'overview' | 'ranking' | 'courses' | 'coding') => void
 }) {
   // Branch-scope: faculty only sees students from their own branch
   const facultyBranch = user.department || 'General'
@@ -1781,7 +1785,9 @@ function FacultyDashboard({
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null)
   const [remarkInput, setRemarkInput] = useState('')
   const [placementReadyToggle, setPlacementReadyToggle] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'ranking' | 'courses' | 'coding'>('overview')
+  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'ranking' | 'courses' | 'coding'>('overview')
+  const activeTab = activeTabProp ?? localActiveTab
+  const setActiveTab = onTabChange ?? setLocalActiveTab
   const [courses, setCourses] = useState<Course[]>([])
   const [loadingCourses, setLoadingCourses] = useState(false)
   const [courseForm, setCourseForm] = useState<Omit<Course, 'id' | 'createdAt'>>({
@@ -2740,6 +2746,8 @@ function AdminDashboard({
   onDepartmentChange,
   onLogout,
   showToast,
+  activeTab: activeTabProp,
+  onTabChange,
 }: {
   user: User
   allSessions: SessionRecord[]
@@ -2749,8 +2757,12 @@ function AdminDashboard({
   onDepartmentChange: (userId: string, department: string) => Promise<void>
   onLogout: () => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  activeTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
+  onTabChange?: (tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding') => void
 }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'>('overview')
+  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'>('overview')
+  const activeTab = activeTabProp ?? localActiveTab
+  const setActiveTab = onTabChange ?? setLocalActiveTab
   const [strictProctoring, setStrictProctoring] = useState(true)
   const [sessionTimeLimit, setSessionTimeLimit] = useState(90)
 
@@ -3553,13 +3565,85 @@ function AdminDashboard({
   )
 }
 
+// ── ROUTING & URL SYNC HELPERS ──────────────────────────────────────────────
+function parsePathname(pathname: string): {
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report'
+  studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile'
+  facultyTab?: 'overview' | 'ranking' | 'courses' | 'coding'
+  adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
+} {
+  const p = pathname.toLowerCase()
+  if (p === '/auth' || p === '/login') {
+    return { screen: 'auth' }
+  }
+  if (p === '/interview/intro' || p === '/intro') {
+    return { screen: 'intro' }
+  }
+  if (p === '/interview/session' || p === '/interview') {
+    return { screen: 'interview' }
+  }
+  if (p === '/interview/report' || p === '/report') {
+    return { screen: 'report' }
+  }
+  if (p.startsWith('/admin')) {
+    let tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' = 'overview'
+    if (p.includes('users')) tab = 'users'
+    else if (p.includes('ranking')) tab = 'ranking'
+    else if (p.includes('courses')) tab = 'courses'
+    else if (p.includes('coding')) tab = 'coding'
+    else if (p.includes('logs')) tab = 'logs'
+    else if (p.includes('config')) tab = 'config'
+    return { screen: 'home', adminTab: tab }
+  }
+  if (p.startsWith('/faculty')) {
+    let tab: 'overview' | 'ranking' | 'courses' | 'coding' = 'overview'
+    if (p.includes('ranking')) tab = 'ranking'
+    else if (p.includes('courses')) tab = 'courses'
+    else if (p.includes('coding')) tab = 'coding'
+    return { screen: 'home', facultyTab: tab }
+  }
+  if (p.startsWith('/dashboard') || p === '/courses' || p === '/coding' || p === '/profile' || p === '/ranking' || p === '/leaderboard') {
+    let tab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' = 'interview'
+    if (p.includes('courses')) tab = 'courses'
+    else if (p.includes('coding')) tab = 'coding'
+    else if (p.includes('ranking') || p.includes('leaderboard')) tab = 'ranking'
+    else if (p.includes('profile')) tab = 'profile'
+    return { screen: 'home', studentTab: tab }
+  }
+  return { screen: 'landing' }
+}
+
+function getUrlPath(
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report',
+  role: string | null | undefined,
+  studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile',
+  facultyTab: 'overview' | 'ranking' | 'courses' | 'coding',
+  adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
+): string {
+  if (screen === 'landing') return '/'
+  if (screen === 'auth') return '/login'
+  if (screen === 'intro') return '/interview/intro'
+  if (screen === 'interview') return '/interview/session'
+  if (screen === 'report') return '/interview/report'
+  if (screen === 'home') {
+    const r = (role || 'student').toLowerCase()
+    if (r === 'admin') return `/admin/${adminTab}`
+    if (r === 'faculty') return `/faculty/${facultyTab === 'overview' ? 'assessments' : facultyTab}`
+    return `/dashboard/${studentTab}`
+  }
+  return '/'
+}
+
 // ── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const { profile, loading: authLoading, logout: firebaseLogout } = useAuth()
+  const initialRoute = parsePathname(window.location.pathname)
+
   const [screen, setScreen] = useState<
     'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report'
-  >('landing')
+  >(initialRoute.screen)
 
+  const [user, setUser] = useState<User | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type })
@@ -3571,7 +3655,48 @@ export default function App() {
     return () => clearTimeout(tId)
   }, [toast])
 
-  const [studentTab, setStudentTab] = useState<'interview' | 'courses' | 'ranking' | 'coding' | 'profile'>('interview')
+  const [studentTab, setStudentTab] = useState<'interview' | 'courses' | 'ranking' | 'coding' | 'profile'>(
+    initialRoute.studentTab || 'interview'
+  )
+  const [facultyTab, setFacultyTab] = useState<'overview' | 'ranking' | 'courses' | 'coding'>(
+    initialRoute.facultyTab || 'overview'
+  )
+  const [adminTab, setAdminTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'>(
+    initialRoute.adminTab || 'overview'
+  )
+  const isPopStateRef = useRef(false)
+
+  // ── Browser History & Back/Forward button listener ───────────────────
+  useEffect(() => {
+    function handlePopState() {
+      isPopStateRef.current = true
+      const route = parsePathname(window.location.pathname)
+      if (route.screen === 'landing' && profile) {
+        setScreen('home')
+      } else {
+        setScreen(route.screen)
+      }
+      if (route.studentTab) setStudentTab(route.studentTab)
+      if (route.facultyTab) setFacultyTab(route.facultyTab)
+      if (route.adminTab) setAdminTab(route.adminTab)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [profile])
+
+  // ── Sync React State to Browser URL ──────────────────────────────────
+  useEffect(() => {
+    if (isPopStateRef.current) {
+      isPopStateRef.current = false
+      return
+    }
+    const targetPath = getUrlPath(screen, user?.role, studentTab, facultyTab, adminTab)
+    if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
+      window.history.pushState({ screen, studentTab, facultyTab, adminTab }, '', targetPath)
+    }
+  }, [screen, user?.role, studentTab, facultyTab, adminTab])
+
   const [studentCourses, setStudentCourses] = useState<Course[]>([])
   const [loadingStudentCourses, setLoadingStudentCourses] = useState(false)
   const [expandedStudentCourseId, setExpandedStudentCourseId] = useState<string | null>(null)
@@ -3593,8 +3718,6 @@ export default function App() {
       loadStudentCourses()
     }
   }, [studentTab])
-
-  const [user, setUser] = useState<User | null>(null)
   const [domain, setDomain] = useState<string | null>(null)
   const [level, setLevel] = useState('Intermediate')
   const [messages, setMessages] = useState<Message[]>([])
@@ -3702,8 +3825,16 @@ export default function App() {
           warnings: s.warnings,
         }))
       setHistory(studentHistory)
+      const activePath = parsePathname(window.location.pathname)
       if (screen === 'auth' || screen === 'landing') {
-        setScreen('home')
+        if (activePath.screen !== 'landing' && activePath.screen !== 'auth') {
+          setScreen(activePath.screen)
+          if (activePath.studentTab) setStudentTab(activePath.studentTab)
+          if (activePath.facultyTab) setFacultyTab(activePath.facultyTab)
+          if (activePath.adminTab) setAdminTab(activePath.adminTab)
+        } else {
+          setScreen('home')
+        }
         requestPermissions().then((p) => {
           if (!cancelled) {
             setPerms({ ...p, checked: true })
@@ -4165,6 +4296,8 @@ export default function App() {
             user={user}
             allSessions={allSessions}
             users={users}
+            activeTab={facultyTab}
+            onTabChange={setFacultyTab}
             onUpdateSession={(id, updates) => {
               setAllSessions((prev) => {
                 const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
@@ -4187,6 +4320,8 @@ export default function App() {
             user={user}
             allSessions={allSessions}
             users={users}
+            activeTab={adminTab}
+            onTabChange={setAdminTab}
             onRoleChange={async (userId, role) => {
               await updateUserProfile(userId, { role })
               setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
