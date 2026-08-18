@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import {
   Settings, User, Calculator, MessageSquare, CameraOff,
@@ -3066,14 +3066,126 @@ function AdminDashboard({
     Critical: allSessions.filter((s) => s.score < 50).length,
   }
 
-  const auditLogs = [
-    { time: '16:45:12', msg: 'Admin session initialized by Dr. Rajesh Sharma.' },
-    { time: '15:20:05', msg: 'Prof. Anil Patil approved Aarav Mehta for placements.' },
-    { time: '14:15:30', msg: 'Sneha Kulkarni completed Group Discussion interview - Score: 94.' },
-    { time: '11:05:44', msg: 'Prof. Deepa Joshi left remarks on Isha Deshpande\'s session.' },
-    { time: 'Yesterday', msg: 'Rohit Shinde completed Aptitude interview - Score: 82.' },
-    { time: 'June 6, 2026', msg: 'Isha Deshpande registered a new Student account.' },
-  ]
+  const [logFilter, setLogFilter] = useState<'All' | 'Interviews' | 'Evaluations' | 'Users' | 'Warnings'>('All')
+  const [logSearch, setLogSearch] = useState('')
+
+  const dynamicAuditLogs = useMemo(() => {
+    interface AuditLogEvent {
+      id: string
+      time: string
+      dateObj: Date
+      category: 'Interviews' | 'Evaluations' | 'Users' | 'Warnings' | 'System'
+      badgeColor: string
+      badgeBg: string
+      title: string
+      msg: string
+      detail?: string
+    }
+
+    const events: AuditLogEvent[] = []
+
+    // 1. Current admin session
+    events.push({
+      id: 'sys-active',
+      time: 'Live Now',
+      dateObj: new Date(),
+      category: 'System',
+      badgeColor: T.primary,
+      badgeBg: T.primaryFix,
+      title: 'Placement Console Active',
+      msg: `Admin session verified for ${user.name} (${user.email}).`,
+    })
+
+    // 2. User registration events
+    users.forEach((u) => {
+      const raw = u.createdAt as any
+      const uDate: Date = raw?.toDate ? raw.toDate() : raw ? new Date(String(raw)) : new Date()
+      const timeStr = raw?.toDate ? raw.toDate().toLocaleDateString() : raw ? String(raw).split('T')[0] : 'Active User'
+      events.push({
+        id: `user-${u.id}`,
+        time: timeStr,
+        dateObj: uDate,
+        category: 'Users',
+        badgeColor: T.primary,
+        badgeBg: T.primaryFix,
+        title: `Account: ${u.name}`,
+        msg: `${u.name} (${u.email}) active as ${u.role} in department '${u.department || 'General'}'.`,
+      })
+    })
+
+    // 3. Interview completions & Faculty evaluations
+    allSessions.forEach((s) => {
+      const sDate = s.date ? new Date(s.date) : new Date()
+      events.push({
+        id: `session-${s.id}`,
+        time: s.date || 'Recent',
+        dateObj: sDate,
+        category: 'Interviews',
+        badgeColor: s.score >= 70 ? T.green : s.score >= 50 ? T.amber : T.error,
+        badgeBg: s.score >= 70 ? T.greenBg : s.score >= 50 ? T.amberBg : T.errCont,
+        title: `${s.domain} Interview (${s.level})`,
+        msg: `${s.studentName} (${s.studentEmail}) completed ${s.domain} interview — Score: ${s.score}%.`,
+      })
+
+      if (s.warnings > 0) {
+        events.push({
+          id: `warn-${s.id}`,
+          time: s.date || 'Recent',
+          dateObj: sDate,
+          category: 'Warnings',
+          badgeColor: s.warnings > 2 ? T.error : T.amber,
+          badgeBg: s.warnings > 2 ? T.errCont : T.amberBg,
+          title: `Integrity Alert (${s.warnings} Warnings)`,
+          msg: `${s.warnings} integrity warning(s) logged for ${s.studentName} during ${s.domain} session.`,
+        })
+      }
+
+      if (s.facultyRemarks || s.placementReady !== undefined) {
+        events.push({
+          id: `eval-${s.id}`,
+          time: s.date || 'Recent',
+          dateObj: sDate,
+          category: 'Evaluations',
+          badgeColor: s.placementReady === true ? T.green : s.placementReady === false ? T.error : T.txtSec,
+          badgeBg: s.placementReady === true ? T.greenBg : s.placementReady === false ? T.errCont : T.bgLow,
+          title: `Faculty Assessment: ${s.studentName}`,
+          msg: `Placement Status: ${s.placementReady === true ? 'APPROVED (Placement Ready)' : s.placementReady === false ? 'REASSESSMENT REQUIRED' : 'PENDING'}. Evaluated Score: ${s.score}%.`,
+          detail: s.facultyRemarks ? `Remarks: "${s.facultyRemarks}"` : undefined,
+        })
+      }
+    })
+
+    return events.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime())
+  }, [allSessions, users, user])
+
+  const filteredLogs = useMemo(() => {
+    return dynamicAuditLogs.filter((log) => {
+      const matchesFilter = logFilter === 'All' || log.category === logFilter
+      const q = logSearch.toLowerCase().trim()
+      const matchesSearch =
+        !q ||
+        log.title.toLowerCase().includes(q) ||
+        log.msg.toLowerCase().includes(q) ||
+        (Boolean(log.detail) && (log.detail?.toLowerCase().includes(q) ?? false))
+      return matchesFilter && matchesSearch
+    })
+  }, [dynamicAuditLogs, logFilter, logSearch])
+
+  function handleExportAuditLogs() {
+    const textContent = filteredLogs
+      .map((l) => `[${l.time}] [${l.category.toUpperCase()}] ${l.title} — ${l.msg}${l.detail ? ` (${l.detail})` : ''}`)
+      .join('\n')
+    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `prephire_audit_logs_${new Date().toISOString().split('T')[0]}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    showToast('Audit log exported successfully!', 'success')
+  }
 
   async function handleRoleChange(userId: string, newRole: string) {
     await onRoleChange(userId, newRole as UserRole)
@@ -3450,44 +3562,155 @@ function AdminDashboard({
 
           {activeTab === 'logs' && (
             <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <section>
-                <h1 style={{ fontSize: 20, fontWeight: 700, color: T.primary, marginBottom: 4 }}>
-                  System Audit Logs
-                </h1>
-                <p className="text-body" style={{ color: T.txtSec }}>
-                  Chronological trail of activities, registrations, and assessment approvals.
-                </p>
+              <section style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <h1 style={{ fontSize: 20, fontWeight: 700, color: T.primary, marginBottom: 4 }}>
+                    System Audit Logs
+                  </h1>
+                  <p className="text-body" style={{ color: T.txtSec }}>
+                    Real-time chronological audit trail of interviews, evaluations, user events, and integrity flags.
+                  </p>
+                </div>
+                <Btn variant="navy" size="sm" onClick={handleExportAuditLogs}>
+                  📥 Export Audit Log (.txt)
+                </Btn>
               </section>
 
-              <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {auditLogs.map((log, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      gap: 12,
-                      alignItems: 'center',
-                      paddingBottom: idx !== auditLogs.length - 1 ? 12 : 0,
-                      borderBottom: idx !== auditLogs.length - 1 ? `1px solid ${T.border}` : 'none',
-                    }}
-                  >
-                    <span
+              {/* Stats Counters */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Total Events</span>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: T.primary }}>{dynamicAuditLogs.length}</span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Interviews Logged</span>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: T.green }}>{allSessions.length}</span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Evaluations Published</span>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: T.primary }}>
+                    {allSessions.filter((s) => s.facultyRemarks || s.placementReady !== undefined).length}
+                  </span>
+                </GlassCard>
+                <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 4, borderLeft: `3px solid ${allSessions.filter(s => s.warnings > 0).length > 0 ? T.error : T.green}` }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Integrity Alerts</span>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: allSessions.filter(s => s.warnings > 0).length > 0 ? T.error : T.green }}>
+                    {allSessions.filter(s => s.warnings > 0).length}
+                  </span>
+                </GlassCard>
+              </div>
+
+              {/* Filters & Search Toolbar */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {(['All', 'Interviews', 'Evaluations', 'Users', 'Warnings'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setLogFilter(cat)}
                       style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: T.onPrimFx,
-                        background: T.primaryFix,
-                        padding: '3px 8px',
-                        borderRadius: 4,
-                        minWidth: 70,
-                        textAlign: 'center',
+                        padding: '6px 14px',
+                        borderRadius: 20,
+                        border: `1.5px solid ${logFilter === cat ? T.primary : T.outlineVar}`,
+                        background: logFilter === cat ? T.primary : '#ffffff',
+                        color: logFilter === cat ? '#ffffff' : T.txtSec,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        fontFamily: 'inherit',
                       }}
                     >
-                      {log.time}
-                    </span>
-                    <span style={{ fontSize: 12, color: T.txtSec }}>{log.msg}</span>
+                      {cat} {cat === 'All' ? `(${dynamicAuditLogs.length})` : `(${dynamicAuditLogs.filter(l => l.category === cat).length})`}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ minWidth: 260 }}>
+                  <input
+                    type="text"
+                    placeholder="Search audit trail by student, domain, action..."
+                    value={logSearch}
+                    onChange={(e) => setLogSearch(e.target.value)}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '8px 14px',
+                      borderRadius: 20,
+                      border: `1px solid ${T.border}`,
+                      fontSize: 12,
+                      fontFamily: 'inherit',
+                      background: '#ffffff',
+                      color: T.txtPri,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Live Audit Log Stream */}
+              <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {filteredLogs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '32px 0', color: T.txtMut, fontSize: 13 }}>
+                    No audit log events match your search criteria.
                   </div>
-                ))}
+                ) : (
+                  filteredLogs.map((log, idx) => (
+                    <div
+                      key={log.id || idx}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        paddingBottom: idx !== filteredLogs.length - 1 ? 12 : 0,
+                        borderBottom: idx !== filteredLogs.length - 1 ? `1px solid ${T.border}` : 'none',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: log.badgeColor,
+                            background: log.badgeBg,
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            minWidth: 65,
+                            textAlign: 'center',
+                          }}
+                        >
+                          {log.time}
+                        </span>
+                        <Pill color={log.badgeColor} bg={log.badgeBg}>
+                          {log.category.toUpperCase()}
+                        </Pill>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>
+                          {log.title}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: 12, color: T.txtSec, paddingLeft: 75 }}>
+                        {log.msg}
+                      </div>
+
+                      {log.detail && (
+                        <div
+                          style={{
+                            marginLeft: 75,
+                            marginTop: 4,
+                            padding: '8px 12px',
+                            borderRadius: 6,
+                            background: '#EFF6FF',
+                            border: '1px solid #BFDBFE',
+                            fontSize: 12,
+                            color: T.primary,
+                            fontStyle: 'italic',
+                          }}
+                        >
+                          💬 {log.detail}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </GlassCard>
             </div>
           )}
