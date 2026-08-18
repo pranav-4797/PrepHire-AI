@@ -1784,7 +1784,6 @@ function FacultyDashboard({
   const [selectedDomain, setSelectedDomain] = useState('All')
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null)
   const [remarkInput, setRemarkInput] = useState('')
-  const [placementReadyToggle, setPlacementReadyToggle] = useState(false)
   const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'ranking' | 'courses' | 'coding'>('overview')
   const activeTab = activeTabProp ?? localActiveTab
   const setActiveTab = onTabChange ?? setLocalActiveTab
@@ -1818,20 +1817,37 @@ function FacultyDashboard({
       ? Math.round(branchSessions.reduce((acc, curr) => acc + curr.score, 0) / branchSessions.length)
       : 0
   const flagSessions = branchSessions.filter((s) => s.warnings > 2).length
+  const [evalScore, setEvalScore] = useState<number>(0)
+  const [placementReadyStatus, setPlacementReadyStatus] = useState<'pending' | 'ready' | 'reassessment'>('pending')
+  const [savingEval, setSavingEval] = useState(false)
 
   function handleOpenReport(session: SessionRecord) {
     setSelectedSession(session)
+    setEvalScore(session.score)
     setRemarkInput(session.facultyRemarks || '')
-    setPlacementReadyToggle(!!session.placementReady)
+    setPlacementReadyStatus(
+      session.placementReady === true ? 'ready' : session.placementReady === false ? 'reassessment' : 'pending'
+    )
   }
 
-  function _handleSaveRemark() {
+  async function handleSaveRemark() {
     if (!selectedSession) return
-    onUpdateSession(selectedSession.id, {
-      facultyRemarks: remarkInput,
-      placementReady: placementReadyToggle,
-    })
-    setSelectedSession(null)
+    setSavingEval(true)
+    try {
+      const isReady = placementReadyStatus === 'ready' ? true : placementReadyStatus === 'reassessment' ? false : undefined
+      const cleanScore = Math.max(0, Math.min(100, Math.round(evalScore)))
+      onUpdateSession(selectedSession.id, {
+        score: cleanScore,
+        facultyRemarks: remarkInput.trim(),
+        placementReady: isReady,
+      })
+      showToast(`Evaluation and remarks submitted for ${selectedSession.studentName}!`, 'success')
+      setSelectedSession(null)
+    } catch (err: any) {
+      showToast('Failed to save evaluation: ' + (err.message || err), 'error')
+    } finally {
+      setSavingEval(false)
+    }
   }
 
   // Course form helpers
@@ -2733,6 +2749,210 @@ const addResource = (chapterIndex: number) => {
           )}
         </main>
       </div>
+
+      {/* ── FACULTY EVALUATION MODAL ── */}
+      {selectedSession && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(7, 19, 39, 0.65)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedSession(null)
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: 16,
+              maxWidth: 640,
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: `1px solid ${T.border}`,
+              padding: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 18,
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${T.border}`, paddingBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: T.primary }}>
+                  Evaluate Student Interview
+                </div>
+                <div style={{ fontSize: 13, color: T.txtSec, marginTop: 4 }}>
+                  Candidate: <strong>{selectedSession.studentName}</strong> ({selectedSession.studentEmail})
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedSession(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  color: T.txtMut,
+                  padding: 4,
+                  lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Session Metadata Badges */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Pill color={T.primary} bg={T.primaryFix}>Domain: {selectedSession.domain}</Pill>
+              <Pill color={T.txtSec} bg={T.bgLow}>Level: {selectedSession.level}</Pill>
+              <Pill color={selectedSession.warnings > 2 ? T.error : T.green} bg={selectedSession.warnings > 2 ? T.errCont : T.greenBg}>
+                Integrity Warnings: {selectedSession.warnings}
+              </Pill>
+              <span style={{ fontSize: 12, color: T.txtMut, marginLeft: 'auto' }}>
+                Date: {selectedSession.date}
+              </span>
+            </div>
+
+            {/* AI Scorecard Summary (if available) */}
+            {selectedSession.report && (
+              <div style={{ background: T.bgLow, borderRadius: 12, padding: 12, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.primary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  AI Scorecard Metrics
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, textAlign: 'center', marginBottom: 8 }}>
+                  {[
+                    ['Tech', selectedSession.report.technical],
+                    ['Comm', selectedSession.report.communication],
+                    ['Conf', selectedSession.report.confidence],
+                    ['Clarity', selectedSession.report.clarity],
+                    ['Relev', selectedSession.report.relevance],
+                  ].map(([k, v]) => (
+                    <div key={k} style={{ background: '#fff', borderRadius: 6, padding: '4px', border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 9, color: T.txtMut, fontWeight: 600 }}>{k}</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: T.primary }}>{v ?? 0}%</div>
+                    </div>
+                  ))}
+                </div>
+                {selectedSession.report.proctoringNote && (
+                  <div style={{ fontSize: 11, color: T.txtSec, background: '#fff', padding: 8, borderRadius: 6, border: `1px solid ${T.border}` }}>
+                    <strong>Proctoring Note:</strong> {selectedSession.report.proctoringNote}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Faculty Marks / Score Override */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>
+                Assigned Score / Marks (0–100%)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={evalScore}
+                  onChange={(e) => setEvalScore(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                  style={{
+                    width: 90,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: `1.5px solid ${T.outlineVar}`,
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: T.txtPri,
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <span style={{ fontSize: 12, color: T.txtMut }}>
+                  AI Initial Score: <strong>{selectedSession.score}%</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Placement Readiness Status Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>
+                Placement Readiness Decision
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { id: 'ready', label: 'Placement Ready (Approved)', color: T.green, bg: T.greenBg },
+                  { id: 'reassessment', label: 'Reassessment Required', color: T.error, bg: T.errCont },
+                  { id: 'pending', label: 'Pending Review', color: T.outline, bg: T.bgMid },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setPlacementReadyStatus(st.id as typeof placementReadyStatus)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 6px',
+                      borderRadius: 8,
+                      border: `2px solid ${placementReadyStatus === st.id ? st.color : T.outlineVar}`,
+                      background: placementReadyStatus === st.id ? st.bg : '#ffffff',
+                      color: placementReadyStatus === st.id ? st.color : T.txtSec,
+                      fontWeight: placementReadyStatus === st.id ? 700 : 500,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Faculty Remarks Textarea */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>
+                Faculty Remarks & Feedback (Visible on Student Login)
+              </label>
+              <textarea
+                value={remarkInput}
+                onChange={(e) => setRemarkInput(e.target.value)}
+                placeholder="Enter specific recommendations, technical strengths, or areas needing improvement for this student..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  border: `1.5px solid ${T.outlineVar}`,
+                  fontSize: 13,
+                  fontFamily: 'inherit',
+                  color: T.txtPri,
+                  lineHeight: 1.5,
+                  resize: 'vertical',
+                }}
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
+              <Btn variant="ghost" size="md" onClick={() => setSelectedSession(null)}>
+                Cancel
+              </Btn>
+              <Btn size="md" disabled={savingEval} onClick={handleSaveRemark}>
+                {savingEval ? 'Saving...' : 'Save & Publish Evaluation'}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -3568,7 +3788,7 @@ function AdminDashboard({
 // ── ROUTING & URL SYNC HELPERS ──────────────────────────────────────────────
 function parsePathname(pathname: string): {
   screen: 'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report'
-  studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile'
+  studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history'
   facultyTab?: 'overview' | 'ranking' | 'courses' | 'coding'
   adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
 } {
@@ -3602,12 +3822,13 @@ function parsePathname(pathname: string): {
     else if (p.includes('coding')) tab = 'coding'
     return { screen: 'home', facultyTab: tab }
   }
-  if (p.startsWith('/dashboard') || p === '/courses' || p === '/coding' || p === '/profile' || p === '/ranking' || p === '/leaderboard') {
-    let tab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' = 'interview'
+  if (p.startsWith('/dashboard') || p === '/courses' || p === '/coding' || p === '/profile' || p === '/ranking' || p === '/leaderboard' || p === '/history' || p === '/assessments') {
+    let tab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' = 'interview'
     if (p.includes('courses')) tab = 'courses'
     else if (p.includes('coding')) tab = 'coding'
     else if (p.includes('ranking') || p.includes('leaderboard')) tab = 'ranking'
     else if (p.includes('profile')) tab = 'profile'
+    else if (p.includes('history') || p.includes('assessments') || p.includes('submissions')) tab = 'history'
     return { screen: 'home', studentTab: tab }
   }
   return { screen: 'landing' }
@@ -3616,7 +3837,7 @@ function parsePathname(pathname: string): {
 function getUrlPath(
   screen: 'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report',
   role: string | null | undefined,
-  studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile',
+  studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history',
   facultyTab: 'overview' | 'ranking' | 'courses' | 'coding',
   adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
 ): string {
@@ -3655,7 +3876,7 @@ export default function App() {
     return () => clearTimeout(tId)
   }, [toast])
 
-  const [studentTab, setStudentTab] = useState<'interview' | 'courses' | 'ranking' | 'coding' | 'profile'>(
+  const [studentTab, setStudentTab] = useState<'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history'>(
     initialRoute.studentTab || 'interview'
   )
   const [facultyTab, setFacultyTab] = useState<'overview' | 'ranking' | 'courses' | 'coding'>(
@@ -3735,7 +3956,7 @@ export default function App() {
   const [timerActive, setTimerActive] = useState(false)
   const [allSessions, setAllSessions] = useState<SessionRecord[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])
-  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [_history, setHistory] = useState<HistoryEntry[]>([])
   const [procWarnings, setProcWarnings] = useState<{ text: string; time: string }[]>([])
   const [perms, setPerms] = useState<Perms>({ camera: false, microphone: false, checked: false })
   const [introText, setIntroText] = useState('')
@@ -4368,6 +4589,7 @@ export default function App() {
             </div>
             {[
               { id: 'interview', label: 'Mock Interview' },
+              { id: 'history', label: 'My Assessments' },
               { id: 'profile', label: 'Profile' },
               { id: 'coding', label: 'Coding Platform' },
               { id: 'courses', label: 'Resource Library' },
@@ -4574,37 +4796,82 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Session history */}
-                {history.length > 0 && (
+                {/* Recent Submissions & Faculty Remarks */}
+                {allSessions.length > 0 && (
                   <div style={{ marginTop: '2rem' }}>
-                    <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-                      Recent Sessions
-                    </div>
-                    {history.slice(-4).reverse().map((h, i) => (
-                      <div
-                        key={i}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 }}>
+                        Recent Interview Results & Faculty Feedback
+                      </div>
+                      <button
+                        onClick={() => setStudentTab('history')}
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '12px 16px',
+                          background: 'transparent',
+                          border: 'none',
+                          color: T.primary,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        View All Submissions →
+                      </button>
+                    </div>
+                    {allSessions.slice(0, 3).map((session) => (
+                      <div
+                        key={session.id}
+                        style={{
                           background: T.bgWhite,
                           borderRadius: 12,
                           border: `1px solid ${T.border}`,
-                          marginBottom: 8,
+                          padding: '14px 18px',
+                          marginBottom: 10,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
                         }}
                       >
-                        <div>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>{h.domain}</span>
-                          <span className="text-caption" style={{ marginLeft: 8 }}>{h.level}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: T.primary }}>{session.domain}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: T.bgLow }}>
+                              {session.level}
+                            </span>
+                            <span style={{ fontSize: 11, color: T.txtMut }}>{session.date}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {session.placementReady === true ? (
+                              <Pill color={T.green} bg={T.greenBg}>PLACEMENT READY</Pill>
+                            ) : session.placementReady === false ? (
+                              <Pill color={T.error} bg={T.errCont}>REASSESSMENT REQ.</Pill>
+                            ) : (
+                              <Pill color={T.outline} bg={T.bgMid}>PENDING REVIEW</Pill>
+                            )}
+                            <span style={{ fontSize: 16, fontWeight: 800, color: scoreColor(session.score) }}>
+                              {session.score}%
+                            </span>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          {h.warnings > 0 && <Pill color={T.amber} bg={T.amberBg}><AlertTriangle size={11} /> {h.warnings}</Pill>}
-                          <span className="text-caption">{h.date}</span>
-                          <span style={{ fontSize: 15, fontWeight: 800, color: h.score >= 75 ? T.green : h.score >= 55 ? T.amber : T.error }}>
-                            {h.score}<span style={{ fontSize: 11, fontWeight: 500 }}>/100</span>
-                          </span>
-                        </div>
+                        {session.facultyRemarks && (
+                          <div
+                            style={{
+                              marginTop: 4,
+                              padding: '10px 14px',
+                              borderRadius: 8,
+                              background: '#EFF6FF',
+                              border: '1px solid #BFDBFE',
+                              display: 'flex',
+                              gap: 10,
+                              alignItems: 'flex-start',
+                            }}
+                          >
+                            <MessageSquare size={16} style={{ color: T.primary, flexShrink: 0, marginTop: 2 }} />
+                            <div style={{ fontSize: 12, color: T.txtPri, lineHeight: 1.45 }}>
+                              <strong style={{ color: T.primary }}>Faculty Feedback:</strong> {session.facultyRemarks}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -4911,6 +5178,134 @@ export default function App() {
                     )}
                   </GlassCard>
                 </div>
+              </div>
+            ) : studentTab === 'history' ? (
+              <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
+                <section
+                  style={{
+                    paddingTop: 40,
+                    paddingBottom: '1.5rem',
+                    marginBottom: 16,
+                    borderBottom: `1px solid ${T.border}`,
+                    textAlign: 'left',
+                  }}
+                >
+                  <h1 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 8px', color: T.primary, letterSpacing: '-0.4px' }}>
+                    My Assessments & Evaluation Reports
+                  </h1>
+                  <p className="text-body" style={{ color: T.txtSec }}>
+                    Review your completed AI mock interviews, final scores, placement readiness status, and faculty feedback.
+                  </p>
+                </section>
+
+                {allSessions.length === 0 ? (
+                  <GlassCard style={{ textAlign: 'center', padding: '40px 20px', color: T.txtSec }}>
+                    <p style={{ margin: '0 0 12px' }}>You haven't completed any mock interviews yet.</p>
+                    <Btn size="sm" onClick={() => setStudentTab('interview')}>
+                      Start Mock Interview
+                    </Btn>
+                  </GlassCard>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {allSessions.map((session) => (
+                      <GlassCard key={session.id} style={{ padding: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                              <span style={{ fontSize: 16, fontWeight: 800, color: T.primary }}>
+                                {session.domain} Interview
+                              </span>
+                              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: T.bgLow }}>
+                                {session.level}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 12, color: T.txtMut }}>
+                              Completed on {session.date} &bull; Integrity Warnings: {session.warnings}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {session.placementReady === true ? (
+                              <Pill color={T.green} bg={T.greenBg}>PLACEMENT READY</Pill>
+                            ) : session.placementReady === false ? (
+                              <Pill color={T.error} bg={T.errCont}>REASSESSMENT REQUIRED</Pill>
+                            ) : (
+                              <Pill color={T.outline} bg={T.bgMid}>PENDING REVIEW</Pill>
+                            )}
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 10, color: T.txtMut, textTransform: 'uppercase', fontWeight: 700 }}>Score</div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: scoreColor(session.score) }}>
+                                {session.score}%
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Faculty Feedback Section */}
+                        {session.facultyRemarks ? (
+                          <div
+                            style={{
+                              padding: '12px 16px',
+                              borderRadius: 10,
+                              background: '#EFF6FF',
+                              border: '1px solid #BFDBFE',
+                              display: 'flex',
+                              gap: 12,
+                              alignItems: 'flex-start',
+                              marginBottom: 12,
+                            }}
+                          >
+                            <MessageSquare size={18} style={{ color: T.primary, flexShrink: 0, marginTop: 2 }} />
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, marginBottom: 2 }}>
+                                Faculty Evaluation Remarks
+                              </div>
+                              <div style={{ fontSize: 13, color: T.txtPri, lineHeight: 1.5 }}>
+                                {session.facultyRemarks}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              padding: '10px 14px',
+                              borderRadius: 8,
+                              background: T.bgLow,
+                              fontSize: 12,
+                              color: T.txtMut,
+                              marginBottom: 12,
+                            }}
+                          >
+                            ℹ️ Faculty evaluation remarks pending for this session.
+                          </div>
+                        )}
+
+                        {/* Scorecard Metrics Breakdown */}
+                        {session.report && (
+                          <div style={{ background: T.bgLow, borderRadius: 10, padding: 12, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>
+                              Scorecard Dimensions
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, textAlign: 'center' }}>
+                              {[
+                                ['Technical', session.report.technical],
+                                ['Communication', session.report.communication],
+                                ['Confidence', session.report.confidence],
+                                ['Clarity', session.report.clarity],
+                                ['Relevance', session.report.relevance],
+                              ].map(([k, v]) => (
+                                <div key={k} style={{ background: '#fff', borderRadius: 6, padding: '6px 4px', border: `1px solid ${T.border}` }}>
+                                  <div style={{ fontSize: 10, color: T.txtMut, fontWeight: 600 }}>{k}</div>
+                                  <div style={{ fontSize: 13, fontWeight: 800, color: T.primary }}>{v ?? 0}%</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </GlassCard>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : studentTab === 'coding' ? (
               <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
