@@ -1,202 +1,308 @@
-# PrepHire.AI — Next-Generation AI Mock Interview & Technical Assessment Portal
+# PrepHire.AI — Next-Generation AI Mock Interview & Assessment Platform
 
-**PrepHire.AI** is an end-to-end, intelligent skill assessment and interview readiness platform designed to bridge the gap between academic preparation and real-world industry recruitment. By combining real-time AI voice interviewers, live proctoring, sandboxed coding challenges, and automated performance analytics, PrepHire.AI provides candidates with a realistic, high-stakes interview environment while giving educators and institution admins full oversight over candidate readiness.
+<div align="center">
+
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-prephire--ai.web.app-2563EB?style=for-the-badge&logo=googlechrome&logoColor=white)](https://prephire-ai.web.app)
+[![React 19](https://img.shields.io/badge/React%2019-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75FF?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Monaco Editor](https://img.shields.io/badge/Monaco%20Editor-1E1E1E?style=for-the-badge&logo=visualstudiocode&logoColor=007ACC)](https://microsoft.github.io/monaco-editor/)
+
+**Empowering placement candidates with resume-tailored AI voice interviews, proctored assessments, and a sandboxed coding arena.**
+
+*Built for MIT Academy of Engineering, Alandi (Pune) · Placement Cell & Training Division*
+
+</div>
 
 ---
 
 ## 📋 Table of Contents
-- [Portal Overview](#-portal-overview)
-- [Key Portal Capabilities](#-key-portal-capabilities)
-  - [1. Multi-Domain AI Voice Mock Interviews](#1-multi-domain-ai-voice-mock-interviews)
-  - [2. Intelligent Video & Anti-Cheating Proctoring](#2-intelligent-video--anti-cheating-proctoring)
-  - [3. Sandboxed Coding Hub & Problem Management](#3-sandboxed-coding-hub--problem-management)
-  - [4. AI Performance Reports & Actionable Analytics](#4-ai-performance-reports--actionable-analytics)
-  - [5. Gamification & Leaderboards](#5-gamification--leaderboards)
-  - [6. Faculty & Course Management](#6-faculty--course-management)
-- [User Roles & Permissions](#-user-roles--permissions)
-- [User Flow Architecture Diagram](#-user-flow-architecture-diagram)
-- [Detailed User Journeys](#-detailed-user-journeys)
-  - [Student Flow](#student-flow)
-  - [Faculty Flow](#faculty-flow)
-  - [Admin Flow](#admin-flow)
-- [Session Evaluation & Proctoring Standards](#-session-evaluation--proctoring-standards)
+
+- [🌟 Platform Overview](#-platform-overview)
+- [🚀 Key Features](#-key-features)
+  - [1. Resume-Driven Personalization](#1-resume-driven-personalization)
+  - [2. Multi-Domain AI Mock Interviews](#2-multi-domain-ai-mock-interviews)
+  - [3. Sandboxed Coding Hub & Judge](#3-sandboxed-coding-hub--judge)
+  - [4. Anti-Cheat & Intelligent Proctoring](#4-anti-cheat--intelligent-proctoring)
+  - [5. Video Archival & FFmpeg Pipeline](#5-video-archival--ffmpeg-pipeline)
+  - [6. Branch-Specific Institutional Governance](#6-branch-specific-institutional-governance)
+  - [7. Analytics & Dynamic Leaderboards](#7-analytics--dynamic-leaderboards)
+- [🏛️ Supported On-Campus Programs](#️-supported-on-campus-programs)
+- [👥 Role-Based Access Control](#-role-based-access-control)
+- [📐 System Architecture](#-system-architecture)
+- [🛠️ Technology Stack](#️-technology-stack)
+- [⚡ Quick Start & Local Setup](#-quick-start--local-setup)
+  - [Prerequisites](#prerequisites)
+  - [1. Clone Repository](#1-clone-repository)
+  - [2. Client Setup](#2-client-setup)
+  - [3. Backend Setup](#3-backend-setup)
+  - [4. Environment Configuration](#4-environment-configuration)
+  - [5. Launch Application](#5-launch-application)
+- [🛡️ Security Architecture & Firestore Rules](#️-security-architecture--firestore-rules)
+- [🚀 Deployment](#-deployment)
+- [📄 License & Institutional Credits](#-license--institutional-credits)
 
 ---
 
-## 🌟 Portal Overview
+## 🌟 Platform Overview
 
-PrepHire.AI empowers job seekers and students to practice technical, behavioral, and analytical interviews in a dynamic, zero-pressure yet proctored setting. The portal acts as an automated interviewer, mentor, proctor, and evaluator all in one.
+**PrepHire.AI** bridges the gap between academic education and corporate campus recruitment. It provides students with a realistic, high-stakes interview and coding simulator while providing faculty and administrators with comprehensive oversight of student placement readiness.
 
-### Core Objectives:
-- **Democratize Interview Preparation**: Provide personalized, interactive voice-driven mock interviews tailored to specific skill domains and difficulty levels.
-- **Ensure Assessment Integrity**: Maintain strict proctoring standards through browser event listening, focus tracking, camera verification, and session recording.
-- **Provide Actionable Feedback**: Replace vague scores with granular radar charts, strength breakdowns, speech analysis, and concrete improvement plans.
-- **Streamline Technical Evaluation**: Offer integrated coding practice environments with automated code execution and instant test case verification.
-
----
-
-## 🚀 Key Portal Capabilities
-
-### 1. Multi-Domain AI Voice Mock Interviews
-The interview system features adaptive question flows powered by natural speech processing:
-- **Technical Domain**: Computer Science fundamentals, Data Structures & Algorithms, System Design, Web Engineering, and Software Architecture.
-- **HR & Behavioral Domain**: STAR-method workplace scenarios, situational judgment, team collaboration, and leadership qualities.
-- **Aptitude Domain**: Quantitative analysis, logical reasoning, numerical puzzles, and speed math.
-- **Group Discussion Domain**: Contemporary industry debates, persuasive communication, argument structuring, and consensus building.
-- **Difficulty Tiers**: Beginner, Intermediate, and Advanced tiers to match the user's career stage.
-- **Voice Interactivity**: Dual speech engine enabling hands-free spoken responses via microphone input and vocalized AI interviewer responses.
-
-### 2. Intelligent Video & Anti-Cheating Proctoring
-To replicate real proctored corporate assessments:
-- **Live Video Feed**: Continuous webcam streaming during interview sessions.
-- **Focus & Tab-Switch Guard**: Automatic detection of window blur, tab switching, or lost browser focus, triggering warnings and logged incidents.
-- **Smart Session Recording**: Automated chunked video capturing uploaded directly to secure cloud storage for reviewer access.
-- **Early Termination & Contextual Handling**: Context-aware report generation that properly distinguishes between empty sessions, partial interviews, and complete evaluations.
-
-### 3. Sandboxed Coding Hub & Problem Management
-A dedicated platform for hands-on programming assessment:
-- **Monaco Code Editor**: Professional-grade code editing with syntax highlighting, autocomplete, and theme customization.
-- **Sandboxed Code Execution**: Safe multi-language execution (Python, JavaScript, C++, Java, etc.) against test suites.
-- **Test Case Validation**: Displays public test cases, hidden validation cases, memory utilization, and execution runtimes.
-- **Local Solution Persistence**: Automatic local caching to prevent progress loss.
-- **Admin Problem Creator**: Interface for faculty and admins to author custom coding challenges, define hidden test cases, set execution limits, and publish to the student library.
-
-### 4. AI Performance Reports & Actionable Analytics
-Upon session completion, the portal generates a comprehensive evaluation scorecard:
-- **Skill Metrics**: Scores out of 100 for Technical Accuracy, Communication Clarity, Problem Solving, Confidence, and Time Management.
-- **Radar Visualizations**: Graphical overlay comparing current performance against domain benchmark standards.
-- **Qualitative Summary**: Highlighting key strengths, key weaknesses, and step-by-step recommended study topics.
-- **Proctoring Log Digest**: Summary of any recorded tab switches or camera alerts during the session.
-
-### 5. Gamification & Leaderboards
-- **Global Leaderboard**: Ranking candidates based on composite scores across interviews and solved coding challenges.
-- **Achievement Badges**: Earnable milestone rewards such as *Code Warrior*, *Voice Master*, *Speed Demon*, and *Streak Champ*.
-
-### 6. Faculty & Course Management
-- **Course Authoring**: Faculty can build custom course modules, aggregate interview benchmark expectations, and assign coding assignments.
-- **Student Progress Dashboard**: Institutional view of candidate participation rates, average domain scores, video audit logs, and performance trajectories.
+### Core Value Propositions
+- **Tailored Questioning**: Dynamic technical drills and STAR-method behavioral inquiries generated on-the-fly from candidate resume text.
+- **Hands-On Coding Practice**: Sandboxed multi-language programming problems evaluated in real-time.
+- **Assessment Integrity**: Dual-layer proctoring detecting tab switching, browser focus loss, and face presence.
+- **Branch-Specific Scope**: Scoped evaluation workflows aligned with institutional engineering departments.
 
 ---
 
-## 👥 User Roles & Permissions
+## 🚀 Key Features
 
-| Role | Access & Rights |
-| :--- | :--- |
-| **Student** | Access AI Mock Interviews, Coding Arena, Leaderboards, Personal Scorecard History, and Assigned Courses. |
-| **Faculty** | All Student permissions + Create & Edit Courses, Monitor Enrolled Students, Audit Video Recordings, View Class Analytics. |
-| **Admin** | Full system control: Manage User Roles, Create & Edit Coding Problems, Oversee Course Catalog, Audit System Logs. |
+### 1. Resume-Driven Personalization
+- **Client-Side Privacy**: Resumes are parsed directly in the browser via `pdfjs-dist` without storing the raw PDF file on any server.
+- **Structured Profile Extraction**: Gemini AI synthesizes candidate skills, projects, and work history into a clean JSON structure stored in Firestore (`users/{uid}.resumeProfile`).
+- **Prompt Injection**: System prompts dynamically incorporate the student's tech stack for technical rounds and career journey for HR rounds.
+
+### 2. Multi-Domain AI Mock Interviews
+- **Technical Domain**: Core DSA, System Design, Web Architecture, Concurrency, and Optimization.
+- **HR & Behavioral Domain**: STAR-format workplace scenarios, leadership, teamwork, and culture fit.
+- **Aptitude Domain**: Quantitative math, logical reasoning, numerical puzzles, and speed estimation.
+- **Group Discussion Domain**: Persuasive communication, contemporary industry topics, and debate structure.
+- **Voice Interactivity**: Integrated Web Speech API for speech-to-text input and synthetic voice feedback.
+
+### 3. Sandboxed Coding Hub & Judge
+- **Monaco Code Editor**: VS Code-grade code editing with syntax highlighting, auto-indentation, and themes.
+- **Piston Sandbox Execution**: Multi-language test execution (JavaScript, Python, C++, Java) against public and hidden test cases.
+- **Admin Problem Authoring**: Faculty and admins can author challenges, define test cases, specify execution limits, and publish challenges.
+
+### 4. Anti-Cheat & Intelligent Proctoring
+- **Face & Phone Detection**: In-browser object detection powered by TensorFlow.js (`coco-ssd`).
+- **Focus Tracking**: Tab-switch and window-blur listeners track candidate focus shifts with timestamps.
+- **Smart Edge-Case Handling**: File picker operations during resume uploads are whitelisted to prevent false positives.
+
+### 5. Video Archival & FFmpeg Pipeline
+- **Automated Capture**: Interview sessions record audio/video chunks and stream them to the Express backend.
+- **FFmpeg Transcoding**: Fast server-side conversion from WebM to optimized MP4 format with `+faststart` flags.
+- **Google Shared Drive Storage**: Uploads video files to a designated institutional Google Drive with automated cleanup cron.
+
+### 6. Branch-Specific Institutional Governance
+- **Scoped Faculty Portals**: Faculty members are automatically scoped to candidates from their own department.
+- **Admin Control Center**: Administrators maintain global access across all departments, with branch filtering and inline department re-assignment.
+
+### 7. Analytics & Dynamic Leaderboards
+- **Multi-Dimensional Radar Scorecards**: 0–100 scores across Technical Depth, Communication Clarity, Problem Solving, Confidence, and Delivery.
+- **Composite Leaderboard Algorithm**: Weighted rankings factoring in interview frequency, peak performance, domain diversity, and proctoring integrity scores.
 
 ---
 
-## 📐 User Flow Architecture Diagram
+## 🏛️ Supported On-Campus Programs
 
-The flowchart below illustrates the user journey, system interactions, proctoring feedback loop, assessment engine, and data workflows across different user roles in the portal:
+PrepHire.AI supports the following academic programs:
+
+1. **Computer Engineering**
+2. **Information Technology**
+3. **Computer Science & Engineering (AI & ML)**
+4. **Computer Science & Engineering (Data Science)**
+5. **Computer Engineering (Software Engineering)**
+6. **Electronics & Telecommunication Engineering**
+7. **Mechanical Engineering**
+8. **Chemical Engineering**
+9. **Civil Engineering**
+
+---
+
+## 👥 Role-Based Access Control
+
+| Role | Permissions & Capabilities |
+|:---|:---|
+| **Student** | Access AI Mock Interviews, Coding Arena, Leaderboards, Performance History, Course Catalog, and Resume Profile Management. |
+| **Faculty** | Scoped to their department: Evaluate candidate interviews, view class leaderboard, author/import courses, and audit student sessions. |
+| **Admin** | Full cross-department authority: Manage user roles & branch assignments, author global coding challenges, approve courses, and inspect audit logs. |
+
+---
+
+## 📐 System Architecture
 
 ```mermaid
 flowchart TD
-    %% Roles & Entry
-    subgraph Portal_Entry ["Portal Entry & Authentication"]
-        A[User Accesses PrepHire.AI] --> B{Authentication}
-        B -->|Sign In / Sign Up| C{Role Determination}
-        C -->|Student Role| D[Student Dashboard]
-        C -->|Faculty Role| E[Faculty Dashboard]
-        C -->|Admin Role| F[Admin Dashboard]
+    subgraph Client ["Frontend (Vite + React 19 + TypeScript)"]
+        UI[UI Screens / src/App.tsx]
+        Monaco[Monaco Editor]
+        PDF[pdfjs-dist Parser]
+        Speech[Web Speech API]
+        Proctor[TensorFlow coco-ssd]
     end
 
-    %% Student Workflow
-    subgraph Student_Workflow ["Student User Journey"]
-        D --> D1[Select Interview Domain & Difficulty]
-        D --> D2[Access Coding Hub]
-        D --> D3[View Performance Reports & Leaderboard]
-
-        D1 --> G[Launch Proctored Interview Session]
-        
-        subgraph Proctored_Engine ["Live Proctored Session Engine"]
-            G --> G1[Initialize Webcam & Mic]
-            G1 --> G2[AI Voice Question Prompt]
-            G2 --> G3[Student Spoken Response / Text Input]
-            
-            %% Proctoring Loop
-            G1 -.-> P1[Tab-Switch / Window Blur Monitor]
-            G1 -.-> P2[Video Chunk Recorder]
-            P1 -.->|Violation Detected| P3[Log Incident & Show Warning]
-            P2 -.->|Stream Upload| Drive[Secure Cloud Storage]
-        end
-
-        G3 --> H{Interview Progress}
-        H -->|Next Question| G2
-        H -->|5 Questions Answered / End Interview| I[Trigger AI Evaluation Engine]
-
-        I --> J[Generate Comprehensive Session Report]
-        J --> J1[Radar Score Metrics]
-        J --> J2[Speech & Answer Breakdown]
-        J --> J3[Proctoring Audit Summary]
-        J --> D3
-
-        D2 --> K[Select Coding Challenge]
-        K --> L[Monaco Code Editor]
-        L --> M[Run / Submit Code]
-        M --> N[Sandboxed Code Execution Engine]
-        N --> O{Test Cases Passed?}
-        O -->|Yes| P[Award Score & Update Leaderboard]
-        O -->|No| Q[Return Test Case Failures & Diagnostics]
-        Q --> L
-        P --> D3
+    subgraph Firebase_Cloud ["Firebase Platform"]
+        Auth[Firebase Auth]
+        Firestore[(Cloud Firestore DB)]
+        Rules[Firestore Security Rules]
     end
 
-    %% Faculty Workflow
-    subgraph Faculty_Workflow ["Faculty User Journey"]
-        E --> E1[Course & Curriculum Management]
-        E --> E2[Assign Mock Interviews & Coding Benchmarks]
-        E --> E3[Audit Student Performance & Video Recordings]
-        Drive -.->|Fetch Video Logs| E3
+    subgraph Backend_Server ["Express Backend (:3001)"]
+        Server[server/index.js]
+        CodingAPI[server/coding/routes.js]
+        AuthGuard[authMiddleware.js]
+        FFmpeg[FFmpeg Transcoder]
+        Cleanup[Cleanup Cron Service]
     end
 
-    %% Admin Workflow
-    subgraph Admin_Workflow ["Admin User Journey"]
-        F --> F1[Manage User Profiles & Roles]
-        F --> F2[Create / Edit Coding Problems & Test Suites]
-        F --> F3[System-wide Analytics & Settings]
-        F2 --> K
+    subgraph External_Services ["External Services"]
+        Gemini[Google Gemini API]
+        Piston[Piston Execution Engine]
+        GDrive[Google Shared Drive API]
     end
+
+    %% Client Connections
+    UI -->|Sign In / User Records| Auth
+    UI -->|Store Profiles & Session Data| Firestore
+    UI -->|Interview / Resume LLM Requests| Gemini
+    UI -->|Run & Submit Code| CodingAPI
+    UI -->|Upload Session Videos| Server
+    PDF -->|Extract Text| UI
+    Proctor -->|Track Violations| UI
+
+    %% Backend Connections
+    CodingAPI -->|Token Verification| AuthGuard
+    AuthGuard -->|Verify Token & Role| Auth
+    CodingAPI -->|Sandbox Code Execution| Piston
+    Server -->|Transcode WebM to MP4| FFmpeg
+    Server -->|Archive Videos| GDrive
+    Cleanup -->|Purge Expired Data| Firestore
+    Cleanup -->|Delete Old Files| GDrive
 ```
 
 ---
 
-## 🔄 Detailed User Journeys
+## 🛠️ Technology Stack
 
-### Student Flow
-1. **Dashboard Login**: The student arrives at their personalized dashboard showcasing recent interview history, recommended domains, and assigned course tasks.
-2. **Domain Selection**: The student chooses a domain (*Technical*, *HR*, *Aptitude*, or *Group Discussion*) and a difficulty level (*Beginner*, *Intermediate*, *Advanced*).
-3. **Proctored Session Initialization**: The webcam and microphone are tested. Anti-cheating listeners activate immediately.
-4. **Interactive Q&A**:
-   - The AI voice interviewer asks a domain-specific question (vocalized via TTS).
-   - The student answers using natural voice input (Speech-to-Text) or manual keyboard input.
-   - The session records answer duration and flags any tab switches or focus shifts.
-5. **Report Generation**: Upon completion or explicit termination, the AI engine evaluates candidate responses and produces a detailed, multi-dimensional report card.
-6. **Skill Reinforcement**: The student visits the **Coding Hub** to solve programming challenges, test their code in real time, and climb the **Leaderboard**.
-
-### Faculty Flow
-1. **Course Dashboard**: Faculty members oversee student batches enrolled in their courses.
-2. **Assignment Authoring**: Create custom interview benchmarks and assign specific coding challenges to student groups.
-3. **Performance Audit**: Access aggregate class performance stats, individual scorecards, and proctoring video replays to verify student authenticity and offer targeted feedback.
-
-### Admin Flow
-1. **Platform Operations**: Admins monitor overall platform engagement, active users, and system performance.
-2. **Content Curation**: Use the **Admin Problems Manager** to write problem statements, set input/output test constraints, configure time limits, and publish challenges globally.
-3. **Role Management**: Promote or modify user permissions across Student, Faculty, and Admin tiers.
+| Layer | Technologies | Purpose |
+|:---|:---|:---|
+| **Frontend Core** | React 19, TypeScript, Vite | High-performance SPA with fast HMR |
+| **Code Editor** | `@monaco-editor/react` | Sandboxed in-browser code workspace |
+| **Client-Side AI & ML** | `@tensorflow/tfjs`, `@tensorflow-models/coco-ssd` | Live face and proctoring detection |
+| **Document Processing** | `pdfjs-dist` | In-browser PDF resume text parsing |
+| **AI LLM Engine** | Google Gemini (`gemini-3.1-flash-lite-preview`) | Context-aware dynamic question & report synthesis |
+| **Backend Runtime** | Node.js, Express | REST API, video processing, and course endpoints |
+| **Code Execution Engine**| Piston API | Sandboxed multi-language code runner |
+| **Video Processing** | `ffmpeg-static`, `multer` | Video ingestion, optimization, and conversion |
+| **Cloud Storage** | Google Drive API (v3) | Institutional storage for proctored recordings |
+| **Auth & Database** | Firebase Authentication, Cloud Firestore | Real-time database, rule enforcement, and auth |
 
 ---
 
-## 📊 Session Evaluation & Proctoring Standards
+## ⚡ Quick Start & Local Setup
 
-- **Scoring Dimensions**:
-  - **Technical Accuracy** (0–100): Correctness and depth of technical answers.
-  - **Communication Skills** (0–100): Clarity, structure, vocabulary, and articulation.
-  - **Problem Solving** (0–100): Logical breakdown of complex scenarios.
-  - **Confidence & Delivery** (0–100): Pace, stability, and fluency of speech.
-  - **Time Management** (0–100): Efficiency in answering questions within time windows.
-- **Proctoring Rules**:
-  - Zero-question early terminations generate an explicit `0 score` session note.
-  - Partial interview terminations (1–4 questions) highlight early exit counts in the final audit summary.
-  - Window blur events are recorded with exact timestamps for faculty review.
+### Prerequisites
+- **Node.js**: `v20.0.0` or higher
+- **npm**: `v10.0.0` or higher
+- **Firebase CLI**: `npm install -g firebase-tools` (optional for deployment)
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/pranav-4797/PrepHire-AI.git
+cd PrepHire-AI
+```
+
+### 2. Client Setup
+```bash
+npm install
+```
+
+### 3. Backend Setup
+```bash
+cd server
+npm install
+cd ..
+```
+
+### 4. Environment Configuration
+
+#### Client Configuration (`.env.local` in root)
+```env
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+```
+
+#### Backend Configuration (`server/.env`)
+```env
+PORT=3001
+CORS_ORIGIN=http://localhost:5173
+GOOGLE_SHARED_DRIVE_FOLDER_ID=your_google_drive_folder_id
+PISTON_API_URL=https://emkc.org/api/v2/piston
+```
+
+### 5. Launch Application
+```bash
+npm run dev
+```
+- **Frontend App**: [http://localhost:5173](http://localhost:5173)
+- **Backend API**: [http://localhost:3001](http://localhost:3001)
+
+---
+
+## 🛡️ Security Architecture & Firestore Rules
+
+PrepHire.AI enforces strict role-based access directly at the database layer via [firestore.rules](firestore.rules):
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function role() { return signedIn() ? profile().role : null; }
+    function isAdmin() { return role() == 'Admin' || role() == 'admin'; }
+    function isFaculty() { return role() == 'Faculty' || role() == 'faculty'; }
+    function isStudent() { return role() == 'Student' || role() == 'student'; }
+
+    // Users collection: department, role, and disabled status are immutable by users
+    match /users/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin() || isFaculty());
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'disabled', 'department'])
+        )
+      );
+      allow delete: if signedIn() && isAdmin();
+    }
+
+    // Sessions collection
+    match /sessions/{sessionId} {
+      allow create: if signedIn() && (isAdmin() || isFaculty() || (isStudent() && request.resource.data.studentEmail == request.auth.token.email));
+      allow read: if signedIn() && (isAdmin() || isFaculty() || (isStudent() && resource.data.studentEmail == request.auth.token.email));
+      allow update: if signedIn() && (isAdmin() || isFaculty());
+      allow delete: if signedIn() && isAdmin();
+    }
+  }
+}
+```
+
+---
+
+## 🚀 Deployment
+
+### Firebase Hosting (Frontend)
+```bash
+npm run build
+firebase deploy --only hosting,firestore:rules
+```
+
+### Render (Backend Service)
+The backend is configured for deployment via `render.yaml` with automatic Docker container provisioning and system-level FFmpeg support.
+
+---
+
+## 📄 License & Institutional Credits
+
+Distributed under the MIT License. Developed for **MIT Academy of Engineering (MIT AoE), Alandi, Pune** — Placement & Career Development Cell.
