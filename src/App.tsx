@@ -5,7 +5,8 @@ import {
   AlertTriangle, Square, Mic, Clock, Volume2,
   CornerDownLeft, CheckCircle, Info, Check,
   TrendingUp, Lightbulb, ArrowLeft, ArrowRight,
-  Link, BookOpen, FileText, Trash2, UploadCloud
+  Link, BookOpen, FileText, Trash2, UploadCloud,
+  Eye, EyeOff
 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import {
@@ -152,7 +153,7 @@ interface SessionRecord {
   placementReady?: boolean
 }
 
-const getInitialSessions = (): SessionRecord[] => {
+const _getInitialSessions = (): SessionRecord[] => {
   return [
     {
       id: 's1',
@@ -1256,12 +1257,17 @@ function LoginScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Student' as UserRole, branch: '' })
   const [accessCode, setAccessCode] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
     if (!form.email || !form.password || (mode === 'register' && !form.name)) {
       setErr('Please fill all fields.')
+      return
+    }
+    if (form.password.length < 6) {
+      setErr('Password must be at least 6 characters.')
       return
     }
     if (mode === 'register' && form.role !== 'Admin' && !form.branch) {
@@ -1402,13 +1408,20 @@ function LoginScreen() {
             ))}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleSubmit()
+            }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
             {mode === 'register' && (
               <input
                 style={inp}
                 placeholder="Full name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                autoComplete="name"
               />
             )}
             <input
@@ -1417,14 +1430,40 @@ function LoginScreen() {
               type="email"
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              autoComplete="email"
             />
-            <input
-              style={inp}
-              placeholder="Password"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-            />
+            <div style={{ position: 'relative', width: '100%' }}>
+              <input
+                style={{ ...inp, paddingRight: 44 }}
+                placeholder="Password (min 6 characters)"
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 4,
+                  color: T.txtSec,
+                }}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {mode === 'register' && (
               <select
                 style={inp}
@@ -1472,7 +1511,7 @@ function LoginScreen() {
               </div>
             )}
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={loading}
               style={{
                 width: '100%',
@@ -1499,15 +1538,15 @@ function LoginScreen() {
                 'Please wait…'
               ) : mode === 'login' ? (
                 <>
-                  Sign In <ArrowRight size={14} />
+                  Sign In <ArrowRight size={18} />
                 </>
               ) : (
                 <>
-                  Create Account <ArrowRight size={14} />
+                  Create Account <CheckCircle size={18} />
                 </>
               )}
             </button>
-          </div>
+          </form>
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
