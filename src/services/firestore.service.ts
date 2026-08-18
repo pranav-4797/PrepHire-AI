@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -196,6 +197,67 @@ export async function updateSessionRecord(id: string, updates: Partial<SessionRe
 
 export async function deleteSessionRecord(id: string) {
   await deleteDoc(doc(db, 'sessions', id))
+}
+
+// ===== REAL-TIME MULTI-USER LIVE LISTENERS =====
+
+export function subscribeToUserProfiles(callback: (users: UserProfile[]) => void): () => void {
+  const q = collection(db, 'users')
+  return onSnapshot(
+    q,
+    (snap) => {
+      const users = snap.docs.map((d) => ({
+        id: d.id,
+        uid: d.id,
+        ...(d.data() as Omit<UserProfile, 'id' | 'uid'>),
+        role: normalizeRole(d.data().role),
+        department: d.data().department || 'General',
+      }))
+      callback(users)
+    },
+    (err) => {
+      console.warn('Real-time users listener error:', err)
+    }
+  )
+}
+
+export function subscribeToSessions(callback: (sessions: SessionRecordData[]) => void): () => void {
+  const q = collection(db, 'sessions')
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => ({ ...(d.data() as Omit<SessionRecordData, 'id'>), id: d.id }))
+      const sorted = list.sort((a, b) => {
+        const tA = (a.createdAt as any)?.toMillis?.() || (a.date ? new Date(a.date).getTime() : 0)
+        const tB = (b.createdAt as any)?.toMillis?.() || (b.date ? new Date(b.date).getTime() : 0)
+        return tB - tA
+      })
+      callback(sorted)
+    },
+    (err) => {
+      console.warn('Real-time sessions listener error:', err)
+    }
+  )
+}
+
+export function subscribeToStudentSessions(email: string, callback: (sessions: SessionRecordData[]) => void): () => void {
+  const cleanEmail = (email || '').trim().toLowerCase()
+  const q = query(collection(db, 'sessions'), where('studentEmail', '==', cleanEmail))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => ({ ...(d.data() as Omit<SessionRecordData, 'id'>), id: d.id }))
+      const sorted = list.sort((a, b) => {
+        const tA = (a.createdAt as any)?.toMillis?.() || (a.date ? new Date(a.date).getTime() : 0)
+        const tB = (b.createdAt as any)?.toMillis?.() || (b.date ? new Date(b.date).getTime() : 0)
+        return tB - tA
+      })
+      callback(sorted)
+    },
+    (err) => {
+      console.warn('Real-time student sessions listener error:', err)
+    }
+  )
 }
 
 // ===== COURSE OPERATIONS =====

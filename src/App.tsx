@@ -17,6 +17,9 @@ import {
   createCourse,
   updateCourse,
   deleteCourse,
+  subscribeToSessions,
+  subscribeToStudentSessions,
+  subscribeToUserProfiles,
 } from './services/firestore.service'
 import type { UserProfile, UserRole, Course } from './services/firestore.service'
 import { loadSessions, loadStudentSessions, saveSession, updateSession } from './services/session.service'
@@ -3576,6 +3579,34 @@ function AdminDashboard({
                 </Btn>
               </section>
 
+              {/* Real-time Multi-user Live Pulse Banner */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 16px',
+                  background: '#F0FDF4',
+                  border: '1px solid #BBF7D0',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: T.green,
+                  fontWeight: 600,
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: T.green,
+                    display: 'inline-block',
+                    boxShadow: '0 0 0 3px rgba(34, 197, 94, 0.25)',
+                  }}
+                />
+                <span>Real-Time Multi-User Event Stream Active • Live sync when multiple users perform interviews & assessments simultaneously</span>
+              </div>
+
               {/* Stats Counters */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                 <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -4209,39 +4240,27 @@ export default function App() {
       return
     }
 
-    let cancelled = false
+    const unsubs: (() => void)[] = []
+    const role = profile.role.toLowerCase()
 
-    async function loadFirestoreData() {
-      const userProfile = profile
-      if (!userProfile) return
-
-      try {
-        const role = userProfile.role.toLowerCase()
-        if (role === 'admin' || role === 'faculty') {
-          const [nextSessions, nextUsers] = await Promise.all([
-            loadSessions(),
-            listUserProfiles(),
-          ])
-          if (!cancelled) {
-            setAllSessions(nextSessions as SessionRecord[])
-            setUsers(nextUsers)
-          }
-        } else {
-          // Student loads only their own sessions
-          const nextSessions = await loadStudentSessions(userProfile.email)
-          if (!cancelled) {
-            setAllSessions(nextSessions as SessionRecord[])
-            setUsers([])
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load user-specific Firestore data:', error)
-      }
+    if (role === 'admin' || role === 'faculty') {
+      const unsubSessions = subscribeToSessions((nextSessions) => {
+        setAllSessions(nextSessions as SessionRecord[])
+      })
+      const unsubUsers = subscribeToUserProfiles((nextUsers) => {
+        setUsers(nextUsers)
+      })
+      unsubs.push(unsubSessions, unsubUsers)
+    } else {
+      const unsubStudentSessions = subscribeToStudentSessions(profile.email, (nextSessions) => {
+        setAllSessions(nextSessions as SessionRecord[])
+        setUsers([])
+      })
+      unsubs.push(unsubStudentSessions)
     }
 
-    loadFirestoreData()
     return () => {
-      cancelled = true
+      unsubs.forEach((u) => u())
     }
   }, [profile])
 
