@@ -33,7 +33,7 @@ service cloud.firestore {
         isAdmin() ||
         (
           request.auth.uid == userId &&
-          !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'disabled'])
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'disabled', 'department'])
         )
       );
       allow delete: if signedIn() && isAdmin();

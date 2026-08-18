@@ -4645,38 +4645,11 @@ export default function App() {
                         <span style={{ color: T.txtMut }}>Role</span>
                         <span style={{ fontWeight: 700, color: T.txtPri }}>{user?.role || 'Student'}</span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span style={{ color: T.txtMut, fontSize: 11, fontWeight: 600 }}>Branch / Department</span>
-                        <select
-                          value={user?.department || 'General'}
-                          onChange={async (e) => {
-                            const nextDept = e.target.value
-                            if (!user) return
-                            try {
-                              await updateUserProfile(user.uid, { department: nextDept })
-                              setUser((prev) => prev ? { ...prev, department: nextDept } : null)
-                              showToast(`Department updated to ${nextDept}`, 'success')
-                            } catch (err: any) {
-                              showToast('Failed to update department: ' + (err.message || err), 'error')
-                            }
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '8px 10px',
-                            borderRadius: 8,
-                            border: `1.5px solid ${T.outlineVar}`,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            background: T.bgWhite,
-                            color: T.txtPri,
-                            fontFamily: 'inherit',
-                          }}
-                        >
-                          <option value="General">Select Branch / Program</option>
-                          {BRANCHES.map((b) => (
-                            <option key={b} value={b}>{b}</option>
-                          ))}
-                        </select>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 12, gap: 12 }}>
+                        <span style={{ color: T.txtMut, flexShrink: 0 }}>Department</span>
+                        <span style={{ fontWeight: 700, color: T.primary, textAlign: 'right' }}>
+                          {user?.department || 'General'}
+                        </span>
                       </div>
                     </div>
                   </GlassCard>
