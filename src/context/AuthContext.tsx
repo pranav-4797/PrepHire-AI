@@ -105,7 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(credential.user)
           setProfile(nextProfile)
         } finally {
-          pendingRegistrationEmailRef.current = null
+          setTimeout(() => {
+            pendingRegistrationEmailRef.current = null
+          }, 1500)
           setLoading(false)
         }
       },
