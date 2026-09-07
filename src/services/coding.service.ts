@@ -223,6 +223,26 @@ export async function submitCode(
   return handle(res, 'Failed to submit code')
 }
 
+export interface CodeReview {
+  correctnessNote: string
+  complexity: string
+  betterApproach: string
+  codeQualityNotes: string[]
+  overallVerdict: string
+}
+
+export async function getCodeReview(
+  problemId: string,
+  payload: { code: string; language: string; verdict: string; testResults: unknown },
+): Promise<CodeReview> {
+  const res = await fetch(`${API_URL}/api/coding/problems/${problemId}/review`, {
+    method: 'POST',
+    headers: await authHeaders(true),
+    body: JSON.stringify(payload),
+  })
+  return handle(res, 'Failed to get code review')
+}
+
 export async function listSubmissions(
   problemId?: string,
 ): Promise<Submission[]> {

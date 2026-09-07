@@ -27,7 +27,12 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
+      // A new account can only ever create itself as a Student, never-disabled.
+      // Promotion to Faculty/Admin can only happen via an existing Admin's
+      // `update` below — never at signup, and never by the user themselves.
+      allow create: if signedIn() && request.auth.uid == userId &&
+        (request.resource.data.role == 'Student' || request.resource.data.role == 'student') &&
+        request.resource.data.disabled == false;
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin() || isFaculty());
       allow update: if signedIn() && (
         isAdmin() ||
@@ -47,16 +52,24 @@ service cloud.firestore {
       );
       allow read: if signedIn() && (
         isAdmin() ||
-        isFaculty() ||
+        (isFaculty() && resource.data.department == profile().department) ||
         (isStudent() && resource.data.studentEmail == request.auth.token.email)
       );
-      allow update: if signedIn() && (isAdmin() || isFaculty());
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (isFaculty() && resource.data.department == profile().department)
+      );
       allow delete: if signedIn() && isAdmin();
     }
 
     match /courses/{courseId} {
       allow read: if signedIn();
       allow write: if signedIn() && (isAdmin() || isFaculty());
+    }
+
+    match /feedback/{feedbackId} {
+      allow create: if signedIn() && request.resource.data.userEmail == request.auth.token.email;
+      allow read: if signedIn() && isAdmin();
     }
 
     match /{document=**} {

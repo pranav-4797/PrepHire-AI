@@ -93,6 +93,20 @@ export function requireAdmin() {
   }
 }
 
+/** Gate for Faculty-or-Admin-only writes (e.g. Courses CRUD). */
+export function requireFacultyOrAdmin() {
+  return async (req, res, next) => {
+    const user = await resolveAuthUser(req)
+    if (!user) return res.status(401).json({ error: 'Sign in required.' })
+    const role = (user.role || '').toLowerCase()
+    if (role !== 'admin' && role !== 'faculty') {
+      return res.status(403).json({ error: 'Only Faculty or Admin users can manage courses.' })
+    }
+    req.authUser = user
+    next()
+  }
+}
+
 /** Non-blocking: attaches req.authUser if resolvable, otherwise leaves it undefined. */
 export function attachUserOptional() {
   return async (req, _res, next) => {

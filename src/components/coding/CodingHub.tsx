@@ -7,7 +7,7 @@ import { CodingDashboard } from './CodingDashboard'
 import { listLanguages, getDashboardStats } from '../../services/coding.service'
 import type { LanguageOption } from '../../services/coding.service'
 
-export function CodingHub({ userEmail, userName }: { userEmail: string; userName: string }) {
+export function CodingHub({ userEmail, userName, showToast }: { userEmail: string; userName: string; showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [tab, setTab] = useState<'problems' | 'dashboard'>('problems')
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null)
   const [languages, setLanguages] = useState<LanguageOption[]>([])
@@ -38,6 +38,7 @@ export function CodingHub({ userEmail, userName }: { userEmail: string; userName
         languages={languages}
         onBack={() => setSelectedProblemId(null)}
         onSolved={(id) => setSolvedIds((prev) => new Set(prev).add(id))}
+        showToast={showToast}
       />
     )
   }

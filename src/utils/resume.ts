@@ -1,5 +1,6 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { auth } from '../firebase/firebase'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -29,25 +30,29 @@ export async function extractResumeText(file: File): Promise<string> {
   return text.trim().slice(0, MAX_RESUME_CHARS)
 }
 
+const AI_API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
+
+// Calls our own Express server (/api/ai/generate), which holds the Gemini key
+// server-side and forwards the request. The key never reaches the browser.
 async function callGemini(prompt: string, sys: string): Promise<string> {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-  if (!GEMINI_API_KEY) {
-    throw new Error('Missing VITE_GEMINI_API_KEY environment variable.')
+  const token = await auth.currentUser?.getIdToken()
+  if (!token) {
+    throw new Error('You must be signed in to use AI features.')
   }
-  const baseUrl = import.meta.env.DEV ? '/gemini' : 'https://generativelanguage.googleapis.com'
-  const res = await fetch(
-    `${baseUrl}/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: sys }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      }),
-    }
-  )
+  const res = await fetch(`${AI_API_URL}/api/ai/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ prompt, sys }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || 'AI request failed.')
+  }
   const d = await res.json()
-  return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  return d.text || ''
 }
 
 export async function analyzeResume(text: string): Promise<ResumeProfile> {

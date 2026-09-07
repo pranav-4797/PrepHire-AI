@@ -13,6 +13,11 @@ services:
         sync: false
       - key: GOOGLE_SERVICE_ACCOUNT
         sync: false
+      # Server-side only — used by /api/ai/generate (resume parsing +
+      # interview question generation). Never give this a VITE_ prefix or
+      # it will be bundled into the client JS and exposed to anyone.
+      - key: GEMINI_API_KEY
+        sync: false
       # Online Coding Platform — sandboxed execution service. Defaults to the
       # public Piston demo instance in code if unset, but that instance is
       # rate-limited and NOT intended for production traffic. Self-host

@@ -9,6 +9,7 @@ import {
   Eye, EyeOff
 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
+import { auth } from './firebase/firebase'
 import {
   deleteUserProfile,
   listUserProfiles,
@@ -20,8 +21,10 @@ import {
   subscribeToSessions,
   subscribeToStudentSessions,
   subscribeToUserProfiles,
+  submitFeedback,
+  subscribeToFeedback,
 } from './services/firestore.service'
-import type { UserProfile, UserRole, Course } from './services/firestore.service'
+import type { UserProfile, UserRole, Course, Feedback } from './services/firestore.service'
 import { loadSessions, loadStudentSessions, saveSession, updateSession } from './services/session.service'
 import { Leaderboard } from './components/Leaderboard'
 import { CodingHub } from './components/coding/CodingHub'
@@ -178,7 +181,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['Could mention corner cases of Binary Search', 'Minor pause during Graph search question'],
         tip: 'Deepen your knowledge of system design scalability.',
         proctoringNote: 'Clean session with steady eye contact.',
-        warnCount: 0
+        warnCount: 0,
+        actionPlan: ['Deep-dive scalability trade-offs for one system design case study.', 'Practice binary search edge cases aloud with time complexity analysis.', 'Time yourself on 2 graph traversal whiteboard problems this week.']
       },
       facultyRemarks: 'Excellent analytical skills. Approved.',
       placementReady: true
@@ -203,7 +207,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['Struggled with the logical reasoning sequence', 'Took too long on Q3'],
         tip: 'Practice speed math exercises to save time.',
         proctoringNote: '1 tab switch warning logged.',
-        warnCount: 1
+        warnCount: 1,
+        actionPlan: ['Drill 20 logical reasoning sequences under timed conditions.', 'Practice speed math for 15 minutes daily.', 'Review Q3-type problems and solve 3 variants.']
       },
       facultyRemarks: '',
       placementReady: undefined
@@ -228,7 +233,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['Answers could be 10% more concise'],
         tip: 'Try to summarize your answers slightly faster.',
         proctoringNote: 'Perfect proctoring results.',
-        warnCount: 0
+        warnCount: 0,
+        actionPlan: ['Record answers and trim to under 90 seconds for conciseness.', 'Practice summarizing leadership stories with STAR in 1 minute.', 'Do one mock HR round focusing on crisp closure.']
       },
       facultyRemarks: 'Commendable communication and confidence!',
       placementReady: true
@@ -253,7 +259,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['Struggled with recursion logic', 'Multiple warnings due to tab-switches'],
         tip: 'Build stronger fundamentals in recursion and trees.',
         proctoringNote: '3 warnings logged: tab switches detected.',
-        warnCount: 3
+        warnCount: 3,
+        actionPlan: ['Revise recursion fundamentals and solve 5 recursion problems with trace.', 'Practice tree traversals and explain base cases aloud.', 'Do mock interviews with proctoring on to avoid tab switches.']
       },
       facultyRemarks: 'Needs to focus on DSA fundamentals and maintain integrity.',
       placementReady: false
@@ -278,7 +285,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['Improve formatting in mental calculations'],
         tip: 'Practice multi-variable linear equation solving.',
         proctoringNote: 'Clean session.',
-        warnCount: 0
+        warnCount: 0,
+        actionPlan: ['Practice formatting mental calculations on paper for 10 problems.', 'Solve multi-variable linear equations with timed drills.', 'Review logical deduction shortcuts for 30 minutes daily.']
       },
       facultyRemarks: '',
       placementReady: undefined
@@ -303,7 +311,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['Could elaborate more on economic impacts', 'Interrupted the AI voice prompt once'],
         tip: 'Allow speakers to finish and listen actively before responding.',
         proctoringNote: '1 face movement warning logged.',
-        warnCount: 1
+        warnCount: 1,
+        actionPlan: ['Research and prepare one current-affairs point with economic impact detail.', 'Practice active listening and pausing 2 seconds before responding.', 'Join one peer GD to practice turn-taking.']
       },
       facultyRemarks: '',
       placementReady: undefined
@@ -328,7 +337,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['None observed, outstanding performance'],
         tip: 'Perfect! Mentor other peers on GD participation.',
         proctoringNote: 'Excellent proctoring. High facial alignment.',
-        warnCount: 0
+        warnCount: 0,
+        actionPlan: ['Mentor a peer on GD structure and get feedback.', 'Tackle one advanced GD topic with counter-arguments.', 'Record a 2-minute summary to keep timing sharp.']
       },
       facultyRemarks: 'Brilliant performer. Ready for immediate drives.',
       placementReady: true
@@ -353,7 +363,8 @@ const _getInitialSessions = (): SessionRecord[] => {
         improvements: ['Could mention longer term technical goals'],
         tip: 'Keep this enthusiasm up!',
         proctoringNote: 'Clean session.',
-        warnCount: 0
+        warnCount: 0,
+        actionPlan: ['Draft a 1-minute answer on 5-year technical goals with milestones.', 'Practice linking current skills to future roadmap.', 'Prepare one question to ask the interviewer about growth.']
       },
       facultyRemarks: 'Strong candidate.',
       placementReady: true
@@ -383,6 +394,7 @@ interface ReportData {
   tip: string
   proctoringNote: string
   warnCount: number
+  actionPlan: string[]
 }
 
 interface HistoryEntry {
@@ -1591,6 +1603,7 @@ function Navbar({
   inInterview,
   timer,
   timerColor,
+  onFeedback,
 }: {
   user: User | null
   onLogout: () => void
@@ -1598,6 +1611,7 @@ function Navbar({
   inInterview: boolean
   timer?: number
   timerColor?: string
+  onFeedback?: () => void
 }) {
   return (
     <header
@@ -1668,6 +1682,27 @@ function Navbar({
 
       {user && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {onFeedback && !inInterview && user.role === 'Student' && (
+            <button
+              onClick={onFeedback}
+              style={{
+                fontSize: 12,
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: `1px solid ${T.primary}22`,
+                background: T.primaryFix,
+                cursor: 'pointer',
+                color: T.primary,
+                fontWeight: 700,
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <MessageSquare size={13} /> Feedback
+            </button>
+          )}
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>{user.name}</div>
             <div style={{ fontSize: 11, color: T.txtSec }}>{user.role}</div>
@@ -1733,25 +1768,29 @@ async function requestPermissions(): Promise<{ camera: boolean; microphone: bool
   return { camera, microphone }
 }
 
+const AI_API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
+
+// Calls our own Express server (/api/ai/generate), which holds the Gemini key
+// server-side and forwards the request. The key never reaches the browser.
 async function callClaude(prompt: string, sys: string): Promise<string> {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-  if (!GEMINI_API_KEY) {
-    throw new Error('Missing VITE_GEMINI_API_KEY environment variable.')
+  const token = await auth.currentUser?.getIdToken()
+  if (!token) {
+    throw new Error('You must be signed in to use AI features.')
   }
-  const baseUrl = import.meta.env.DEV ? '/gemini' : 'https://generativelanguage.googleapis.com'
-  const res = await fetch(
-    `${baseUrl}/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: sys }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      }),
-    }
-  )
+  const res = await fetch(`${AI_API_URL}/api/ai/generate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ prompt, sys }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || 'AI request failed.')
+  }
   const d = await res.json()
-  return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  return d.text || ''
 }
 function FacultyDashboard({
   user,
@@ -1999,11 +2038,11 @@ const addResource = (chapterIndex: number) => {
         status: 'pending' as const
       }
       if (editingCourseId) {
-        await updateCourse(editingCourseId, payload, user.email, user.role)
+        await updateCourse(editingCourseId, payload)
         setEditingCourseId(null)
         showToast('Course updated and submitted for approval!', 'success')
       } else {
-        await createCourse(payload, user.email, user.role)
+        await createCourse(payload)
         showToast('Course created and submitted for approval!', 'success')
       }
       // Reset form
@@ -2037,7 +2076,7 @@ const addResource = (chapterIndex: number) => {
 
   const handleDeleteCourse = async (id: string) => {
     try {
-      await deleteCourse(id, user.email, user.role)
+      await deleteCourse(id)
       await loadCourses()
     } catch (error) {
       console.error('Failed to delete course:', error)
@@ -2747,7 +2786,7 @@ const addResource = (chapterIndex: number) => {
 
           {activeTab === 'coding' && (
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
-              <CodingHub userEmail={user.email} userName={user.name} />
+              <CodingHub userEmail={user.email} userName={user.name} showToast={showToast} />
             </div>
           )}
         </main>
@@ -2980,10 +3019,10 @@ function AdminDashboard({
   onDepartmentChange: (userId: string, department: string) => Promise<void>
   onLogout: () => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
-  activeTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
-  onTabChange?: (tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding') => void
+  activeTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'
+  onTabChange?: (tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback') => void
 }) {
-  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'>('overview')
+  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'>('overview')
   const activeTab = activeTabProp ?? localActiveTab
   const setActiveTab = onTabChange ?? setLocalActiveTab
   const [strictProctoring, setStrictProctoring] = useState(true)
@@ -3012,9 +3051,22 @@ function AdminDashboard({
     }
   }, [activeTab])
 
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
+  const [loadingFeedback, setLoadingFeedback] = useState(false)
+
+  useEffect(() => {
+    if (activeTab !== 'feedback') return
+    setLoadingFeedback(true)
+    const unsub = subscribeToFeedback((items) => {
+      setFeedbacks(items)
+      setLoadingFeedback(false)
+    })
+    return () => unsub()
+  }, [activeTab])
+
   const handleApproveCourse = async (id: string) => {
     try {
-      await updateCourse(id, { status: 'approved' }, user.email, user.role)
+      await updateCourse(id, { status: 'approved' })
       showToast('Course approved successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
@@ -3025,7 +3077,7 @@ function AdminDashboard({
 
   const handleRejectCourse = async (id: string) => {
     try {
-      await updateCourse(id, { status: 'rejected' }, user.email, user.role)
+      await updateCourse(id, { status: 'rejected' })
       showToast('Course rejected successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
@@ -3244,6 +3296,7 @@ function AdminDashboard({
             { id: 'overview', label: 'Analytics Overview' },
             { id: 'ranking', label: 'Student Rankings' },
             { id: 'users', label: 'User Management' },
+            { id: 'feedback', label: 'Feedback' },
             { id: 'courses', label: 'Course Approvals' },
             { id: 'coding', label: 'Coding Problems' },
             { id: 'logs', label: 'System Audit Logs' },
@@ -4033,6 +4086,58 @@ function AdminDashboard({
           {activeTab === 'coding' && (
             <AdminProblemsManager userEmail={user.email} showToast={showToast} />
           )}
+
+          {activeTab === 'feedback' && (
+            <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <section>
+                <h1 style={{ fontSize: 20, fontWeight: 700, color: T.primary, marginBottom: 4 }}>
+                  Student Feedback
+                </h1>
+                <p className="text-body" style={{ color: T.txtSec }}>
+                  Centralized pilot feedback from students — bugs, confusion, and suggestions.
+                </p>
+              </section>
+
+              {loadingFeedback ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: T.txtSec }}>Loading feedback…</div>
+              ) : feedbacks.length === 0 ? (
+                <GlassCard style={{ textAlign: 'center', padding: '40px 20px', color: T.txtSec }}>
+                  No feedback submitted yet.
+                </GlassCard>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {feedbacks.map((fb) => {
+                    const ts: any = fb.createdAt as any
+                    const dateStr = ts?.toDate ? ts.toDate().toLocaleString() : ts ? new Date(String(ts)).toLocaleString() : ''
+                    const catColor =
+                      fb.category === 'Bug' ? T.error : fb.category === 'Confusing' ? '#F59E0B' : fb.category === 'Suggestion' ? T.primary : T.txtMut
+                    const catBg =
+                      fb.category === 'Bug' ? T.errCont : fb.category === 'Confusing' ? T.amberBg : fb.category === 'Suggestion' ? T.primaryFix : T.bgLow
+                    return (
+                      <GlassCard key={fb.id} style={{ padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                          <Pill color={catColor} bg={catBg}>{fb.category}</Pill>
+                          <span style={{ fontSize: 11, color: T.txtMut }}>{dateStr}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: T.txtPri, lineHeight: 1.5, whiteSpace: 'pre-wrap', marginBottom: 10 }}>
+                          {fb.message}
+                        </div>
+                        <div style={{ fontSize: 11, color: T.txtSec, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600 }}>{fb.userName}</span>
+                          <span>·</span>
+                          <span>{fb.userEmail}</span>
+                          <span>·</span>
+                          <span>{fb.role}</span>
+                          <span>·</span>
+                          <span>page: {fb.page}</span>
+                        </div>
+                      </GlassCard>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>
@@ -4041,14 +4146,17 @@ function AdminDashboard({
 
 // ── ROUTING & URL SYNC HELPERS ──────────────────────────────────────────────
 function parsePathname(pathname: string): {
-  screen: 'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report'
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report'
   studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history'
   facultyTab?: 'overview' | 'ranking' | 'courses' | 'coding'
-  adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
+  adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'
 } {
   const p = pathname.toLowerCase()
   if (p === '/auth' || p === '/login') {
     return { screen: 'auth' }
+  }
+  if (p === '/interview/consent' || p === '/consent') {
+    return { screen: 'consent' }
   }
   if (p === '/interview/intro' || p === '/intro') {
     return { screen: 'intro' }
@@ -4060,11 +4168,12 @@ function parsePathname(pathname: string): {
     return { screen: 'report' }
   }
   if (p.startsWith('/admin')) {
-    let tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' = 'overview'
+    let tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' = 'overview'
     if (p.includes('users')) tab = 'users'
     else if (p.includes('ranking')) tab = 'ranking'
     else if (p.includes('courses')) tab = 'courses'
     else if (p.includes('coding')) tab = 'coding'
+    else if (p.includes('feedback')) tab = 'feedback'
     else if (p.includes('logs')) tab = 'logs'
     else if (p.includes('config')) tab = 'config'
     return { screen: 'home', adminTab: tab }
@@ -4089,15 +4198,16 @@ function parsePathname(pathname: string): {
 }
 
 function getUrlPath(
-  screen: 'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report',
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report',
   role: string | null | undefined,
   studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history',
   facultyTab: 'overview' | 'ranking' | 'courses' | 'coding',
-  adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'
+  adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'
 ): string {
   if (screen === 'landing') return '/'
   if (screen === 'auth') return '/login'
   if (screen === 'intro') return '/interview/intro'
+  if (screen === 'consent') return '/interview/consent'
   if (screen === 'interview') return '/interview/session'
   if (screen === 'report') return '/interview/report'
   if (screen === 'home') {
@@ -4115,7 +4225,7 @@ export default function App() {
   const initialRoute = parsePathname(window.location.pathname)
 
   const [screen, setScreen] = useState<
-    'landing' | 'auth' | 'home' | 'intro' | 'interview' | 'loading' | 'report'
+    'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report'
   >(initialRoute.screen)
 
   const [user, setUser] = useState<User | null>(null)
@@ -4136,9 +4246,14 @@ export default function App() {
   const [facultyTab, setFacultyTab] = useState<'overview' | 'ranking' | 'courses' | 'coding'>(
     initialRoute.facultyTab || 'overview'
   )
-  const [adminTab, setAdminTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding'>(
+  const [adminTab, setAdminTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'>(
     initialRoute.adminTab || 'overview'
   )
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [feedbackCategory, setFeedbackCategory] = useState<'Bug' | 'Confusing' | 'Suggestion' | 'Other'>('Bug')
+  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
+  const [pendingIntroText, setPendingIntroText] = useState<string | null>(null)
   const isPopStateRef = useRef(false)
 
   // ── Browser History & Back/Forward button listener ───────────────────
@@ -4183,6 +4298,7 @@ export default function App() {
       setStudentCourses(list.filter((c) => (c.status || 'approved').toLowerCase() === 'approved'))
     } catch (error) {
       console.error('Failed to load courses for student:', error)
+      showToast('Failed to load courses — please refresh and try again', 'error')
     } finally {
       setLoadingStudentCourses(false)
     }
@@ -4382,9 +4498,10 @@ export default function App() {
         return uploadVideoToDrive(videoBlob, sessionId, attempt + 1)
       }
       console.error('❌ All upload attempts failed. Video was not saved to Drive.')
+      showToast('Failed to upload interview video — please check your connection', 'error')
       return null
     }
-  }, [domain, level, user])
+  }, [domain, level, user, showToast])
 
   const beginActualInterview = useCallback(async (intro: string) => {
     setScreen('interview')
@@ -4418,7 +4535,7 @@ export default function App() {
       const resumeCtx = resumeProfile
         ? buildResumeContext(resumeProfile, resumeNotes, domain || '')
         : ''
-      const sys = `You are PrepHire AI, a professional interview coach for MIT AoE placement preparation. Domain: ${domainObj?.label || domain}, Level: ${level}. ${introCtx}${resumeCtx}Ask ONE question at a time. Give 1-line micro-feedback after each answer then ask the next. Keep responses under 80 words. Ensure variety across question types and difficulty levels. Start with a brief warm acknowledgement of their intro (1 sentence) then your first question.`
+      const sys = `You are PrepHire AI, a professional interview coach for MIT AoE placement preparation. Domain: ${domainObj?.label || domain}, Level: ${level}. ${introCtx}${resumeCtx}Ask ONE question at a time. After each answer give honest, calibrated 1-line micro-feedback — if the answer was vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-ups after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Keep responses under 80 words. Ensure variety across technical, behavioral, logical, and current-affairs question types. Start with a brief warm acknowledgement of their intro (1 sentence) then your first question.`
       const q = await callClaude('Start the interview.', sys)
       setMessages([{ role: 'ai', text: q }])
       setQCount(1)
@@ -4427,11 +4544,12 @@ export default function App() {
       aiSpeak(q)
     } catch (err) {
       console.error(err)
+      showToast("Couldn't start the interview — please try again", 'error')
       setMessages([{ role: 'system', text: `⚠️ Error initializing interview: ${(err as Error).message || 'Unknown error'}. Please verify your Gemini API key is configured correctly.` }])
     } finally {
       setLoading(false)
     }
-  }, [domain, level, aiSpeak, stopSpeaking, resumeProfile, resumeNotes])
+  }, [domain, level, aiSpeak, stopSpeaking, resumeProfile, resumeNotes, showToast])
 
   const generateReport = useCallback(async (data: QA[]) => {
     setScreen('loading')
@@ -4472,10 +4590,12 @@ export default function App() {
         tip: 'Start a new interview and answer at least one question to receive feedback.',
         proctoringNote: wc > 0 ? `Interview ended before any questions were answered. Warnings: ${wc}.` : 'The interview was ended before any questions could be answered. No performance data to evaluate.',
         warnCount: wc,
+        actionPlan: ['Complete a full 5-question interview to generate a personalized action plan.', 'Review fundamentals for your target domain and prepare one project story with STAR format.', 'Practice answering one technical and one behavioral question aloud and time yourself.'],
       }
     } else {
-      const sys = `You are PrepHire AI evaluator. Return ONLY valid JSON, no markdown:
-{"overallScore":<0-100>,"technical":<0-100>,"communication":<0-100>,"confidence":<0-100>,"clarity":<0-100>,"relevance":<0-100>,"strengths":["...","...","..."],"improvements":["...","...","..."],"tip":"...","proctoringNote":"..."}`
+      const sys = `You are PrepHire AI evaluator. Return ONLY valid JSON, no markdown, no fences:
+{"overallScore":<0-100>,"technical":<0-100>,"communication":<0-100>,"confidence":<0-100>,"clarity":<0-100>,"relevance":<0-100>,"strengths":["...","...","..."],"improvements":["...","...","..."],"tip":"...","proctoringNote":"...","actionPlan":["...","...","..."]}
+Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, complete and precise with zero follow-up needed; 70-89 = solid but missing depth, edge cases, or trade-offs; 50-69 = vague or partial, would need probing to confirm real understanding; below 50 = incorrect, off-topic, or too shallow to demonstrate competence. Score ONLY what was demonstrated in the transcript — no credit for confidence or politeness alone, and do not undersell genuinely strong answers. For "improvements", each item must cite the SPECIFIC question that revealed the gap (e.g. "In Q3 you named a solution but never explained the trade-off") — never generic phrases like "improve technical depth". For "actionPlan", provide ~3 concrete, specific next steps the candidate can act on this week (a topic to study, a habit to drill, a type of question to practice) — not vague encouragement.`
       try {
         const raw = await callClaude(
           `Domain: ${domainObj?.label || domain}, Level: ${level}, Proctoring warnings: ${wc}\n${data.map((d, i) => `Q${i + 1}: ${d.q}\nA: ${d.a}`).join('\n\n')}`,
@@ -4499,6 +4619,7 @@ export default function App() {
           tip: isEarlyEnd ? 'Complete all 5 questions in your next interview to receive a comprehensive assessment.' : 'Practice STAR format for behavioral questions.',
           proctoringNote: isEarlyEnd ? `Interview ended early after ${qAnswered} of 5 questions.` : 'Session completed.',
           warnCount: wc,
+          actionPlan: ['Practice STAR format for behavioral questions and rehearse one story aloud.', 'Drill one core technical topic from your domain with edge cases and trade-offs.', 'Record yourself answering 3 new questions and review for clarity and conciseness.'],
         }
       }
     }
@@ -4566,17 +4687,25 @@ export default function App() {
       return
     }
     setLoading(true)
-    const reply = await callClaude(
-      `Time expired. Acknowledge briefly and ask question ${qCount + 1} of 5. Under 60 words.`,
-      `You are PrepHire AI. Domain: ${domain}, Level: ${level}.`
-    )
-    setMessages((p) => [...p, { role: 'ai', text: reply }])
-    setQCount((q) => q + 1)
-    setTimer(sessionTimeLimit)
-    setTimerActive(true)
-    setLoading(false)
-    aiSpeak(reply)
-  }, [stopSpeaking, messages, sessionData, qCount, domain, level, aiSpeak, generateReport])
+    try {
+      const reply = await callClaude(
+        `Time expired. Acknowledge briefly and ask question ${qCount + 1} of 5. Under 60 words.`,
+        `You are PrepHire AI. Domain: ${domain}, Level: ${level}.`
+      )
+      setMessages((p) => [...p, { role: 'ai', text: reply }])
+      setQCount((q) => q + 1)
+      setTimer(sessionTimeLimit)
+      setTimerActive(true)
+      aiSpeak(reply)
+    } catch (err) {
+      console.error(err)
+      showToast("Couldn't generate the next question — please try again", 'error')
+      setMessages((p) => [...p, { role: 'system', text: `⚠️ Error calling AI: ${(err as Error).message || 'Unknown error'}.` }])
+      setTimerActive(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [stopSpeaking, messages, sessionData, qCount, domain, level, aiSpeak, generateReport, showToast])
 
   const submitIntro = useCallback(async (text: string) => {
     setIntroTimerActive(false)
@@ -4584,14 +4713,38 @@ export default function App() {
     if (profile?.uid && resumeNotes.trim()) {
       updateUserProfile(profile.uid, { resumeNotes: resumeNotes.trim() }).catch((e) => {
         console.error('Failed to save resume notes:', e)
+        showToast('Failed to save notes — please try again', 'error')
       })
     }
+    const uid = profile?.uid || user?.uid
+    const consentKey = uid ? `prephire_consent_acknowledged_${uid}` : null
+    const hasConsented = consentKey ? localStorage.getItem(consentKey) === 'true' : false
+    if (hasConsented) {
+      await beginActualInterview(text)
+    } else {
+      setPendingIntroText(text)
+      setScreen('consent')
+    }
+  }, [beginActualInterview, profile, resumeNotes, user, showToast])
+
+  const handleConsent = useCallback(async () => {
+    const uid = profile?.uid || user?.uid
+    if (uid) {
+      try {
+        localStorage.setItem(`prephire_consent_acknowledged_${uid}`, 'true')
+      } catch {
+        /* ignore localStorage errors */
+      }
+    }
+    const text = pendingIntroText ?? introText
+    setPendingIntroText(null)
     await beginActualInterview(text)
-  }, [beginActualInterview, profile, resumeNotes])
+  }, [pendingIntroText, introText, beginActualInterview, profile, user])
 
   async function handleResumeUpload(file: File) {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       setResumeError('Please upload a PDF file.')
+      showToast('Please upload a PDF file', 'error')
       return
     }
     setResumeLoading(true)
@@ -4608,10 +4761,12 @@ export default function App() {
       if (profile?.uid) {
         updateUserProfile(profile.uid, { resumeProfile: parsed, resumeNotes: resumeNotes.trim() }).catch((e) => {
           console.error('Failed to save resume profile:', e)
+          showToast('Failed to save resume profile — please try again', 'error')
         })
       }
     } catch (err) {
       setResumeError((err as Error).message || 'Failed to analyze resume. Please try again.')
+      showToast('Failed to analyze resume — please try again', 'error')
     } finally {
       setResumeLoading(false)
     }
@@ -4624,6 +4779,7 @@ export default function App() {
     if (profile?.uid) {
       updateUserProfile(profile.uid, { resumeProfile: null }).catch((e) => {
         console.error('Failed to remove resume profile:', e)
+        showToast('Failed to remove resume — please try again', 'error')
       })
     }
   }
@@ -4712,7 +4868,7 @@ export default function App() {
         await generateReport(sd)
         return
       }
-      const sys = `You are PrepHire AI. Domain: ${domainObj?.label || domain}, Level: ${level}. Previous questions asked: ${newMsgs.filter((m) => m.role === 'ai').map((m) => m.text).join(', ') || 'None yet'}. Type variation: Include technical, behavioral, logical, and current affairs perspectives. Ensure diversity and avoid repeating question types or patterns. Give 1-line micro-feedback on the answer, then ask question ${qCount + 1} of 5. Under 80 words.`
+      const sys = `You are PrepHire AI. Domain: ${domainObj?.label || domain}, Level: ${level}. Previous questions asked: ${newMsgs.filter((m) => m.role === 'ai').map((m) => m.text).join(', ') || 'None yet'}. Type variation: Include technical, behavioral, logical, and current affairs perspectives. Ensure diversity and avoid repeating question types or patterns. After the answer give honest, calibrated 1-line micro-feedback — if vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-up after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Then ask question ${qCount + 1} of 5. Under 80 words, one question at a time.`
       const reply = await callClaude(
         `Conversation:\n${newMsgs.map((m) => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: ${m.text}`).join('\n')}`,
         sys
@@ -4724,6 +4880,7 @@ export default function App() {
       aiSpeak(reply)
     } catch (err) {
       console.error(err)
+      showToast("Couldn't generate the next question — please try again", 'error')
       setMessages((p) => [...p, { role: 'system', text: `⚠️ Error calling AI: ${(err as Error).message || 'Unknown error'}.` }])
       setTimerActive(true)
     } finally {
@@ -4813,7 +4970,7 @@ export default function App() {
 
     return (
       <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', flexDirection: 'column' }}>
-        <Navbar user={user} onLogout={handleLogout} onHome={() => { setStudentTab('interview'); setScreen('home') }} inInterview={false} />
+        <Navbar user={user} onLogout={handleLogout} onHome={() => { setStudentTab('interview'); setScreen('home') }} inInterview={false} onFeedback={() => setShowFeedbackModal(true)} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 60px)', flex: 1 }}>
           {/* Sidebar */}
@@ -4858,6 +5015,27 @@ export default function App() {
                 {tab.label}
               </button>
             ))}
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              style={{
+                textAlign: 'left',
+                padding: '10px 14px',
+                borderRadius: 8,
+                border: `1px solid ${T.border}`,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 700,
+                background: '#EFF6FF',
+                color: T.primary,
+                marginTop: 8,
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <MessageSquare size={13} /> Feedback
+            </button>
           </aside>
 
           {/* Main Content */}
@@ -5552,7 +5730,7 @@ export default function App() {
               </div>
             ) : studentTab === 'coding' ? (
               <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
-                <CodingHub userEmail={user?.email || ''} userName={user?.name || ''} />
+                <CodingHub userEmail={user?.email || ''} userName={user?.name || ''} showToast={showToast} />
               </div>
             ) : (
               <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
@@ -5626,6 +5804,122 @@ export default function App() {
           </main>
         </div>
         <ToastNotification toast={toast} />
+        {showFeedbackModal && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              background: 'rgba(0,0,0,0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: 'fadeIn 0.2s ease',
+            }}
+            onClick={() => setShowFeedbackModal(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#fff',
+                borderRadius: 16,
+                padding: '24px',
+                maxWidth: 480,
+                width: '90%',
+                boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <MessageSquare size={18} style={{ color: T.primary }} />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: T.primary, margin: 0 }}>Send Feedback</h3>
+              </div>
+              <p style={{ fontSize: 12, color: T.txtSec, margin: 0, lineHeight: 1.5 }}>
+                Help us improve the pilot — report bugs, confusion, or suggestions. Your feedback is visible only to Admins.
+              </p>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: T.txtPri, display: 'block', marginBottom: 6 }}>Category</label>
+                <select
+                  value={feedbackCategory}
+                  onChange={(e) => setFeedbackCategory(e.target.value as typeof feedbackCategory)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: 10,
+                    border: `1.5px solid ${T.outlineVar}`,
+                    fontSize: 13,
+                    fontFamily: 'inherit',
+                    background: T.bgWhite,
+                    color: T.txtPri,
+                  }}
+                >
+                  <option value="Bug">Bug</option>
+                  <option value="Confusing">Confusing</option>
+                  <option value="Suggestion">Suggestion</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: T.txtPri, display: 'block', marginBottom: 6 }}>Message</label>
+                <textarea
+                  value={feedbackMessage}
+                  onChange={(e) => setFeedbackMessage(e.target.value)}
+                  placeholder="Describe the issue or suggestion…"
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    border: `1.5px solid ${T.outlineVar}`,
+                    fontSize: 13,
+                    fontFamily: 'inherit',
+                    background: T.bgWhite,
+                    lineHeight: 1.5,
+                    color: T.txtPri,
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <Btn variant="ghost" onClick={() => setShowFeedbackModal(false)} disabled={feedbackSubmitting}>
+                  Cancel
+                </Btn>
+                <Btn
+                  variant="navy"
+                  disabled={!feedbackMessage.trim() || feedbackSubmitting}
+                  onClick={async () => {
+                    if (!feedbackMessage.trim() || !user) return
+                    setFeedbackSubmitting(true)
+                    try {
+                      await submitFeedback({
+                        userEmail: user.email,
+                        userName: user.name,
+                        role: user.role,
+                        category: feedbackCategory,
+                        message: feedbackMessage.trim(),
+                        page: screen === 'home' ? studentTab : screen,
+                      })
+                      showToast('Thanks — your feedback was sent!', 'success')
+                      setFeedbackMessage('')
+                      setFeedbackCategory('Bug')
+                      setShowFeedbackModal(false)
+                    } catch (err: any) {
+                      console.error('Failed to submit feedback:', err)
+                      showToast('Failed to send feedback — please try again', 'error')
+                    } finally {
+                      setFeedbackSubmitting(false)
+                    }
+                  }}
+                >
+                  {feedbackSubmitting ? 'Sending…' : 'Submit'}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -5760,6 +6054,60 @@ export default function App() {
 
             <ProctoredCamera onWarning={handleProcWarn} active={screen === 'intro'} onStreamReady={handleStreamReady} />
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── CONSENT ────────────────────────────────────────────────────────────
+  if (screen === 'consent') {
+    return (
+      <div style={{ minHeight: '100vh', background: T.bg }}>
+        <Navbar user={user} onLogout={handleLogout} onHome={() => setScreen('home')} inInterview={false} />
+        <div style={{ maxWidth: 560, margin: '0 auto', padding: '3rem 1rem', animation: 'fadeIn 0.4s ease' }}>
+          <GlassCard style={{ padding: '28px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: T.amberBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertTriangle size={18} style={{ color: T.amber }} />
+              </div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: T.primary, margin: 0 }}>Before you begin</h2>
+            </div>
+            <div style={{ fontSize: 13, color: T.txtSec, lineHeight: 1.65, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              <p style={{ margin: 0 }}>
+                Your <strong style={{ color: T.txtPri }}>camera and microphone will be recorded</strong> for this session for proctoring and playback.
+              </p>
+              <p style={{ margin: 0 }}>
+                Your answers will be <strong style={{ color: T.txtPri }}>evaluated by AI</strong> to generate your performance report and feedback.
+              </p>
+              <p style={{ margin: 0 }}>
+                If you uploaded a resume, it will be <strong style={{ color: T.txtPri }}>processed by AI to generate personalized questions</strong> for Technical &amp; HR interviews.
+              </p>
+            </div>
+            <div style={{ background: T.bgLow, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', fontSize: 12, color: T.txtMut, marginBottom: 20, lineHeight: 1.5 }}>
+              By continuing you consent to recording and AI processing for this mock interview. You can request deletion of your session data afterwards.
+            </div>
+            <Btn onClick={handleConsent} variant="navy" size="lg" style={{ width: '100%', justifyContent: 'center' }}>
+              I Understand, Start Interview <ArrowRight size={16} />
+            </Btn>
+            <button
+              onClick={() => setScreen('intro')}
+              style={{
+                marginTop: 12,
+                width: '100%',
+                padding: '10px',
+                borderRadius: 10,
+                border: `1px solid ${T.border}`,
+                background: 'transparent',
+                color: T.txtSec,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 13,
+              }}
+            >
+              Back to Introduction
+            </button>
+          </GlassCard>
         </div>
       </div>
     )
@@ -6142,6 +6490,18 @@ export default function App() {
             ))}
           </SolidCard>
         </div>
+
+        {/* Action Plan */}
+        <SolidCard style={{ background: '#EFF6FF', borderColor: '#BFDBFE', marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BookOpen size={18} /> Action Plan
+          </div>
+          {(report.actionPlan || []).map((s, i) => (
+            <p key={i} className="text-body" style={{ margin: '0 0 7px', display: 'flex', gap: 7 }}>
+              <span style={{ color: T.primary, fontWeight: 800, flexShrink: 0, marginTop: 1 }}>{i + 1}.</span>{s}
+            </p>
+          ))}
+        </SolidCard>
 
         {/* Pro tip */}
         <GlassCard style={{ marginBottom: '1.5rem', display: 'flex', gap: 12, background: 'rgba(253,237,193,0.7)', borderColor: '#fea61955' }}>

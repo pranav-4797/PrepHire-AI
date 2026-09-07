@@ -12,7 +12,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { db } from '../firebase/firebase'
+import { auth, db } from '../firebase/firebase'
 import type { ResumeProfile } from '../utils/resume'
 
 export type UserRole = 'Admin' | 'Faculty' | 'Student'
@@ -294,16 +294,26 @@ export async function getCourse(id: string): Promise<Course | null> {
   return res.json()
 }
 
+// Every write sends the current Firebase user's ID token as
+// `Authorization: Bearer <token>` — the server verifies it and resolves the
+// caller's role from Firestore itself, the same pattern used by the coding
+// platform. We never ask the server to trust a client-supplied role/email.
+async function courseAuthHeaders(json = false): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {}
+  if (json) headers['Content-Type'] = 'application/json'
+  const token = await auth.currentUser?.getIdToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return headers
+}
+
 export async function listCourses(): Promise<Course[]> {
   const res = await fetch(`${API_URL}/api/courses`)
   if (!res.ok) throw new Error('Failed to list courses')
   return res.json()
 }
 
-export async function createCourse(course: Omit<Course, 'id'>, email?: string, role?: string): Promise<string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (email) headers['x-user-email'] = email
-  if (role) headers['x-user-role'] = role
+export async function createCourse(course: Omit<Course, 'id'>): Promise<string> {
+  const headers = await courseAuthHeaders(true)
   const res = await fetch(`${API_URL}/api/courses`, {
     method: 'POST',
     headers,
@@ -314,10 +324,8 @@ export async function createCourse(course: Omit<Course, 'id'>, email?: string, r
   return data.id
 }
 
-export async function updateCourse(id: string, updates: Partial<Course>, email?: string, role?: string): Promise<void> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (email) headers['x-user-email'] = email
-  if (role) headers['x-user-role'] = role
+export async function updateCourse(id: string, updates: Partial<Course>): Promise<void> {
+  const headers = await courseAuthHeaders(true)
   const res = await fetch(`${API_URL}/api/courses/${id}`, {
     method: 'PUT',
     headers,
@@ -326,13 +334,53 @@ export async function updateCourse(id: string, updates: Partial<Course>, email?:
   if (!res.ok) throw new Error('Failed to update course')
 }
 
-export async function deleteCourse(id: string, email?: string, role?: string): Promise<void> {
-  const headers: Record<string, string> = {}
-  if (email) headers['x-user-email'] = email
-  if (role) headers['x-user-role'] = role
+export async function deleteCourse(id: string): Promise<void> {
+  const headers = await courseAuthHeaders(false)
   const res = await fetch(`${API_URL}/api/courses/${id}`, {
     method: 'DELETE',
     headers
   })
   if (!res.ok) throw new Error('Failed to delete course')
+}
+
+// ===== FEEDBACK =====
+
+export interface Feedback {
+  id: string
+  userEmail: string
+  userName: string
+  role: string
+  category: 'Bug' | 'Confusing' | 'Suggestion' | 'Other'
+  message: string
+  createdAt?: unknown
+  page: string
+}
+
+export async function submitFeedback(feedback: Omit<Feedback, 'id' | 'createdAt'>): Promise<string> {
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+  const payload = {
+    ...feedback,
+    createdAt: serverTimestamp(),
+  }
+  await setDoc(doc(db, 'feedback', id), payload)
+  return id
+}
+
+export async function listFeedback(): Promise<Feedback[]> {
+  const snap = await getDocs(query(collection(db, 'feedback'), orderBy('createdAt', 'desc')))
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, 'id'>) }))
+}
+
+export function subscribeToFeedback(callback: (items: Feedback[]) => void): () => void {
+  const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, 'id'>) }))
+      callback(items)
+    },
+    (err) => {
+      console.warn('Real-time feedback listener error:', err)
+    }
+  )
 }

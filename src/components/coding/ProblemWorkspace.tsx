@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
 import {
-  ArrowLeft, Play, Send, Clock, Cpu, Loader2, CheckCircle2, XCircle, History,
+  ArrowLeft, Play, Send, Clock, Cpu, Loader2, CheckCircle2, XCircle, History, Sparkles,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { DifficultyBadge, VerdictBadge } from './Badges'
 import { CodeEditor } from './CodeEditor'
 import {
   getProblem, runCode, submitCode, listSubmissions,
-  loadAutosavedCode, saveAutosavedCode,
+  loadAutosavedCode, saveAutosavedCode, getCodeReview,
 } from '../../services/coding.service'
-import type { Problem, RunResult, Submission, LanguageOption } from '../../services/coding.service'
+import type { Problem, RunResult, Submission, LanguageOption, CodeReview } from '../../services/coding.service'
 
 function Btn({
   children, onClick, disabled, variant = 'outline', style = {},
@@ -64,6 +64,7 @@ export function ProblemWorkspace({
   languages,
   onBack,
   onSolved,
+  showToast,
 }: {
   problemId: string
   userEmail: string
@@ -71,6 +72,7 @@ export function ProblemWorkspace({
   languages: LanguageOption[]
   onBack: () => void
   onSolved?: (problemId: string) => void
+  showToast?: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [problem, setProblem] = useState<Problem | null>(null)
   const [loading, setLoading] = useState(true)
@@ -84,6 +86,9 @@ export function ProblemWorkspace({
   const [submitResult, setSubmitResult] = useState<Submission | null>(null)
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState(false)
+  const [review, setReview] = useState<CodeReview | null>(null)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [reviewError, setReviewError] = useState('')
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -113,6 +118,8 @@ export function ProblemWorkspace({
     setCode(saved ?? problem.starterCode?.[nextLang] ?? '')
     setRunResult(null)
     setSubmitResult(null)
+    setReview(null)
+    setReviewError('')
   }
 
   function handleCodeChange(next: string) {
@@ -143,6 +150,8 @@ export function ProblemWorkspace({
   async function handleRun() {
     setRunning(true)
     setSubmitResult(null)
+    setReview(null)
+    setReviewError('')
     try {
       const result = await runCode(problemId, code, language)
       setRunResult(result)
@@ -163,6 +172,8 @@ export function ProblemWorkspace({
   async function handleSubmit() {
     setSubmitting(true)
     setRunResult(null)
+    setReview(null)
+    setReviewError('')
     try {
       const result = await submitCode(problemId, code, language, userName)
       setSubmitResult(result)
@@ -215,6 +226,28 @@ export function ProblemWorkspace({
     : runResult
       ? { verdict: runResult.verdict, testResults: runResult.testResults, runtimeMs: runResult.runtimeMs }
       : null
+
+  async function handleReview() {
+    if (!activeResult) return
+    setReviewLoading(true)
+    setReviewError('')
+    try {
+      const payload = {
+        code,
+        language,
+        verdict: activeResult.verdict,
+        testResults: activeResult.testResults,
+      }
+      const result = await getCodeReview(problemId, payload)
+      setReview(result)
+    } catch (err) {
+      const msg = (err as Error).message || 'Failed to get AI review — please try again'
+      setReviewError(msg)
+      if (showToast) showToast(msg, 'error')
+    } finally {
+      setReviewLoading(false)
+    }
+  }
 
   return (
     <div>
@@ -372,8 +405,13 @@ export function ProblemWorkspace({
           {/* Results panel */}
           {activeResult && (
             <div style={{ background: T.bgWhite, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <VerdictBadge verdict={activeResult.verdict} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <VerdictBadge verdict={activeResult.verdict} />
+                  <Btn onClick={handleReview} disabled={reviewLoading} variant="outline" style={{ padding: '6px 12px', fontSize: 11 }}>
+                    {reviewLoading ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={12} />} {reviewLoading ? 'Reviewing…' : 'Get AI Review'}
+                  </Btn>
+                </div>
                 <span style={{ fontSize: 11, color: T.txtMut }}>Runtime: {activeResult.runtimeMs} ms</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -394,6 +432,32 @@ export function ProblemWorkspace({
                   </div>
                 ))}
               </div>
+              {reviewError && (
+                <div style={{ marginTop: 12, padding: 10, background: T.errCont, border: `1px solid ${T.error}33`, borderRadius: 8, fontSize: 12, color: T.error }}>
+                  {reviewError}
+                </div>
+              )}
+              {review && (
+                <div style={{ marginTop: 12, background: T.bgWhite, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 12, fontWeight: 700, color: T.primary }}>
+                    <Sparkles size={14} style={{ color: T.primary }} /> AI Code Review
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 12, lineHeight: 1.6 }}>
+                    <div><strong style={{ color: T.txtPri }}>Correctness:</strong> <span style={{ color: T.txtSec }}>{review.correctnessNote}</span></div>
+                    <div><strong style={{ color: T.txtPri }}>Complexity:</strong> <span style={{ color: T.txtSec }}>{review.complexity}</span></div>
+                    <div><strong style={{ color: T.txtPri }}>Better Approach:</strong> <span style={{ color: T.txtSec }}>{review.betterApproach}</span></div>
+                    <div>
+                      <strong style={{ color: T.txtPri }}>Code Quality:</strong>
+                      <ul style={{ margin: '6px 0 0 18px', padding: 0, color: T.txtSec }}>
+                        {review.codeQualityNotes.map((n, idx) => <li key={idx} style={{ marginBottom: 4 }}>{n}</li>)}
+                      </ul>
+                    </div>
+                    <div style={{ background: T.bgLow, borderRadius: 8, padding: 10, border: `1px solid ${T.border}` }}>
+                      <strong style={{ color: T.primary }}>Overall:</strong> <span style={{ color: T.txtPri }}>{review.overallVerdict}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

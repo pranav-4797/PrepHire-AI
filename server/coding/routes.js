@@ -15,6 +15,7 @@ import express from 'express'
 import { createCodingStore } from './store.js'
 import { runTestCases, SUPPORTED_LANGUAGES, LANGUAGE_CONFIG } from './judge.js'
 import { requireAdmin as requireAdminAuth, requireAuth, attachUserOptional } from './authMiddleware.js'
+import { callGemini, isRateLimited } from '../gemini.js'
 
 export function registerCodingRoutes(app, { serverDir }) {
   const store = createCodingStore(serverDir)
@@ -275,6 +276,63 @@ export function registerCodingRoutes(app, { serverDir }) {
     } catch (err) {
       console.error('Submit failed:', err)
       res.status(500).json({ error: 'Failed to execute code.' })
+    }
+  })
+
+  // ── AI Code Review ────────────────────────────────────────────────────
+  router.post('/problems/:id/review', requireAuth(), async (req, res) => {
+    const { code, language, verdict, testResults } = req.body
+    if (!code || !language) {
+      return res.status(400).json({ error: 'code and language are required' })
+    }
+
+    const problem = store.listProblems().find((p) => p.id === req.params.id)
+    if (!problem) return res.status(404).json({ error: 'Problem not found' })
+
+    const limitKey = req.authUser.uid || req.authUser.email
+    if (isRateLimited(limitKey)) {
+      return res.status(429).json({ error: 'Too many AI requests — please wait a moment and try again.' })
+    }
+
+    const sys = `You are a senior software engineer doing a code review — honest and specific, not encouraging by default. You're given a coding problem statement, a student's submitted code, and the judge's verdict/test results. Review the code itself, not just whether it passed:
+  - Correctness: if it passed all tests, still flag any edge case it got lucky on or would fail under different constraints. If it failed, explain what's actually wrong (referencing the specific line/logic), not just repeating the verdict.
+  - Time/space complexity: state the actual Big-O of their solution and whether a better one exists — if there's a more efficient approach, name it (don't just say 'consider a more efficient approach').
+  - Code quality: naming, readability, structure — be specific about what to rename or restructure, not generic ('improve readability').
+  Return ONLY valid JSON, no markdown:
+  {"correctnessNote":"...","complexity":"...","betterApproach":"...","codeQualityNotes":["...","..."],"overallVerdict":"..."}
+  Keep each field concise — this is a quick review, not an essay.`
+
+    const prompt = `Problem: ${problem.title} (${problem.difficulty})
+Statement: ${problem.statement}
+Constraints: ${problem.constraints || 'N/A'}
+Difficulty: ${problem.difficulty}
+Student code (${language}):
+${code}
+Judge verdict: ${verdict || 'N/A'}
+Test results: ${JSON.stringify(testResults || [])}`
+
+    try {
+      const text = await callGemini(prompt, sys)
+      const cleaned = text.replace(/```json|```/g, '').trim()
+      let parsed
+      try {
+        parsed = JSON.parse(cleaned)
+      } catch {
+        // try to extract JSON object if wrapped
+        const match = cleaned.match(/\{[\s\S]*\}/)
+        if (match) {
+          parsed = JSON.parse(match[0])
+        } else {
+          throw new Error('Failed to parse review JSON')
+        }
+      }
+      // basic shape validation
+      if (!parsed || typeof parsed !== 'object') throw new Error('Invalid review shape')
+      res.json(parsed)
+    } catch (err) {
+      console.error('Review generation failed:', err)
+      // Don't leak internal errors; return friendly 502
+      return res.status(502).json({ error: 'Review unavailable, try again' })
     }
   })
 

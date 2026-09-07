@@ -6,6 +6,8 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import multer from 'multer'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -16,6 +18,8 @@ import { fileURLToPath } from 'node:url'
 import { db, FieldValue } from './firebase.js'
 import { initCleanup } from './cleanupService.js'
 import { registerCodingRoutes } from './coding/routes.js'
+import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
+import { callGemini } from './gemini.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -30,6 +34,12 @@ try {
   console.log('✅ Using system-installed ffmpeg')
 } catch (e) {
   console.log('ℹ️ System ffmpeg not found, using ffmpeg-static at:', ffmpegPath)
+}
+
+// Gemini key lives server-side only now — never shipped to the browser bundle.
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+if (!GEMINI_API_KEY) {
+  console.warn('⚠️ GEMINI_API_KEY is not set — resume parsing and interview question generation will fail.')
 }
 
 const SA_PATH = process.env.GOOGLE_SERVICE_ACCOUNT_PATH || './service-account.json'
@@ -122,7 +132,44 @@ app.use(cors({
   },
   credentials: true
 }))
-app.use(express.json())
+
+// Security headers. This process only ever serves JSON/API responses (the
+// frontend is hosted separately, e.g. Firebase Hosting), so we disable CSP
+// (irrelevant for an API and easy to get wrong) and explicitly allow
+// cross-origin resource loading so the separately-hosted SPA can fetch it.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}))
+
+app.use(express.json({ limit: '1mb' }))
+
+// Baseline abuse/DoS guard on every route. Generous enough for a classroom
+// of ~20 concurrent students; tighter, endpoint-specific limiters are added
+// below for the expensive routes (AI generation, video upload, code exec).
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+app.use(generalLimiter)
+
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many video uploads from this network. Please wait a few minutes.' },
+})
+
+const codingExecLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many code runs from this network. Please wait a moment.' },
+})
 
 // Multer: store uploads temporarily in server/uploads/ before sending to Drive
 const uploadsDir = path.resolve(serverDir, 'uploads')
@@ -181,8 +228,54 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// ── AI Proxy (Gemini) ──────────────────────────────────────────────────────
+// The client used to call generativelanguage.googleapis.com directly with the
+// API key embedded in the bundle (VITE_GEMINI_API_KEY) — anyone could pull it
+// from devtools/Network tab and run up the bill on our key. The key now lives
+// only in this process's environment; the browser talks to /api/ai/generate,
+// which requires a verified, signed-in user (same as the coding platform) and
+// forwards the request server-side.
+
+// Very small per-user rate limit: Gemini calls cost real money per request,
+// and this endpoint is behind login but not otherwise throttled.
+const aiCallLog = new Map() // uid/email -> array of call timestamps (ms)
+const AI_RATE_LIMIT = 12       // max calls...
+const AI_RATE_WINDOW_MS = 60_000 // ...per rolling minute
+
+function isRateLimited(key) {
+  const now = Date.now()
+  const calls = (aiCallLog.get(key) || []).filter((t) => now - t < AI_RATE_WINDOW_MS)
+  calls.push(now)
+  aiCallLog.set(key, calls)
+  return calls.length > AI_RATE_LIMIT
+}
+
+app.post('/api/ai/generate', requireAuth(), async (req, res) => {
+  const { prompt, sys } = req.body
+  if (!prompt || typeof prompt !== 'string') {
+    return res.status(400).json({ error: 'prompt is required' })
+  }
+
+  const limitKey = req.authUser.uid || req.authUser.email
+  if (isRateLimited(limitKey)) {
+    return res.status(429).json({ error: 'Too many AI requests — please wait a moment and try again.' })
+  }
+
+  try {
+    const text = await callGemini(prompt, sys)
+    res.json({ text })
+  } catch (err) {
+    const status = err.status || 502
+    if (status === 500) {
+      return res.status(500).json({ error: err.message })
+    }
+    console.error('❌ Gemini proxy call failed:', err.message || err)
+    res.status(status).json({ error: status === 502 ? 'AI generation service unavailable.' : err.message })
+  }
+})
+
 // Upload interview video to Google Shared Drive (converts to MP4)
-app.post('/api/upload', upload.single('video'), async (req, res) => {
+app.post('/api/upload', uploadLimiter, upload.single('video'), async (req, res) => {
   const file = req.file
 
   if (!file) {
@@ -340,23 +433,22 @@ app.get('/api/courses/:id', (req, res) => {
   res.json(course)
 })
 
-app.post('/api/courses', (req, res) => {
-  const userEmail = req.headers['x-user-email']
+app.post('/api/courses', requireFacultyOrAdmin(), (req, res) => {
   const courses = readCourses()
   const newCourse = {
     ...req.body,
     id: Date.now().toString(),
     createdAt: new Date().toISOString(),
-    createdByEmail: userEmail || null
+    createdByEmail: req.authUser.email || null
   }
   courses.push(newCourse)
   writeCourses(courses)
   res.json({ id: newCourse.id })
 })
 
-app.put('/api/courses/:id', (req, res) => {
-  const userEmail = req.headers['x-user-email']
-  const userRole = req.headers['x-user-role']
+app.put('/api/courses/:id', requireFacultyOrAdmin(), (req, res) => {
+  const userEmail = req.authUser.email
+  const userRole = req.authUser.role
 
   const courses = readCourses()
   const index = courses.findIndex(c => c.id === req.params.id)
@@ -388,9 +480,9 @@ app.put('/api/courses/:id', (req, res) => {
   res.json({ success: true })
 })
 
-app.delete('/api/courses/:id', (req, res) => {
-  const userEmail = req.headers['x-user-email']
-  const userRole = req.headers['x-user-role']
+app.delete('/api/courses/:id', requireFacultyOrAdmin(), (req, res) => {
+  const userEmail = req.authUser.email
+  const userRole = req.authUser.role
 
   const courses = readCourses()
   const course = courses.find(c => c.id === req.params.id)
@@ -411,6 +503,15 @@ app.delete('/api/courses/:id', (req, res) => {
 })
 
 // ── Online Coding Platform API (Problems, Run/Submit, Submissions, Dashboard) ─
+// Rate-limit specifically the two routes that trigger Piston execution —
+// these are the ones that can hammer the (rate-limited, possibly public)
+// Piston instance if left unthrottled.
+app.use((req, res, next) => {
+  if (req.method === 'POST' && /^\/api\/coding\/problems\/[^/]+\/(run|submit)$/.test(req.path)) {
+    return codingExecLimiter(req, res, next)
+  }
+  next()
+})
 registerCodingRoutes(app, { serverDir })
 
 // ── Error Handling ──────────────────────────────────────────────────────────

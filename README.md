@@ -292,6 +292,10 @@ service cloud.firestore {
 
 ## 🚀 Deployment
 
+> **First time deploying, or standing this up for a pilot cohort?** See
+> [`DEPLOY.md`](./DEPLOY.md) for a full checklist, including the Admin
+> bootstrap step and the required environment variables.
+
 ### Firebase Hosting (Frontend)
 ```bash
 npm run build
