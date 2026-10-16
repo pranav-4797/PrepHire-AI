@@ -6,7 +6,8 @@ import {
   CornerDownLeft, CheckCircle, Info, Check,
   TrendingUp, Lightbulb, ArrowLeft, ArrowRight,
   Link, BookOpen, FileText, Trash2, UploadCloud,
-  Eye, EyeOff, Download, FileSpreadsheet, Activity, Sliders, Sparkles
+  Eye, EyeOff, Download, FileSpreadsheet, Activity, Sliders, Sparkles,
+  Cpu, ExternalLink, Key, Calendar
 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import { auth } from './firebase/firebase'
@@ -3933,6 +3934,119 @@ function AdminDashboard({
                 <Btn variant="navy" style={{ alignSelf: 'flex-start', marginTop: 12 }} onClick={() => showToast('Configurations saved successfully!', 'success')}>
                   Save Configurations
                 </Btn>
+              </GlassCard>
+
+              {/* NVIDIA NIM & AI Microservices Governance Card */}
+              <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ padding: 10, background: '#10B9811A', color: '#10B981', borderRadius: 10 }}>
+                      <Cpu size={22} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: T.primary, margin: 0 }}>
+                        NVIDIA NIM &amp; AI Engine Credentials
+                      </h3>
+                      <p className="text-body" style={{ color: T.txtSec, margin: '2px 0 0', fontSize: 12 }}>
+                        Automated coding assignment generation &amp; Piston sandbox pre-validation.
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: 16,
+                      background: '#DCFCE7',
+                      color: '#166534',
+                      border: '1px solid #86EFAC',
+                    }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a' }} />
+                      ACTIVE (Expires 16/04/2027)
+                    </span>
+                    <a
+                      href="https://build.nvidia.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: T.primary,
+                        textDecoration: 'none',
+                        padding: '5px 10px',
+                        borderRadius: 8,
+                        border: `1px solid ${T.outlineVar}`,
+                        background: T.bgLow,
+                      }}
+                    >
+                      <ExternalLink size={12} /> build.nvidia.com
+                    </a>
+                  </div>
+                </div>
+
+                {/* Expiry Reminder Alert */}
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: 10,
+                  border: '1.5px solid #F59E0B',
+                  background: '#FEF3C72A',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 12,
+                }}>
+                  <div style={{ color: '#D97706', marginTop: 1 }}>
+                    <Calendar size={18} />
+                  </div>
+                  <div style={{ fontSize: 12, lineHeight: 1.5, color: T.txtPri }}>
+                    <strong style={{ color: '#B45309' }}>⚠️ Critical Maintenance Reminder — API Key Expiration on 16/04/2027:</strong>
+                    <div style={{ marginTop: 2, color: T.txtSec }}>
+                      All current NVIDIA NIM API credentials (Qwen 2.5 Coder 32B, Llama 3.1 Nemotron 70B, and Meta Llama 3.3 70B) are valid until <strong>April 16, 2027 (16/04/2027)</strong>. After this date, please generate replacement keys in your <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" style={{ color: T.primary, fontWeight: 700 }}>NVIDIA API Catalog</a> and update <code>server/.env</code> to maintain uninterrupted automated coding question creation.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active Key Registry Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <div style={{ padding: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgLow }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.txtPri }}>Qwen 2.5 Coder 32B</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a' }}>PRIMARY</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: T.txtMut, marginBottom: 6 }}>qwen/qwen2.5-coder-32b-instruct</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: T.txtSec, background: T.bgWhite, padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.outlineVar}` }}>
+                      <Key size={11} /> nvapi-cXpYk...MCx-Dhgl
+                    </div>
+                  </div>
+
+                  <div style={{ padding: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgLow }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.txtPri }}>Llama 3.1 Nemotron 70B</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: T.primary }}>PEDAGOGY</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: T.txtMut, marginBottom: 6 }}>nvidia/llama-3.1-nemotron-70b-instruct</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: T.txtSec, background: T.bgWhite, padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.outlineVar}` }}>
+                      <Key size={11} /> nvapi-xNIOb...JAJO8cO
+                    </div>
+                  </div>
+
+                  <div style={{ padding: 12, borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgLow }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.txtPri }}>Meta Llama 3.3 70B</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>REASONING</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: T.txtMut, marginBottom: 6 }}>meta/llama-3.3-70b-instruct</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: T.txtSec, background: T.bgWhite, padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.outlineVar}` }}>
+                      <Key size={11} /> nvapi-Q7_hJ...uyT63N
+                    </div>
+                  </div>
+                </div>
               </GlassCard>
             </div>
           )}

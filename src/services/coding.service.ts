@@ -191,6 +191,7 @@ export async function generateProblemWithAI(params: {
   difficulty?: Difficulty
   languages?: string[]
   facultyNotes?: string
+  model?: string
   validateWithSandbox?: boolean
 }): Promise<GenerateProblemResponse> {
   const res = await fetch(`${API_URL}/api/coding/generate-problem`, {

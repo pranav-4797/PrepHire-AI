@@ -140,6 +140,7 @@ export function AdminProblemEditor({
   const [aiDifficulty, setAiDifficulty] = useState<Difficulty>('Medium')
   const [aiLangs, setAiLangs] = useState<string[]>(['python', 'javascript', 'cpp', 'java'])
   const [aiNotes, setAiNotes] = useState('')
+  const [aiModel, setAiModel] = useState('qwen/qwen2.5-coder-32b-instruct')
   const [aiValidateSandbox, setAiValidateSandbox] = useState(true)
   const [preflightStatus, setPreflightStatus] = useState<GenerateProblemPreflight | null>(null)
 
@@ -182,6 +183,7 @@ export function AdminProblemEditor({
         difficulty: aiDifficulty,
         languages: aiLangs,
         facultyNotes: aiNotes.trim() || undefined,
+        model: aiModel,
         validateWithSandbox: aiValidateSandbox,
       })
 
@@ -545,6 +547,26 @@ export function AdminProblemEditor({
                 <div style={{ fontSize: 11, color: T.txtMut, marginTop: 4 }}>
                   Tip: Mention specific edge cases, bounds, or desired algorithm patterns.
                 </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>NVIDIA AI Engine</label>
+                <select
+                  disabled={aiGenerating}
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="qwen/qwen2.5-coder-32b-instruct">
+                    Qwen 2.5 Coder 32B (Recommended — Best Code Accuracy & Multi-Language Stubs)
+                  </option>
+                  <option value="nvidia/llama-3.1-nemotron-70b-instruct">
+                    NVIDIA Llama 3.1 Nemotron 70B (Best Problem Pedagogy & Edge Cases)
+                  </option>
+                  <option value="meta/llama-3.3-70b-instruct">
+                    Meta Llama 3.3 70B Instruct (General Reasoning & Algorithmic Design)
+                  </option>
+                </select>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

@@ -139,7 +139,7 @@ export function registerCodingRoutes(app, { serverDir }) {
     if (!isPrivileged(req)) {
       return res.status(403).json({ error: 'Only faculty and administrators can generate coding problems.' })
     }
-    const { topic, difficulty, languages, facultyNotes, validateWithSandbox = true } = req.body
+    const { topic, difficulty, languages, facultyNotes, model, validateWithSandbox = true } = req.body
     if (!topic || typeof topic !== 'string' || !topic.trim()) {
       return res.status(400).json({ error: 'topic is required' })
     }
@@ -150,6 +150,7 @@ export function registerCodingRoutes(app, { serverDir }) {
         difficulty: difficulty || 'Medium',
         languages: Array.isArray(languages) && languages.length ? languages : ['python', 'javascript', 'cpp', 'java'],
         facultyNotes: facultyNotes || '',
+        model: model || undefined,
       })
 
       let preflight = { tested: false, allPassed: true, passedCount: 0, totalCount: 0, details: [] }

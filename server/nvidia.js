@@ -10,12 +10,23 @@ const NVIDIA_BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nv
 const DEFAULT_NVIDIA_MODEL = process.env.NVIDIA_MODEL || 'qwen/qwen2.5-coder-32b-instruct'
 
 /**
+ * Resolves the appropriate NVIDIA API key based on the selected model.
+ */
+function getApiKeyForModel(modelName) {
+  const m = (modelName || '').toLowerCase()
+  if (m.includes('qwen')) return process.env.NVIDIA_KEY_QWEN || process.env.NVIDIA_API_KEY
+  if (m.includes('nemotron')) return process.env.NVIDIA_KEY_NEMOTRON || process.env.NVIDIA_API_KEY
+  if (m.includes('meta') || m.includes('llama')) return process.env.NVIDIA_KEY_META || process.env.NVIDIA_API_KEY
+  return process.env.NVIDIA_API_KEY
+}
+
+/**
  * Call NVIDIA NIM Chat Completions endpoint with JSON-mode output.
  */
 export async function callNvidia(prompt, sys, { model = DEFAULT_NVIDIA_MODEL, temperature = 0.2 } = {}) {
-  const apiKey = process.env.NVIDIA_API_KEY
+  const apiKey = getApiKeyForModel(model)
   if (!apiKey) {
-    console.warn('⚠️ NVIDIA_API_KEY not set in environment. Falling back to Gemini.')
+    console.warn(`⚠️ No NVIDIA API key configured for model "${model}". Falling back to Gemini.`)
     return callGemini(prompt, sys)
   }
 
@@ -77,6 +88,7 @@ export async function generateCodingProblemWithAI({
   difficulty = 'Medium',
   languages = ['python', 'javascript', 'cpp', 'java'],
   facultyNotes = '',
+  model = DEFAULT_NVIDIA_MODEL,
 }) {
   const systemPrompt = `You are an elite competitive programming architect for PrepHire.AI coding sandbox (which uses Piston execution engine).
 Your task is to take a faculty member's brief problem concept and output a complete, publication-grade programming problem.
@@ -134,7 +146,7 @@ Ensure:
 3. Provide at least 2 sample test cases with explanations and 5 diverse hidden test cases (including edge cases).
 4. Return ONLY valid JSON.`
 
-  const raw = await callNvidia(userPrompt, systemPrompt)
+  const raw = await callNvidia(userPrompt, systemPrompt, { model })
   const problem = cleanAndParseJson(raw)
 
   // Ensure default fallback values if any field was omitted
