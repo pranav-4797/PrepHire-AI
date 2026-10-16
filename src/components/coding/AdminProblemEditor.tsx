@@ -278,20 +278,19 @@ export function AdminProblemEditor({
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 7,
-            padding: '8px 16px',
+            gap: 6,
+            padding: '7px 14px',
             borderRadius: 8,
-            border: 'none',
-            background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)',
-            color: '#fff',
+            border: `1.5px solid ${T.outlineVar}`,
+            background: T.bgLow,
+            color: T.primary,
             fontSize: 12,
             fontWeight: 700,
             cursor: 'pointer',
-            boxShadow: '0 2px 10px rgba(37, 99, 235, 0.25)',
             fontFamily: 'inherit',
           }}
         >
-          <Sparkles size={14} /> ✨ AI Generate with NVIDIA
+          <Sparkles size={14} /> Generate
         </button>
       </div>
 
@@ -509,9 +508,9 @@ export function AdminProblemEditor({
                   <Cpu size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>AI Coding Problem Generator</h3>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Generate Problem</h3>
                   <div style={{ fontSize: 11, opacity: 0.9 }}>
-                    Powered by NVIDIA NIM &amp; Piston Sandbox Pre-Validation
+                    Draft problem statement, starter code, and verified test cases.
                   </div>
                 </div>
               </div>
@@ -695,26 +694,26 @@ export function AdminProblemEditor({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 8,
-                  padding: '9px 18px',
+                  padding: '9px 20px',
                   borderRadius: 8,
                   border: 'none',
-                  background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)',
+                  background: T.primary,
                   color: '#fff',
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: aiGenerating ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 2px 8px rgba(37,99,235,0.3)',
+                  fontFamily: 'inherit',
                 }}
               >
                 {aiGenerating ? (
                   <>
                     <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                    Generating &amp; Pre-Validating...
+                    Generating...
                   </>
                 ) : (
                   <>
                     <Sparkles size={15} />
-                    Generate &amp; Populate
+                    Generate
                   </>
                 )}
               </button>
