@@ -44,6 +44,7 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Env vars**: All prefixed `VITE_` for Vite client; `server/.env` for backend (port, Drive folder, Piston URL)
 - **Sound**: SpeechSynthesis for AI voice responses; `MicButton` component for speech-to-text
 - **Proctoring**: Simulated face detection + tab-switch blur listener in `ProctoredCamera`
+- **Documentation**: Whenever new features or improvements are added, always update `README.md` by adding a summary paragraph and bullets under the `## 🆕 What's New in the Latest Release` section.
 
 ## Recent fixes (2026-07-12)
 
