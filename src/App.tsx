@@ -39,6 +39,8 @@ import { analyzeResume, buildResumeContext, extractResumeText } from './utils/re
 import type { ResumeProfile } from './utils/resume'
 import { T } from './theme'
 import { BRANCHES } from './constants/branches'
+import { orchestrateNextQuestion, type EngineMode } from './utils/interviewEngine'
+import { evaluateOfflineSession } from './utils/offlineEvaluator'
 
 // ── DOMAINS ─────────────────────────────────────────────────────────────────
 interface Domain {
@@ -4363,6 +4365,8 @@ export default function App() {
     }
   }, [voiceEnabled])
   const [qCount, setQCount] = useState(0)
+  const [engineMode, setEngineMode] = useState<EngineMode>('cloud')
+  const [usedOfflineQuestionIds, setUsedOfflineQuestionIds] = useState<string[]>([])
   const [usedQuestionIndices, setUsedQuestionIndices] = useState<number[]>([])
   const [sessionData, setSessionData] = useState<QA[]>([])
   const [report, setReport] = useState<ReportData | null>(null)
@@ -4592,20 +4596,37 @@ export default function App() {
         ? buildResumeContext(resumeProfile, resumeNotes, domain || '')
         : ''
       const sys = `You are PrepHire AI, a professional interview coach for MIT AoE placement preparation. Domain: ${domainObj?.label || domain}, Level: ${level}. ${introCtx}${resumeCtx}Ask ONE question at a time. After each answer give honest, calibrated 1-line micro-feedback — if the answer was vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-ups after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Keep responses under 80 words. Ensure variety across technical, behavioral, logical, and current-affairs question types. Start with a brief warm acknowledgement of their intro (1 sentence) then your first question.`
-      const q = await callClaude('Start the interview.', sys)
-      setMessages([{ role: 'ai', text: q }])
+      const result = await orchestrateNextQuestion(
+        callClaude,
+        {
+          domain: domainObj?.label || domain || 'technical',
+          department: user?.department || profile?.department,
+          level,
+          resumeProfile,
+          intro,
+          qCount: 0,
+          previousQA: [],
+          usedQuestionIds: [],
+        },
+        () => ({ prompt: 'Start the interview.', sys })
+      )
+      setEngineMode(result.mode)
+      if (result.questionNode) {
+        setUsedOfflineQuestionIds([result.questionNode.id])
+      }
+      setMessages([{ role: 'ai', text: result.text }])
       setQCount(1)
       setTimer(sessionTimeLimit)
       setTimerActive(true)
-      aiSpeak(q)
+      aiSpeak(result.text)
     } catch (err) {
       console.error(err)
       showToast("Couldn't start the interview — please try again", 'error')
-      setMessages([{ role: 'system', text: `⚠️ Error initializing interview: ${(err as Error).message || 'Unknown error'}. Please verify your Gemini API key is configured correctly.` }])
+      setMessages([{ role: 'system', text: `⚠️ Error initializing interview: ${(err as Error).message || 'Unknown error'}.` }])
     } finally {
       setLoading(false)
     }
-  }, [domain, level, aiSpeak, stopSpeaking, resumeProfile, resumeNotes, showToast])
+  }, [domain, level, aiSpeak, user, profile, resumeProfile, resumeNotes, showToast])
 
   const generateReport = useCallback(async (data: QA[]) => {
     setScreen('loading')
@@ -4661,22 +4682,16 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         if (isEarlyEnd) {
           r.proctoringNote = (r.proctoringNote ? r.proctoringNote + ' ' : '') + `Interview ended early after ${qAnswered} of 5 questions.`
         }
-      } catch {
-        const avgScore = Math.round(data.reduce((sum) => sum + 50, 0) / data.length)
-        r = {
-          overallScore: avgScore,
-          technical: avgScore,
-          communication: avgScore,
-          confidence: avgScore,
-          clarity: avgScore,
-          relevance: avgScore,
-          strengths: ['Interview was attempted.'],
-          improvements: isEarlyEnd ? ['Interview was ended early. Try completing all 5 questions for a full evaluation.'] : [],
-          tip: isEarlyEnd ? 'Complete all 5 questions in your next interview to receive a comprehensive assessment.' : 'Practice STAR format for behavioral questions.',
-          proctoringNote: isEarlyEnd ? `Interview ended early after ${qAnswered} of 5 questions.` : 'Session completed.',
+      } catch (err) {
+        console.warn('⚠️ Cloud AI report generation failed or timed out — invoking Offline Heuristic Evaluator:', err)
+        const speechMetrics = data.length > 0 ? analyzeSpeech(data.map((d) => d.a), 180) : undefined
+        r = evaluateOfflineSession(data, {
+          domain: domainObj?.label || domain || 'Technical',
+          level,
+          department: user?.department || profile?.department,
           warnCount: wc,
-          actionPlan: ['Practice STAR format for behavioral questions and rehearse one story aloud.', 'Drill one core technical topic from your domain with edge cases and trade-offs.', 'Record yourself answering 3 new questions and review for clarity and conciseness.'],
-        }
+          speechMetrics,
+        })
       }
     }
     r.warnCount = wc
@@ -4747,15 +4762,32 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
     }
     setLoading(true)
     try {
-      const reply = await callClaude(
-        `Time expired. Acknowledge briefly and ask question ${qCount + 1} of 5. Under 60 words.`,
-        `You are PrepHire AI. Domain: ${domain}, Level: ${level}.`
+      const result = await orchestrateNextQuestion(
+        callClaude,
+        {
+          domain: domain || 'technical',
+          department: user?.department || profile?.department,
+          level,
+          resumeProfile,
+          qCount,
+          previousQA: sessionData,
+          latestAnswer: '[Time expired]',
+          usedQuestionIds: usedOfflineQuestionIds,
+        },
+        () => ({
+          prompt: `Time expired. Acknowledge briefly and ask question ${qCount + 1} of 5. Under 60 words.`,
+          sys: `You are PrepHire AI. Domain: ${domain}, Level: ${level}.`
+        })
       )
-      setMessages((p) => [...p, { role: 'ai', text: reply }])
+      setEngineMode(result.mode)
+      if (result.questionNode) {
+        setUsedOfflineQuestionIds((prev) => [...prev, result.questionNode!.id])
+      }
+      setMessages((p) => [...p, { role: 'ai', text: result.text }])
       setQCount((q) => q + 1)
       setTimer(sessionTimeLimit)
       setTimerActive(true)
-      aiSpeak(reply)
+      aiSpeak(result.text)
     } catch (err) {
       console.error(err)
       showToast("Couldn't generate the next question — please try again", 'error')
@@ -4764,7 +4796,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
     } finally {
       setLoading(false)
     }
-  }, [stopSpeaking, messages, sessionData, qCount, domain, level, aiSpeak, generateReport, showToast])
+  }, [stopSpeaking, messages, sessionData, qCount, domain, level, user, profile, resumeProfile, usedOfflineQuestionIds, aiSpeak, generateReport, showToast])
 
   const submitIntro = useCallback(async (text: string) => {
     setIntroTimerActive(false)
@@ -4929,15 +4961,32 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         return
       }
       const sys = `You are PrepHire AI. Domain: ${domainObj?.label || domain}, Level: ${level}. Previous questions asked: ${newMsgs.filter((m) => m.role === 'ai').map((m) => m.text).join(', ') || 'None yet'}. Type variation: Include technical, behavioral, logical, and current affairs perspectives. Ensure diversity and avoid repeating question types or patterns. After the answer give honest, calibrated 1-line micro-feedback — if vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-up after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Then ask question ${qCount + 1} of 5. Under 80 words, one question at a time.`
-      const reply = await callClaude(
-        `Conversation:\n${newMsgs.map((m) => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: ${m.text}`).join('\n')}`,
-        sys
+      const result = await orchestrateNextQuestion(
+        callClaude,
+        {
+          domain: domainObj?.label || domain || 'technical',
+          department: user?.department || profile?.department,
+          level,
+          resumeProfile,
+          qCount,
+          previousQA: sd,
+          latestAnswer: txt,
+          usedQuestionIds: usedOfflineQuestionIds,
+        },
+        () => ({
+          prompt: `Conversation:\n${newMsgs.map((m) => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: ${m.text}`).join('\n')}`,
+          sys
+        })
       )
-      setMessages((p) => [...p, { role: 'ai', text: reply }])
+      setEngineMode(result.mode)
+      if (result.questionNode) {
+        setUsedOfflineQuestionIds((prev) => [...prev, result.questionNode!.id])
+      }
+      setMessages((p) => [...p, { role: 'ai', text: result.text }])
       setQCount((q) => q + 1)
       setTimer(sessionTimeLimit)
       setTimerActive(true)
-      aiSpeak(reply)
+      aiSpeak(result.text)
     } catch (err) {
       console.error(err)
       showToast("Couldn't generate the next question — please try again", 'error')
@@ -6197,6 +6246,13 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           <Pill>{activeDomain?.label}</Pill>
           <span style={{ fontSize: 12, color: T.txtMut, fontWeight: 600 }}>·</span>
           <Pill>{level}</Pill>
+          <span style={{ fontSize: 12, color: T.txtMut, fontWeight: 600 }}>·</span>
+          <Pill
+            color={engineMode === 'cloud' ? '#2563EB' : '#059669'}
+            bg={engineMode === 'cloud' ? '#EFF6FF' : '#ECFDF5'}
+          >
+            {engineMode === 'cloud' ? '⚡ Cloud AI' : '🛡️ Autonomous Safe Mode'}
+          </Pill>
         </div>
         <div className="interview-session-header__center">
           <div style={{ position: 'relative', width: 44, height: 44 }}>

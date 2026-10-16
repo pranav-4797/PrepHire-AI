@@ -69,6 +69,7 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Export capabilities**: Added print/PDF generation for candidate interview evaluation reports and batch CSV placement gradebook export for faculty.
 - **Monaco coding custom testcases**: Added custom input (stdin) runner to `ProblemWorkspace.tsx` and coding backend execution route.
 - **Cookie governance system**: Multi-category cookie registry (`cookieManager.ts`) with granular preferences modal, unobtrusive landing page footer link, and student profile settings trigger.
+- **Autonomous offline interview engine & question library**: Multi-branch curated question repository (`questionBank.ts`) spanning all 9 engineering programs, circuit breaker with 8s timeout (`interviewEngine.ts`), deterministic STAR/keyword heuristic evaluator (`offlineEvaluator.ts`), and real-time engine mode indicator.
 
 ## Gotchas
 
