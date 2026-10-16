@@ -19,7 +19,7 @@ import { db, FieldValue } from './firebase.js'
 import { initCleanup } from './cleanupService.js'
 import { registerCodingRoutes } from './coding/routes.js'
 import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
-import { callGemini } from './gemini.js'
+import { callGemini, streamGemini } from './gemini.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -271,6 +271,36 @@ app.post('/api/ai/generate', requireAuth(), async (req, res) => {
     }
     console.error('❌ Gemini proxy call failed:', err.message || err)
     res.status(status).json({ error: status === 502 ? 'AI generation service unavailable.' : err.message })
+  }
+})
+
+// Real-Time SSE AI Streaming Endpoint (Low-Latency First-Token Pipeline)
+app.post('/api/ai/stream', requireAuth(), async (req, res) => {
+  const { prompt, sys } = req.body
+  if (!prompt || typeof prompt !== 'string') {
+    return res.status(400).json({ error: 'prompt is required' })
+  }
+
+  const limitKey = req.authUser.uid || req.authUser.email
+  if (isRateLimited(limitKey)) {
+    return res.status(429).json({ error: 'Too many AI requests — please wait a moment and try again.' })
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders?.()
+
+  try {
+    await streamGemini(prompt, sys, (chunk) => {
+      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
+    })
+    res.write('data: [DONE]\n\n')
+    res.end()
+  } catch (err) {
+    console.error('❌ Gemini streaming proxy failed:', err.message || err)
+    res.write(`data: ${JSON.stringify({ error: err.message || 'Streaming service error' })}\n\n`)
+    res.end()
   }
 })
 

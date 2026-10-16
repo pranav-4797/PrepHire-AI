@@ -6,7 +6,7 @@ import {
   CornerDownLeft, CheckCircle, Info, Check,
   TrendingUp, Lightbulb, ArrowLeft, ArrowRight,
   Link, BookOpen, FileText, Trash2, UploadCloud,
-  Eye, EyeOff, Download, FileSpreadsheet, Activity, Sliders
+  Eye, EyeOff, Download, FileSpreadsheet, Activity, Sliders, Sparkles
 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import { auth } from './firebase/firebase'
@@ -41,6 +41,9 @@ import { T } from './theme'
 import { BRANCHES } from './constants/branches'
 import { orchestrateNextQuestion, type EngineMode } from './utils/interviewEngine'
 import { evaluateOfflineSession } from './utils/offlineEvaluator'
+import { COMPANY_TRACKS, getCompanyTrack } from './data/companyTracks'
+import { AtsScannerModal } from './components/resume/AtsScannerModal'
+import { SentenceBoundarySpeaker } from './utils/streamingVoice'
 
 // ── DOMAINS ─────────────────────────────────────────────────────────────────
 interface Domain {
@@ -4366,6 +4369,13 @@ export default function App() {
   }, [voiceEnabled])
   const [qCount, setQCount] = useState(0)
   const [engineMode, setEngineMode] = useState<EngineMode>('cloud')
+  const [selectedCompanyTrack, setSelectedCompanyTrack] = useState<string | null>(null)
+  const [showAtsModal, setShowAtsModal] = useState(false)
+  const [uploadedResumeRawText, setUploadedResumeRawText] = useState('')
+  const streamingSpeakerRef = useRef<SentenceBoundarySpeaker | null>(null)
+  if (!streamingSpeakerRef.current && typeof window !== 'undefined') {
+    streamingSpeakerRef.current = new SentenceBoundarySpeaker(voiceEnabled)
+  }
   const [usedOfflineQuestionIds, setUsedOfflineQuestionIds] = useState<string[]>([])
   const [usedQuestionIndices, setUsedQuestionIndices] = useState<number[]>([])
   const [sessionData, setSessionData] = useState<QA[]>([])
@@ -4595,7 +4605,9 @@ export default function App() {
       const resumeCtx = resumeProfile
         ? buildResumeContext(resumeProfile, resumeNotes, domain || '')
         : ''
-      const sys = `You are PrepHire AI, a professional interview coach for MIT AoE placement preparation. Domain: ${domainObj?.label || domain}, Level: ${level}. ${introCtx}${resumeCtx}Ask ONE question at a time. After each answer give honest, calibrated 1-line micro-feedback — if the answer was vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-ups after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Keep responses under 80 words. Ensure variety across technical, behavioral, logical, and current-affairs question types. Start with a brief warm acknowledgement of their intro (1 sentence) then your first question.`
+      const companyObj = selectedCompanyTrack ? getCompanyTrack(selectedCompanyTrack) : null
+      const companyCtx = companyObj ? `Target Company Track: ${companyObj.name} (${companyObj.badge}) — focus heavily on ${companyObj.keyFocusAreas.join(', ')}. ` : ''
+      const sys = `You are PrepHire AI, a professional interview coach for MIT AoE placement preparation. Domain: ${domainObj?.label || domain}, Level: ${level}. ${companyCtx}${introCtx}${resumeCtx}Ask ONE question at a time. After each answer give honest, calibrated 1-line micro-feedback — if the answer was vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-ups after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Keep responses under 80 words. Ensure variety across technical, behavioral, logical, and current-affairs question types. Start with a brief warm acknowledgement of their intro (1 sentence) then your first question.`
       const result = await orchestrateNextQuestion(
         callClaude,
         {
@@ -4845,6 +4857,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
       if (!text) {
         throw new Error('No readable text found in this PDF. Try pasting your resume text instead.')
       }
+      setUploadedResumeRawText(text)
       const parsed = await analyzeResume(text)
       setResumeProfile(parsed)
       setResumeFileName(file.name)
@@ -4960,7 +4973,9 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         await generateReport(sd)
         return
       }
-      const sys = `You are PrepHire AI. Domain: ${domainObj?.label || domain}, Level: ${level}. Previous questions asked: ${newMsgs.filter((m) => m.role === 'ai').map((m) => m.text).join(', ') || 'None yet'}. Type variation: Include technical, behavioral, logical, and current affairs perspectives. Ensure diversity and avoid repeating question types or patterns. After the answer give honest, calibrated 1-line micro-feedback — if vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-up after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Then ask question ${qCount + 1} of 5. Under 80 words, one question at a time.`
+      const companyObj = selectedCompanyTrack ? getCompanyTrack(selectedCompanyTrack) : null
+      const companyCtx = companyObj ? `Target Company Track: ${companyObj.name} (${companyObj.badge}) — focus heavily on ${companyObj.keyFocusAreas.join(', ')}. ` : ''
+      const sys = `You are PrepHire AI. Domain: ${domainObj?.label || domain}, Level: ${level}. ${companyCtx}Previous questions asked: ${newMsgs.filter((m) => m.role === 'ai').map((m) => m.text).join(', ') || 'None yet'}. Type variation: Include technical, behavioral, logical, and current affairs perspectives. Ensure diversity and avoid repeating question types or patterns. After the answer give honest, calibrated 1-line micro-feedback — if vague, incomplete, or wrong say so plainly and specifically (e.g. "Right idea, but you skipped the time complexity") not empty praise; if genuinely strong, say precisely why. Adapt difficulty: harder follow-up after strong answers, easier/more foundational after weak ones so the final transcript reflects the candidate's real level. Then ask question ${qCount + 1} of 5. Under 80 words, one question at a time.`
       const result = await orchestrateNextQuestion(
         callClaude,
         {
@@ -5202,52 +5217,125 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
 
                 {/* 2-Column Dashboard Layout */}
                 <div className="dashboard-layout">
-                  {/* Left Column: Domain Selection */}
-                  <GlassCard style={{ marginBottom: 0 }}>
-                    <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem', fontWeight: 700 }}>
-                      Interview Domain
-                    </div>
-                    <div className="domain-grid">
-                      {DOMAINS.map((d) => (
-                        <div
-                          key={d.id}
-                          className="domain-card"
-                          onClick={() => setDomain(d.id)}
-                          style={{
-                            border: `2px solid ${domain === d.id ? T.primary : T.outlineVar}`,
-                            borderRadius: 12,
-                            padding: 16,
-                            cursor: 'pointer',
-                            background: domain === d.id ? '#F0F2FF' : T.bgWhite,
-                            minHeight: 120,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            textAlign: 'center',
-                          }}
-                        >
+                  {/* Left Column: Domain & Company Track Selection */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <GlassCard style={{ marginBottom: 0 }}>
+                      <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1rem', fontWeight: 700 }}>
+                        Interview Domain
+                      </div>
+                      <div className="domain-grid">
+                        {DOMAINS.map((d) => (
                           <div
+                            key={d.id}
+                            className="domain-card"
+                            onClick={() => setDomain(d.id)}
                             style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              background: `${DOMAIN_ICON_COLORS[d.id]}1A`,
+                              border: `2px solid ${domain === d.id ? T.primary : T.outlineVar}`,
+                              borderRadius: 12,
+                              padding: 16,
+                              cursor: 'pointer',
+                              background: domain === d.id ? '#F0F2FF' : T.bgWhite,
+                              minHeight: 120,
                               display: 'flex',
+                              flexDirection: 'column',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              margin: '0 auto 10px auto',
-                              color: DOMAIN_ICON_COLORS[d.id],
+                              textAlign: 'center',
                             }}
                           >
-                            {d.icon}
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                background: `${DOMAIN_ICON_COLORS[d.id]}1A`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 10px auto',
+                                color: DOMAIN_ICON_COLORS[d.id],
+                              }}
+                            >
+                              {d.icon}
+                            </div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: T.primary }}>{d.label}</div>
+                            <div className="text-caption" style={{ fontSize: 11, color: T.txtMut, marginTop: 4, lineHeight: 1.3 }}>{d.desc}</div>
                           </div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: T.primary }}>{d.label}</div>
-                          <div className="text-caption" style={{ fontSize: 11, color: T.txtMut, marginTop: 4, lineHeight: 1.3 }}>{d.desc}</div>
+                        ))}
+                      </div>
+                    </GlassCard>
+
+                    {/* Target Company Track Selector */}
+                    <GlassCard style={{ marginBottom: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                        <div>
+                          <div className="text-caption" style={{ letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700, color: T.primary }}>
+                            Target Company Track (Optional)
+                          </div>
+                          <div style={{ fontSize: 11, color: T.txtMut, marginTop: 2 }}>
+                            Calibrate AI questions to specific corporate placement rounds
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </GlassCard>
+                        {selectedCompanyTrack && (
+                          <button
+                            onClick={() => setSelectedCompanyTrack(null)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: T.error,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0,
+                            }}
+                          >
+                            Reset to General Track
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
+                        {COMPANY_TRACKS.map((track) => {
+                          const isSelected = selectedCompanyTrack === track.id
+                          return (
+                            <div
+                              key={track.id}
+                              onClick={() => setSelectedCompanyTrack(isSelected ? null : track.id)}
+                              style={{
+                                border: `2px solid ${isSelected ? track.brandColor : T.outlineVar}`,
+                                borderRadius: 10,
+                                padding: '12px',
+                                cursor: 'pointer',
+                                background: isSelected ? `${track.brandColor}0D` : T.bgWhite,
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: track.brandColor }}>
+                                  {track.name}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    background: `${track.brandColor}1A`,
+                                    color: track.brandColor,
+                                  }}
+                                >
+                                  {track.badge}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 11, color: T.txtSec, lineHeight: 1.35 }}>
+                                {track.tagline}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </GlassCard>
+                  </div>
 
                   {/* Right Column: Difficulty and Voice toggle stacked */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -5673,18 +5761,50 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                             <span style={{ fontWeight: 700, color: T.txtPri }}>Certifications:</span> {resumeProfile.certifications.join(' · ')}
                           </div>
                         )}
-                        <label style={{ display: 'inline-block', marginTop: 12, cursor: 'pointer', fontSize: 12, color: T.primary, fontWeight: 600 }}>
-                          Replace resume
-                          <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleResumeUpload(f); e.target.value = '' }} />
-                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
+                          <label style={{ cursor: 'pointer', fontSize: 12, color: T.primary, fontWeight: 600 }}>
+                            Replace resume
+                            <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleResumeUpload(f); e.target.value = '' }} />
+                          </label>
+                          <Btn
+                            onClick={() => setShowAtsModal(true)}
+                            variant="outline"
+                            size="sm"
+                            style={{ borderColor: T.primary, color: T.primary, background: '#F8FAFC', fontSize: 12 }}
+                          >
+                            <Sparkles size={13} style={{ marginRight: 6 }} /> ATS Resume vs JD Matcher
+                          </Btn>
+                        </div>
                       </div>
                     ) : (
-                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: `1.5px dashed ${T.border}`, borderRadius: 10, padding: 20, cursor: 'pointer', background: T.bg }}>
-                        <UploadCloud size={18} style={{ color: T.primary }} />
-                        <span style={{ fontSize: 13, color: T.txtSec, fontWeight: 600 }}>Upload PDF resume</span>
-                        <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleResumeUpload(f); e.target.value = '' }} />
-                      </label>
+                      <div>
+                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: `1.5px dashed ${T.border}`, borderRadius: 10, padding: 20, cursor: 'pointer', background: T.bg }}>
+                          <UploadCloud size={18} style={{ color: T.primary }} />
+                          <span style={{ fontSize: 13, color: T.txtSec, fontWeight: 600 }}>Upload PDF resume</span>
+                          <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleResumeUpload(f); e.target.value = '' }} />
+                        </label>
+                        <div style={{ marginTop: 10 }}>
+                          <Btn
+                            onClick={() => setShowAtsModal(true)}
+                            variant="outline"
+                            size="sm"
+                            style={{ width: '100%', justifyContent: 'center', borderColor: T.border, color: T.txtSec, fontSize: 12 }}
+                          >
+                            <Sparkles size={13} style={{ marginRight: 6 }} /> Benchmark Resume against Job Description (ATS)
+                          </Btn>
+                        </div>
+                      </div>
                     )}
+
+                    <AtsScannerModal
+                      isOpen={showAtsModal}
+                      onClose={() => setShowAtsModal(false)}
+                      resumeText={uploadedResumeRawText || (resumeProfile ? `${resumeProfile.skills.join(' ')} ${resumeProfile.techStacks.join(' ')} ${resumeProfile.projects.join(' ')}` : '')}
+                      onApplyKeywordsToInterview={(keywords) => {
+                        setResumeNotes((prev) => (prev ? prev + ' ' : '') + `Targeting JD focus: ${keywords.join(', ')}`)
+                        showToast('Interview will focus on your targeted JD keywords!', 'success')
+                      }}
+                    />
 
                     {resumeError && (
                       <div style={{ fontSize: 12, color: T.error, marginTop: 8 }}>{resumeError}</div>

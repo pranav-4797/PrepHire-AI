@@ -44,3 +44,71 @@ export async function callGemini(prompt, sys) {
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   return text
 }
+
+export async function streamGemini(prompt, sys, onChunk) {
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+  if (!GEMINI_API_KEY) {
+    const err = new Error('AI generation is not configured on the server.')
+    err.status = 500
+    throw err
+  }
+  const geminiRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: sys || '' }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      }),
+    }
+  )
+
+  if (!geminiRes.ok) {
+    const data = await geminiRes.json().catch(() => ({}))
+    console.error('Gemini stream error:', data)
+    const err = new Error('AI generation service error.')
+    err.status = 502
+    err.data = data
+    throw err
+  }
+
+  const reader = geminiRes.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('data: ')) {
+        const jsonStr = trimmed.slice(6).trim()
+        if (jsonStr === '[DONE]') continue
+        try {
+          const parsed = JSON.parse(jsonStr)
+          const textChunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text
+          if (textChunk) {
+            onChunk(textChunk)
+          }
+        } catch {
+          // partial JSON line, ignore
+        }
+      }
+    }
+  }
+
+  if (buffer.trim().startsWith('data: ')) {
+    try {
+      const parsed = JSON.parse(buffer.trim().slice(6).trim())
+      const textChunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text
+      if (textChunk) onChunk(textChunk)
+    } catch {
+      // ignore
+    }
+  }
+}
