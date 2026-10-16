@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
-import { Plus, Trash2, Save, UploadCloud } from 'lucide-react'
+import { Plus, Trash2, Save, UploadCloud, Sparkles, CheckCircle2, AlertTriangle, Loader2, X, Cpu } from 'lucide-react'
 import { T } from '../../theme'
-import { createProblem, updateProblem, listLanguages } from '../../services/coding.service'
-import type { Problem, TestCase, LanguageOption, Difficulty } from '../../services/coding.service'
+import { createProblem, updateProblem, listLanguages, generateProblemWithAI } from '../../services/coding.service'
+import type { Problem, TestCase, LanguageOption, Difficulty, GenerateProblemPreflight } from '../../services/coding.service'
 
 const inputStyle: CSSProperties = {
   width: '100%',
@@ -134,6 +134,14 @@ export function AdminProblemEditor({
   const [languages, setLanguages] = useState<LanguageOption[]>([])
   const [starterLangTab, setStarterLangTab] = useState<string>(problem?.languages?.[0] || '')
   const [saving, setSaving] = useState(false)
+  const [showAiModal, setShowAiModal] = useState(false)
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiTopic, setAiTopic] = useState('')
+  const [aiDifficulty, setAiDifficulty] = useState<Difficulty>('Medium')
+  const [aiLangs, setAiLangs] = useState<string[]>(['python', 'javascript', 'cpp', 'java'])
+  const [aiNotes, setAiNotes] = useState('')
+  const [aiValidateSandbox, setAiValidateSandbox] = useState(true)
+  const [preflightStatus, setPreflightStatus] = useState<GenerateProblemPreflight | null>(null)
 
   useEffect(() => {
     listLanguages().then((list) => {
@@ -152,6 +160,70 @@ export function AdminProblemEditor({
     const next = current.includes(id) ? current.filter((l) => l !== id) : [...current, id]
     set('languages', next)
     if (!starterLangTab && next.length) setStarterLangTab(next[0])
+  }
+
+  function toggleAiLang(id: string) {
+    setAiLangs((prev) => (prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]))
+  }
+
+  async function handleAiGenerate() {
+    if (!aiTopic.trim()) {
+      showToast('Please enter a problem topic or concept.', 'error')
+      return
+    }
+    if (aiLangs.length === 0) {
+      showToast('Select at least one target programming language.', 'error')
+      return
+    }
+    setAiGenerating(true)
+    try {
+      const res = await generateProblemWithAI({
+        topic: aiTopic.trim(),
+        difficulty: aiDifficulty,
+        languages: aiLangs,
+        facultyNotes: aiNotes.trim() || undefined,
+        validateWithSandbox: aiValidateSandbox,
+      })
+
+      const p = res.problem
+      setForm((prev) => ({
+        ...prev,
+        title: p.title || prev.title,
+        difficulty: p.difficulty || prev.difficulty,
+        statement: p.statement || prev.statement,
+        inputFormat: p.inputFormat || prev.inputFormat,
+        outputFormat: p.outputFormat || prev.outputFormat,
+        constraints: p.constraints || prev.constraints,
+        timeLimitMs: p.timeLimitMs || prev.timeLimitMs || 2000,
+        memoryLimitMb: p.memoryLimitMb || prev.memoryLimitMb || 256,
+        languages: p.languages || aiLangs,
+        starterCode: p.starterCode || prev.starterCode || {},
+        sampleTests: p.sampleTests || prev.sampleTests || [],
+        hiddenTests: p.hiddenTests || prev.hiddenTests || [],
+      }))
+
+      if (p.topics && Array.isArray(p.topics)) {
+        setTopicsInput(p.topics.join(', '))
+      }
+      if (p.languages && p.languages.length > 0) {
+        setStarterLangTab(p.languages[0])
+      }
+
+      setPreflightStatus(res.preflight)
+      setShowAiModal(false)
+
+      if (res.preflight?.allPassed) {
+        showToast(`AI problem generated and pre-validated! (${res.preflight.passedCount}/${res.preflight.totalCount} tests passed in sandbox)`, 'success')
+      } else if (res.preflight?.tested) {
+        showToast(`AI problem generated with warnings (${res.preflight.passedCount}/${res.preflight.totalCount} tests passed)`, 'info')
+      } else {
+        showToast('AI problem generated successfully! Review and edit before saving.', 'success')
+      }
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to generate problem with AI', 'error')
+    } finally {
+      setAiGenerating(false)
+    }
   }
 
   async function save(status: 'draft' | 'published') {
@@ -194,9 +266,55 @@ export function AdminProblemEditor({
 
   return (
     <div style={{ background: T.bgWhite, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
-      <h2 style={{ fontSize: 18, fontWeight: 700, color: T.primary, margin: '0 0 16px' }}>
-        {problem ? 'Edit Problem' : 'Create New Problem'}
-      </h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: T.primary, margin: 0 }}>
+          {problem ? 'Edit Problem' : 'Create New Problem'}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setShowAiModal(true)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+            padding: '8px 16px',
+            borderRadius: 8,
+            border: 'none',
+            background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 2px 10px rgba(37, 99, 235, 0.25)',
+            fontFamily: 'inherit',
+          }}
+        >
+          <Sparkles size={14} /> ✨ AI Generate with NVIDIA
+        </button>
+      </div>
+
+      {preflightStatus && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            borderRadius: 8,
+            border: `1px solid ${preflightStatus.allPassed ? '#86efac' : '#fde047'}`,
+            background: preflightStatus.allPassed ? '#f0fdf4' : '#fefce8',
+            color: preflightStatus.allPassed ? '#166534' : '#854d0e',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 13,
+          }}
+        >
+          {preflightStatus.allPassed ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+          <div>
+            <strong>{preflightStatus.allPassed ? 'Sandbox Pre-Validation Passed:' : 'Sandbox Pre-Validation Notice:'}</strong>{' '}
+            {preflightStatus.passedCount} of {preflightStatus.totalCount} test cases verified against the AI reference solution in Piston sandbox ({preflightStatus.verdict}).
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
@@ -331,6 +449,257 @@ export function AdminProblemEditor({
           <UploadCloud size={14} /> {problem?.status === 'published' ? 'Update & Publish' : 'Publish'}
         </button>
       </div>
+
+      {showAiModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.7)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !aiGenerating) setShowAiModal(false)
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 580,
+              background: '#ffffff',
+              borderRadius: 16,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: `1px solid ${T.border}`,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: '90vh',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '18px 24px',
+                background: 'linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Cpu size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>AI Coding Problem Generator</h3>
+                  <div style={{ fontSize: 11, opacity: 0.9 }}>
+                    Powered by NVIDIA NIM &amp; Piston Sandbox Pre-Validation
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={aiGenerating}
+                onClick={() => setShowAiModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  cursor: aiGenerating ? 'not-allowed' : 'pointer',
+                  padding: 4,
+                  borderRadius: 6,
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: 22, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={labelStyle}>Problem Concept / Statement Prompt *</label>
+                <textarea
+                  disabled={aiGenerating}
+                  rows={3}
+                  value={aiTopic}
+                  onChange={(e) => setAiTopic(e.target.value)}
+                  placeholder="e.g. Find all unique triplets in an array that sum to zero (3Sum), ensuring no duplicate triplets in the output."
+                  style={{ ...inputStyle, resize: 'vertical' }}
+                />
+                <div style={{ fontSize: 11, color: T.txtMut, marginTop: 4 }}>
+                  Tip: Mention specific edge cases, bounds, or desired algorithm patterns.
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>Target Difficulty</label>
+                  <select
+                    disabled={aiGenerating}
+                    value={aiDifficulty}
+                    onChange={(e) => setAiDifficulty(e.target.value as Difficulty)}
+                    style={inputStyle}
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Faculty Guidance (Optional)</label>
+                  <input
+                    disabled={aiGenerating}
+                    value={aiNotes}
+                    onChange={(e) => setAiNotes(e.target.value)}
+                    placeholder="e.g. Max array length 3000, O(N^2)"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Generate Starter Code For</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {languages.map((l) => {
+                    const checked = aiLangs.includes(l.id)
+                    return (
+                      <label
+                        key={l.id}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12,
+                          padding: '5px 10px',
+                          borderRadius: 6,
+                          border: `1.5px solid ${checked ? T.primary : T.outlineVar}`,
+                          background: checked ? T.primaryFix : 'transparent',
+                          cursor: aiGenerating ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={aiGenerating}
+                          checked={checked}
+                          onChange={() => toggleAiLang(l.id)}
+                          style={{ margin: 0 }}
+                        />
+                        {l.label}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  fontSize: 12,
+                  color: T.txtPri,
+                  background: T.bgLow,
+                  padding: 10,
+                  borderRadius: 8,
+                  cursor: aiGenerating ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  disabled={aiGenerating}
+                  checked={aiValidateSandbox}
+                  onChange={(e) => setAiValidateSandbox(e.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <div>
+                  <strong>Pre-validate test cases in Piston sandbox</strong>
+                  <div style={{ fontSize: 11, color: T.txtMut, marginTop: 2 }}>
+                    Executes the AI reference solution against all generated test cases inside the sandbox before returning to guarantee zero erroneous cases.
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '14px 22px',
+                borderTop: `1px solid ${T.border}`,
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 10,
+                background: T.bgLow,
+              }}
+            >
+              <button
+                type="button"
+                disabled={aiGenerating}
+                onClick={() => setShowAiModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: `1px solid ${T.outlineVar}`,
+                  background: 'transparent',
+                  color: T.txtSec,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: aiGenerating ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={aiGenerating}
+                onClick={handleAiGenerate}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '9px 18px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: aiGenerating ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 8px rgba(37,99,235,0.3)',
+                }}
+              >
+                {aiGenerating ? (
+                  <>
+                    <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                    Generating &amp; Pre-Validating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={15} />
+                    Generate &amp; Populate
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

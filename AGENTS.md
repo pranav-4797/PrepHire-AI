@@ -74,6 +74,7 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Modular Vite bundle chunking**: Optimized Rollup vendor chunks in `vite.config.ts` (`vendor-react`, `vendor-firebase`, `vendor-monaco`, `vendor-tensorflow`, `vendor-icons`), cutting main chunk size from 1,524 kB to 741 kB with clean 597ms builds.
 - **Company-specific placement tracks**: Curated TCS NQT, Infosys DSE, Amazon SDE, and Barclays FinTech hiring tracks (`companyTracks.ts`) with track selector UI in `App.tsx` and tailored system prompt injection.
 - **Client-side ATS resume analyzer & JD gap matrix**: In-browser keyword, metric, and format gap parser (`atsAnalyzer.ts` & `AtsScannerModal.tsx`) providing candidates with match percentages, missing competencies, and real-time guidance before campus interviews.
+- **NVIDIA NIM AI coding problem generator & Piston sandbox pre-validation**: Added `POST /api/coding/generate-problem` powered by NVIDIA NIM (`qwen/qwen2.5-coder-32b-instruct` / `nvidia/llama-3.1-nemotron-70b-instruct` in `server/nvidia.js`), featuring automated Piston execution of the generated reference solution against all generated test cases to prevent hallucinations, and a one-click generation modal in `AdminProblemEditor.tsx`.
 
 ## Gotchas
 

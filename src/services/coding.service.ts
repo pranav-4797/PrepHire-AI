@@ -165,6 +165,42 @@ export async function getProblem(id: string): Promise<Problem> {
   return handle(res, 'Failed to load problem')
 }
 
+export interface GenerateProblemPreflight {
+  tested: boolean
+  allPassed: boolean
+  passedCount: number
+  totalCount: number
+  verdict?: Verdict | string
+  details?: TestResult[]
+  error?: string
+}
+
+export interface GenerateProblemResponse {
+  success: boolean
+  problem: Partial<Problem> & {
+    referenceSolution?: {
+      language: string
+      code: string
+    }
+  }
+  preflight: GenerateProblemPreflight
+}
+
+export async function generateProblemWithAI(params: {
+  topic: string
+  difficulty?: Difficulty
+  languages?: string[]
+  facultyNotes?: string
+  validateWithSandbox?: boolean
+}): Promise<GenerateProblemResponse> {
+  const res = await fetch(`${API_URL}/api/coding/generate-problem`, {
+    method: 'POST',
+    headers: await authHeaders(true),
+    body: JSON.stringify(params),
+  })
+  return handle(res, 'Failed to generate problem with AI')
+}
+
 export async function createProblem(
   payload: Partial<Problem>,
 ): Promise<{ id: string; problem: Problem }> {

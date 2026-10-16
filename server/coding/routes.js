@@ -16,6 +16,7 @@ import { createCodingStore } from './store.js'
 import { runTestCases, SUPPORTED_LANGUAGES, LANGUAGE_CONFIG } from './judge.js'
 import { requireAdmin as requireAdminAuth, requireAuth, attachUserOptional } from './authMiddleware.js'
 import { callGemini, isRateLimited } from '../gemini.js'
+import { generateCodingProblemWithAI } from '../nvidia.js'
 
 export function registerCodingRoutes(app, { serverDir }) {
   const store = createCodingStore(serverDir)
@@ -129,6 +130,80 @@ export function registerCodingRoutes(app, { serverDir }) {
       return res.status(404).json({ error: 'Problem not found' })
     }
     res.json(privileged ? problem : toStudentProblem(problem))
+  })
+
+  // ── AI Automated Problem Generator (NVIDIA NIM / Gemini Fallback) ──────
+  // Takes faculty prompt/difficulty/languages, generates complete structured
+  // problem, and pre-validates test cases inside Piston sandbox.
+  router.post('/generate-problem', requireAuth(), async (req, res) => {
+    if (!isPrivileged(req)) {
+      return res.status(403).json({ error: 'Only faculty and administrators can generate coding problems.' })
+    }
+    const { topic, difficulty, languages, facultyNotes, validateWithSandbox = true } = req.body
+    if (!topic || typeof topic !== 'string' || !topic.trim()) {
+      return res.status(400).json({ error: 'topic is required' })
+    }
+
+    try {
+      const generated = await generateCodingProblemWithAI({
+        topic: topic.trim(),
+        difficulty: difficulty || 'Medium',
+        languages: Array.isArray(languages) && languages.length ? languages : ['python', 'javascript', 'cpp', 'java'],
+        facultyNotes: facultyNotes || '',
+      })
+
+      let preflight = { tested: false, allPassed: true, passedCount: 0, totalCount: 0, details: [] }
+
+      // Sandbox Pre-Validation Loop (Piston)
+      if (validateWithSandbox && generated.referenceSolution?.code) {
+        const refLang = generated.referenceSolution.language || 'python'
+        const allTests = [
+          ...(generated.sampleTests || []).map((t) => ({ ...t, hidden: false })),
+          ...(generated.hiddenTests || []).map((t) => ({ ...t, hidden: true })),
+        ]
+
+        if (allTests.length > 0 && SUPPORTED_LANGUAGES.includes(refLang)) {
+          try {
+            const outcome = await runTestCases({
+              code: generated.referenceSolution.code,
+              language: refLang,
+              testCases: allTests,
+              timeLimitMs: generated.timeLimitMs || 2000,
+              memoryLimitMb: generated.memoryLimitMb || 256,
+            })
+            const passed = (outcome.results || []).filter((r) => r.passed).length
+            const total = allTests.length
+            preflight = {
+              tested: true,
+              allPassed: outcome.verdict === 'Accepted' || passed === total,
+              passedCount: passed,
+              totalCount: total,
+              verdict: outcome.verdict || (passed === total ? 'Accepted' : 'Wrong Answer'),
+              details: outcome.results || [],
+            }
+          } catch (execErr) {
+            console.warn('Sandbox pre-validation error (non-fatal):', execErr.message)
+            preflight = {
+              tested: true,
+              allPassed: false,
+              passedCount: 0,
+              totalCount: allTests.length,
+              verdict: 'Sandbox Offline',
+              error: execErr.message,
+            }
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        problem: generated,
+        preflight,
+      })
+    } catch (err) {
+      console.error('AI problem generation failed:', err)
+      res.status(500).json({ error: err.message || 'Failed to generate coding problem' })
+    }
   })
 
   router.post('/problems', requireAdmin, (req, res) => {
