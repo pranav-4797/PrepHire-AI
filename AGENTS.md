@@ -61,6 +61,14 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Deep Subpage Routing & Browser Back/Forward History**: Two-way synchronization between React state and browser History API (`pushState` / `popstate`). Clicking the browser Back button or mouse back key navigates to the previous subpage/tab (`/dashboard/interview`, `/dashboard/coding`, `/dashboard/profile`, `/admin/users`, `/faculty/assessments`, etc.) without exiting the website. Direct linking/refreshing to subpaths restored on initial mount.
 - **Zero build/lint errors**: Fixed all pre-existing TypeScript and ESLint errors. `npm run build` (`tsc -b && vite build`) and `npm run lint` pass cleanly with 0 errors.
 
+## Recent fixes (2026-10-16)
+
+- **Security & persistence hardening**: Secured `POST /api/upload` and `GET /api/courses` with Firebase token auth middleware (`requireAuth`). Upgraded backend storage (`server/coding/store.js` and `server/index.js`) to hybrid Firestore with local file fallback.
+- **Audio visualizer & speech analytics**: Integrated real-time Web Audio API waveform visualizer (`AudioVisualizer.tsx`) and speech delivery metrics (`speechAnalytics.ts`) tracking Words Per Minute (WPM), pacing diagnosis, and filler crutch words.
+- **Export capabilities**: Added print/PDF generation for candidate interview evaluation reports and batch CSV placement gradebook export for faculty.
+- **Monaco coding custom testcases**: Added custom input (stdin) runner to `ProblemWorkspace.tsx` and coding backend execution route.
+- **Cookie governance system**: Multi-category cookie registry (`cookieManager.ts`) with granular preferences modal, unobtrusive landing page footer link, and student profile settings trigger.
+
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit

@@ -6,7 +6,7 @@ import {
   CornerDownLeft, CheckCircle, Info, Check,
   TrendingUp, Lightbulb, ArrowLeft, ArrowRight,
   Link, BookOpen, FileText, Trash2, UploadCloud,
-  Eye, EyeOff
+  Eye, EyeOff, Download, FileSpreadsheet, Activity, Sliders
 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import { auth } from './firebase/firebase'
@@ -29,6 +29,12 @@ import { loadSessions, loadStudentSessions, saveSession, updateSession } from '.
 import { Leaderboard } from './components/Leaderboard'
 import { CodingHub } from './components/coding/CodingHub'
 import { AdminProblemsManager } from './components/coding/AdminProblemsManager'
+import { AudioVisualizer } from './components/interview/AudioVisualizer'
+import { CookieBanner } from './components/cookies/CookieBanner'
+import { setCookie, getCookie, hasConsent, openCookiePreferences } from './utils/cookieManager'
+import { analyzeSpeech } from './utils/speechAnalytics'
+import type { SpeechDeliveryMetrics } from './utils/speechAnalytics'
+import { exportReportToPdf, exportSessionsToCsv } from './utils/reportExport'
 import { analyzeResume, buildResumeContext, extractResumeText } from './utils/resume'
 import type { ResumeProfile } from './utils/resume'
 import { T } from './theme'
@@ -395,6 +401,7 @@ interface ReportData {
   proctoringNote: string
   warnCount: number
   actionPlan: string[]
+  speechMetrics?: SpeechDeliveryMetrics
 }
 
 interface HistoryEntry {
@@ -946,12 +953,17 @@ function ProctoredCamera({
 // ── MIC BUTTON ───────────────────────────────────────────────────────────────
 function MicButton({
   onTranscript,
+  onListeningChange,
   disabled,
 }: {
   onTranscript?: (t: string) => void
+  onListeningChange?: (listening: boolean) => void
   disabled: boolean
 }) {
   const [listening, setListening] = useState(false)
+  useEffect(() => {
+    onListeningChange?.(listening)
+  }, [listening, onListeningChange])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null)
   const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -1223,10 +1235,25 @@ function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
       </section>
 
       {/* Public Footer */}
-      <footer style={{ borderTop: `1px solid ${T.border}`, padding: '24px', background: T.bgWhite, textAlign: 'center' }}>
+      <footer style={{ borderTop: `1px solid ${T.border}`, padding: '24px', background: T.bgWhite, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 11, color: T.txtMut }}>
           © 2026 PrepHire.AI · MIT Academy of Engineering Alandi. Placement Cell Simulator.
         </span>
+        <button
+          onClick={openCookiePreferences}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: T.primary,
+            fontSize: 11,
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            fontFamily: 'inherit',
+            padding: 0,
+          }}
+        >
+          Cookie Preferences
+        </button>
       </footer>
     </div>
   )
@@ -2222,7 +2249,16 @@ const addResource = (chapterIndex: number) => {
                     ))}
                   </div>
 
-<input
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <Btn
+                      onClick={() => exportSessionsToCsv(filteredSessions, `${facultyBranch}_placement_readiness.csv`)}
+                      variant="outline"
+                      size="sm"
+                      style={{ fontSize: 12, padding: '6px 12px' }}
+                    >
+                      <FileSpreadsheet size={13} style={{ marginRight: 6 }} /> Export Batch CSV
+                    </Btn>
+                    <input
                       type="text"
                       placeholder="Search by student name…"
                       value={searchTerm}
@@ -2235,6 +2271,7 @@ const addResource = (chapterIndex: number) => {
                         minWidth: 240,
                       }}
                     />
+                  </div>
                 </div>
 
                 {/* Table */}
@@ -4315,7 +4352,16 @@ export default function App() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [speaking, setSpeaking] = useState(false)
-  const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    const saved = getCookie('prephire_voice_enabled')
+    return saved !== null ? saved === 'true' : true
+  })
+
+  useEffect(() => {
+    if (hasConsent('preferences')) {
+      setCookie('prephire_voice_enabled', String(voiceEnabled), 180, 'preferences')
+    }
+  }, [voiceEnabled])
   const [qCount, setQCount] = useState(0)
   const [usedQuestionIndices, setUsedQuestionIndices] = useState<number[]>([])
   const [sessionData, setSessionData] = useState<QA[]>([])
@@ -4344,6 +4390,8 @@ export default function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const cameraStreamRef = useRef<MediaStream | null>(null)
+  const [activeMediaStream, setActiveMediaStream] = useState<MediaStream | null>(null)
+  const [isCandidateListening, setIsCandidateListening] = useState(false)
 
   const chatRef = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -4483,7 +4531,15 @@ export default function App() {
 
     try {
       const apiUrl = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
-      const res = await fetch(`${apiUrl}/api/upload`, { method: 'POST', body: formData })
+      const token = await auth.currentUser?.getIdToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch(`${apiUrl}/api/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      })
       const resp = await res.json()
       if (res.ok && resp.success) {
         console.log(`✅ Interview video uploaded to Drive: ${resp.driveLink}`)
@@ -4624,6 +4680,9 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
       }
     }
     r.warnCount = wc
+    if (data.length > 0) {
+      r.speechMetrics = analyzeSpeech(data.map((d) => d.a), 180)
+    }
 
     // Create session record
     const sessionId = uid()
@@ -4843,9 +4902,10 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
     setScreen('intro')
   }
 
-  // ── Camera stream handler (for recording) ──────────────────────────────
+  // ── Camera stream handler (for recording & visualizer) ───────────────────
   const handleStreamReady = useCallback((stream: MediaStream) => {
     cameraStreamRef.current = stream
+    setActiveMediaStream(stream)
   }, [])
 
   async function sendAnswer(ans: string) {
@@ -4891,7 +4951,8 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
   const tc = timer > 60 ? T.green : timer > 30 ? T.amber : T.error
   const activeDomain = DOMAINS.find((d) => d.id === domain)
 
-  if (authLoading) {
+  function renderContent() {
+    if (authLoading) {
     return (
       <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
         <div style={{ width: 56, height: 56, borderRadius: '50%', border: `4px solid ${T.primaryFix}`, borderTop: `4px solid ${T.primary}`, animation: 'spin 1s linear infinite' }} />
@@ -4929,7 +4990,6 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             onLogout={handleLogout}
             showToast={showToast}
           />
-          <ToastNotification toast={toast} />
         </>
       )
     }
@@ -4963,7 +5023,6 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             onLogout={handleLogout}
             showToast={showToast}
           />
-          <ToastNotification toast={toast} />
         </>
       )
     }
@@ -5513,6 +5572,16 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                           {user?.department || 'General'}
                         </span>
                       </div>
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+                        <Btn
+                          onClick={openCookiePreferences}
+                          variant="outline"
+                          size="sm"
+                          style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}
+                        >
+                          <Sliders size={13} style={{ marginRight: 6 }} /> Cookie & Privacy Settings
+                        </Btn>
+                      </div>
                     </div>
                   </GlassCard>
 
@@ -5803,7 +5872,6 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             )}
           </main>
         </div>
-        <ToastNotification toast={toast} />
         {showFeedbackModal && (
           <div
             style={{
@@ -6211,6 +6279,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
               <MicButton
                 onTranscript={(t) => { setInput(t); setTimeout(() => sendAnswer(t), 200) }}
+                onListeningChange={setIsCandidateListening}
                 disabled={loading || speaking}
               />
               <textarea
@@ -6273,7 +6342,10 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             </div>
           </GlassCard>
 
-          <ProctoredCamera onWarning={handleProcWarn} active={screen === 'interview'} onStreamReady={handleStreamReady} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <ProctoredCamera onWarning={handleProcWarn} active={screen === 'interview'} onStreamReady={handleStreamReady} />
+            <AudioVisualizer isListening={isCandidateListening} isSpeaking={speaking} stream={activeMediaStream} />
+          </div>
         </div>
       </div>
 
@@ -6360,9 +6432,30 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             <h2 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 4px', color: T.primary }}>Interview Report</h2>
             <div className="text-caption">{activeDomain?.label || domain} · {level} · {user?.name}</div>
           </div>
-          <Btn onClick={() => setScreen('home')} variant="ghost">
-            <ArrowLeft size={14} style={{ marginRight: 6 }} /> Back to Home
-          </Btn>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn
+              onClick={() => {
+                const sessionToExport = activeSession || {
+                  studentName: user?.name || profile?.name || 'Student',
+                  studentEmail: user?.email || profile?.email || '',
+                  department: user?.department || profile?.department || 'General',
+                  domain: activeDomain?.label || domain || 'General',
+                  level,
+                  score: report.overallScore,
+                  date: new Date().toISOString().split('T')[0],
+                  warnings: report.warnCount,
+                  report,
+                }
+                exportReportToPdf(sessionToExport)
+              }}
+              variant="navy"
+            >
+              <Download size={14} style={{ marginRight: 6 }} /> Download PDF
+            </Btn>
+            <Btn onClick={() => setScreen('home')} variant="ghost">
+              <ArrowLeft size={14} style={{ marginRight: 6 }} /> Back to Home
+            </Btn>
+          </div>
         </div>
 
         {/* Integrity badge */}
@@ -6467,6 +6560,54 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           <RadarChart scores={{ Technical: report.technical, Comms: report.communication, Confidence: report.confidence, Clarity: report.clarity, Relevance: report.relevance }} />
         </GlassCard>
 
+        {/* Speech & Delivery Cadence Analytics */}
+        {report.speechMetrics && (
+          <GlassCard style={{ marginBottom: '1.25rem', padding: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Activity size={18} style={{ color: T.primary }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.primary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Speech & Delivery Analytics
+                </span>
+              </div>
+              <Pill color={T.primary} bg={T.primaryFix}>
+                Delivery Score: {report.speechMetrics.deliveryScore}/100
+              </Pill>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
+              <div style={{ background: T.bgWhite, padding: '10px 14px', borderRadius: 10, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, color: T.txtMut, fontWeight: 600 }}>Speaking Pace</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: T.primary, marginTop: 2 }}>
+                  {report.speechMetrics.wpm} <span style={{ fontSize: 11, fontWeight: 500, color: T.txtSec }}>WPM</span>
+                </div>
+              </div>
+              <div style={{ background: T.bgWhite, padding: '10px 14px', borderRadius: 10, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, color: T.txtMut, fontWeight: 600 }}>Cadence Diagnosis</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.txtPri, marginTop: 4 }}>
+                  {report.speechMetrics.pacingFeedback}
+                </div>
+              </div>
+              <div style={{ background: T.bgWhite, padding: '10px 14px', borderRadius: 10, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, color: T.txtMut, fontWeight: 600 }}>Verbal Fillers</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: report.speechMetrics.fillerCount > 5 ? T.error : T.green, marginTop: 2 }}>
+                  {report.speechMetrics.fillerCount} <span style={{ fontSize: 11, fontWeight: 500, color: T.txtSec }}>detected</span>
+                </div>
+              </div>
+              <div style={{ background: T.bgWhite, padding: '10px 14px', borderRadius: 10, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, color: T.txtMut, fontWeight: 600 }}>Total Words</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: T.primary, marginTop: 2 }}>
+                  {report.speechMetrics.totalWords}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: T.txtSec, background: T.bgLow, padding: '8px 12px', borderRadius: 8 }}>
+              <strong>Vocal Coach Tip:</strong> {report.speechMetrics.advice}
+            </div>
+          </GlassCard>
+        )}
+
         {/* Strengths / improvements */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: '1.25rem' }}>
           <SolidCard style={{ background: T.greenBg, borderColor: T.green + '44' }}>
@@ -6556,7 +6697,16 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
       </div>
     </div>
   )
-  }
+}
 
   return null
+}
+
+  return (
+    <>
+      {renderContent()}
+      <ToastNotification toast={toast} />
+      <CookieBanner />
+    </>
+  )
 }

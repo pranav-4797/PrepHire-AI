@@ -195,7 +195,7 @@ export function registerCodingRoutes(app, { serverDir }) {
   // Both require a verified, logged-in user — this protects the sandboxed
   // execution service from anonymous abuse/flooding.
   router.post('/problems/:id/run', requireAuth(), async (req, res) => {
-    const { code, language } = req.body
+    const { code, language, customInput } = req.body
     if (!code || !language) return res.status(400).json({ error: 'code and language are required' })
 
     const problem = store.listProblems().find((p) => p.id === req.params.id)
@@ -205,10 +205,15 @@ export function registerCodingRoutes(app, { serverDir }) {
     }
 
     try {
+      const isCustom = typeof customInput === 'string' && customInput.trim().length > 0
+      const testCases = isCustom
+        ? [{ input: customInput, output: '', explanation: 'Custom Testcase', hidden: false }]
+        : (problem.sampleTests || []).map((t) => ({ ...t, hidden: false }))
+
       const result = await runTestCases({
         code,
         language,
-        testCases: (problem.sampleTests || []).map((t) => ({ ...t, hidden: false })),
+        testCases,
         timeLimitMs: problem.timeLimitMs,
         memoryLimitMb: problem.memoryLimitMb,
       })

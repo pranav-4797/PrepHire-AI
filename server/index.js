@@ -275,7 +275,7 @@ app.post('/api/ai/generate', requireAuth(), async (req, res) => {
 })
 
 // Upload interview video to Google Shared Drive (converts to MP4)
-app.post('/api/upload', uploadLimiter, upload.single('video'), async (req, res) => {
+app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), async (req, res) => {
   const file = req.file
 
   if (!file) {
@@ -283,7 +283,8 @@ app.post('/api/upload', uploadLimiter, upload.single('video'), async (req, res) 
   }
 
   // Build the file name from metadata or fallback
-  const studentName = (req.body.studentName || 'Unknown').replace(/[^a-zA-Z0-9_-]/g, '-')
+  const userIdentifier = req.authUser?.email?.split('@')[0] || req.authUser?.uid || 'user'
+  const studentName = (req.body.studentName || userIdentifier).replace(/[^a-zA-Z0-9_-]/g, '-')
   const domain = (req.body.domain || 'General').replace(/[^a-zA-Z0-9_-]/g, '-')
   const level = (req.body.level || 'Intermediate').replace(/[^a-zA-Z0-9_-]/g, '-')
   const sessionId = req.body.sessionId || Date.now().toString(36)
@@ -405,11 +406,9 @@ app.post('/api/upload', uploadLimiter, upload.single('video'), async (req, res) 
 
 // ── Courses CRUD API ──────────────────────────────────────────────────────────
 
-
-
-// --- Local JSON File Database for Courses (Bypass IAM issues) ---
+// --- Hybrid Courses Database (Firestore with local JSON file fallback) ---
 const coursesFile = path.resolve(serverDir, 'uploads', 'courses.json')
-function readCourses() {
+function readCoursesFromFile() {
   if (!fs.existsSync(coursesFile)) return []
   try {
     return JSON.parse(fs.readFileSync(coursesFile, 'utf8'))
@@ -417,24 +416,64 @@ function readCourses() {
     return []
   }
 }
-function writeCourses(courses) {
-  fs.writeFileSync(coursesFile, JSON.stringify(courses, null, 2))
+function writeCoursesToFile(courses) {
+  try {
+    fs.writeFileSync(coursesFile, JSON.stringify(courses, null, 2))
+  } catch (e) {
+    console.warn('⚠️ Failed to write courses JSON backup:', e.message)
+  }
 }
 
-app.get('/api/courses', (req, res) => {
-  const courses = readCourses()
+async function getCoursesList() {
+  if (db) {
+    try {
+      const snap = await db.collection('courses').get()
+      if (!snap.empty) {
+        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        writeCoursesToFile(list)
+        return list
+      }
+    } catch (e) {
+      console.warn('⚠️ Firestore read courses failed, using file backup:', e.message)
+    }
+  }
+  return readCoursesFromFile()
+}
+
+async function saveCourseToDb(course) {
+  if (db && course.id) {
+    try {
+      await db.collection('courses').doc(course.id).set(course, { merge: true })
+    } catch (e) {
+      console.warn('⚠️ Firestore course write failed:', e.message)
+    }
+  }
+}
+
+async function deleteCourseFromDb(id) {
+  if (db && id) {
+    try {
+      await db.collection('courses').doc(id).delete()
+    } catch (e) {
+      console.warn('⚠️ Firestore course delete failed:', e.message)
+    }
+  }
+}
+
+app.get('/api/courses', requireAuth(), async (req, res) => {
+  const courses = await getCoursesList()
   res.json(courses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)))
 })
 
-app.get('/api/courses/:id', (req, res) => {
-  const courses = readCourses()
+app.get('/api/courses/:id', requireAuth(), async (req, res) => {
+  const courses = await getCoursesList()
   const course = courses.find(c => c.id === req.params.id)
   if (!course) return res.status(404).json({ error: 'Course not found' })
   res.json(course)
 })
 
-app.post('/api/courses', requireFacultyOrAdmin(), (req, res) => {
-  const courses = readCourses()
+app.post('/api/courses', requireFacultyOrAdmin(), async (req, res) => {
+  const courses = await getCoursesList()
   const newCourse = {
     ...req.body,
     id: Date.now().toString(),
@@ -442,15 +481,16 @@ app.post('/api/courses', requireFacultyOrAdmin(), (req, res) => {
     createdByEmail: req.authUser.email || null
   }
   courses.push(newCourse)
-  writeCourses(courses)
+  writeCoursesToFile(courses)
+  await saveCourseToDb(newCourse)
   res.json({ id: newCourse.id })
 })
 
-app.put('/api/courses/:id', requireFacultyOrAdmin(), (req, res) => {
+app.put('/api/courses/:id', requireFacultyOrAdmin(), async (req, res) => {
   const userEmail = req.authUser.email
   const userRole = req.authUser.role
 
-  const courses = readCourses()
+  const courses = await getCoursesList()
   const index = courses.findIndex(c => c.id === req.params.id)
   if (index === -1) return res.status(404).json({ error: 'Course not found' })
 
@@ -476,15 +516,16 @@ app.put('/api/courses/:id', requireFacultyOrAdmin(), (req, res) => {
   }
 
   courses[index] = updatedCourse
-  writeCourses(courses)
+  writeCoursesToFile(courses)
+  await saveCourseToDb(updatedCourse)
   res.json({ success: true })
 })
 
-app.delete('/api/courses/:id', requireFacultyOrAdmin(), (req, res) => {
+app.delete('/api/courses/:id', requireFacultyOrAdmin(), async (req, res) => {
   const userEmail = req.authUser.email
   const userRole = req.authUser.role
 
-  const courses = readCourses()
+  const courses = await getCoursesList()
   const course = courses.find(c => c.id === req.params.id)
   if (!course) return res.status(404).json({ error: 'Course not found' })
 
@@ -498,7 +539,8 @@ app.delete('/api/courses/:id', requireFacultyOrAdmin(), (req, res) => {
   }
 
   const filteredCourses = courses.filter(c => c.id !== req.params.id)
-  writeCourses(filteredCourses)
+  writeCoursesToFile(filteredCourses)
+  await deleteCourseFromDb(req.params.id)
   res.json({ success: true })
 })
 

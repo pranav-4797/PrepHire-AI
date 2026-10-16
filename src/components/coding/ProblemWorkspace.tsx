@@ -89,6 +89,8 @@ export function ProblemWorkspace({
   const [review, setReview] = useState<CodeReview | null>(null)
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewError, setReviewError] = useState('')
+  const [useCustomInput, setUseCustomInput] = useState(false)
+  const [customInput, setCustomInput] = useState('')
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -153,7 +155,7 @@ export function ProblemWorkspace({
     setReview(null)
     setReviewError('')
     try {
-      const result = await runCode(problemId, code, language)
+      const result = await runCode(problemId, code, language, useCustomInput ? customInput : undefined)
       setRunResult(result)
     } catch (err) {
       setRunResult({
@@ -398,8 +400,48 @@ export function ProblemWorkspace({
           </div>
 
           <CodeEditor language={language} value={code} onChange={handleCodeChange} height={420} />
-          <div style={{ fontSize: 10, color: T.txtMut, textAlign: 'right' }}>
-            {languageLabel} · autosaving…
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: T.primary, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={useCustomInput}
+                  onChange={(e) => setUseCustomInput(e.target.checked)}
+                  style={{ cursor: 'pointer', accentColor: T.primary }}
+                />
+                Test with Custom Input (stdin)
+              </label>
+              <div style={{ fontSize: 10, color: T.txtMut }}>
+                {languageLabel} · autosaving…
+              </div>
+            </div>
+
+            {useCustomInput && (
+              <div style={{ background: T.bgWhite, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.txtSec, marginBottom: 4 }}>
+                  Custom Standard Input:
+                </div>
+                <textarea
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  placeholder="Enter test input data here..."
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: `1px solid ${T.outlineVar}`,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    background: T.bgLow,
+                    color: T.txtPri,
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Results panel */}

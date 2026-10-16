@@ -52,6 +52,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { db } from '../firebase.js'
 
 export function createCodingStore(serverDir) {
   const dataDir = path.resolve(serverDir, 'uploads')
@@ -70,13 +71,88 @@ export function createCodingStore(serverDir) {
   }
 
   function writeJson(file, data) {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2))
+    try {
+      fs.writeFileSync(file, JSON.stringify(data, null, 2))
+    } catch (e) {
+      console.warn('⚠️ Failed to write local JSON backup:', e.message)
+    }
+  }
+
+  let memoryProblems = readJson(problemsFile)
+  let memorySubmissions = readJson(submissionsFile)
+
+  // Initialize Firestore synchronization if db is connected
+  if (db) {
+    ;(async () => {
+      try {
+        const probSnap = await db.collection('codingProblems').get()
+        if (!probSnap.empty) {
+          memoryProblems = probSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+          writeJson(problemsFile, memoryProblems)
+          console.log(`✅ Loaded ${memoryProblems.length} coding problems from Firestore`)
+        } else if (memoryProblems.length > 0) {
+          // Seed Firestore with initial JSON problems
+          console.log(`ℹ️ Seeding ${memoryProblems.length} initial coding problems into Firestore...`)
+          const batch = db.batch()
+          for (const p of memoryProblems) {
+            const ref = db.collection('codingProblems').doc(p.id)
+            batch.set(ref, p)
+          }
+          await batch.commit()
+          console.log('✅ Successfully seeded coding problems to Firestore')
+        }
+
+        const subSnap = await db.collection('codingSubmissions').limit(500).get()
+        if (!subSnap.empty) {
+          memorySubmissions = subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+          writeJson(submissionsFile, memorySubmissions)
+          console.log(`✅ Loaded ${memorySubmissions.length} coding submissions from Firestore`)
+        }
+      } catch (err) {
+        console.warn('⚠️ Firestore coding store sync notice:', err.message)
+      }
+    })()
+  }
+
+  async function syncProblemToFirestore(problem) {
+    if (!db || !problem?.id) return
+    try {
+      await db.collection('codingProblems').doc(problem.id).set(problem, { merge: true })
+    } catch (e) {
+      console.warn('⚠️ Failed to sync problem to Firestore:', e.message)
+    }
+  }
+
+  async function syncSubmissionToFirestore(submission) {
+    if (!db || !submission?.id) return
+    try {
+      await db.collection('codingSubmissions').doc(submission.id).set(submission, { merge: true })
+    } catch (e) {
+      console.warn('⚠️ Failed to sync submission to Firestore:', e.message)
+    }
   }
 
   return {
-    listProblems: () => readJson(problemsFile),
-    saveProblems: (problems) => writeJson(problemsFile, problems),
-    listSubmissions: () => readJson(submissionsFile),
-    saveSubmissions: (submissions) => writeJson(submissionsFile, submissions),
+    listProblems: () => memoryProblems,
+    saveProblems: (problems) => {
+      memoryProblems = problems
+      writeJson(problemsFile, problems)
+      if (db) {
+        // Sync any new or modified problems in background
+        for (const p of problems) {
+          syncProblemToFirestore(p)
+        }
+      }
+    },
+    listSubmissions: () => memorySubmissions,
+    saveSubmissions: (submissions) => {
+      memorySubmissions = submissions
+      writeJson(submissionsFile, submissions)
+      if (db && submissions.length > 0) {
+        const latest = submissions[submissions.length - 1]
+        syncSubmissionToFirestore(latest)
+      }
+    },
   }
 }
+

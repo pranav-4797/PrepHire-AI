@@ -287,14 +287,7 @@ export interface Course {
 
 const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
 
-export async function getCourse(id: string): Promise<Course | null> {
-  const res = await fetch(`${API_URL}/api/courses/${id}`)
-  if (res.status === 404) return null
-  if (!res.ok) throw new Error('Failed to fetch course')
-  return res.json()
-}
-
-// Every write sends the current Firebase user's ID token as
+// Every course request sends the current Firebase user's ID token as
 // `Authorization: Bearer <token>` — the server verifies it and resolves the
 // caller's role from Firestore itself, the same pattern used by the coding
 // platform. We never ask the server to trust a client-supplied role/email.
@@ -306,8 +299,17 @@ async function courseAuthHeaders(json = false): Promise<Record<string, string>> 
   return headers
 }
 
+export async function getCourse(id: string): Promise<Course | null> {
+  const headers = await courseAuthHeaders(false)
+  const res = await fetch(`${API_URL}/api/courses/${id}`, { headers })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error('Failed to fetch course')
+  return res.json()
+}
+
 export async function listCourses(): Promise<Course[]> {
-  const res = await fetch(`${API_URL}/api/courses`)
+  const headers = await courseAuthHeaders(false)
+  const res = await fetch(`${API_URL}/api/courses`, { headers })
   if (!res.ok) throw new Error('Failed to list courses')
   return res.json()
 }

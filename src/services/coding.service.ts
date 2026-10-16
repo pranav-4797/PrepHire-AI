@@ -200,11 +200,12 @@ export async function runCode(
   problemId: string,
   code: string,
   language: string,
+  customInput?: string,
 ): Promise<RunResult> {
   const res = await fetch(`${API_URL}/api/coding/problems/${problemId}/run`, {
     method: 'POST',
     headers: await authHeaders(true),
-    body: JSON.stringify({ code, language }),
+    body: JSON.stringify({ code, language, customInput }),
   })
   return handle(res, 'Failed to run code')
 }
