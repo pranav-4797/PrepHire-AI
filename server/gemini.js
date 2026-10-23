@@ -15,8 +15,12 @@ export function isRateLimited(key) {
   return calls.length > AI_RATE_LIMIT
 }
 
-export async function callGemini(prompt, sys) {
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+export async function callGemini(prompt, sys, clientApiKey = null) {
+  const GEMINI_API_KEY =
+    clientApiKey ||
+    process.env.GEMINI_API_KEY ||
+    process.env.VITE_GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY
   if (!GEMINI_API_KEY) {
     const err = new Error('AI generation is not configured on the server.')
     err.status = 500
@@ -45,8 +49,12 @@ export async function callGemini(prompt, sys) {
   return text
 }
 
-export async function streamGemini(prompt, sys, onChunk) {
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+export async function streamGemini(prompt, sys, onChunk, clientApiKey = null) {
+  const GEMINI_API_KEY =
+    clientApiKey ||
+    process.env.GEMINI_API_KEY ||
+    process.env.VITE_GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY
   if (!GEMINI_API_KEY) {
     const err = new Error('AI generation is not configured on the server.')
     err.status = 500

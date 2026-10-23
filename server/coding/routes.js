@@ -146,12 +146,14 @@ export function registerCodingRoutes(app, { serverDir }) {
     }
 
     try {
+      const clientApiKey = req.headers['x-gemini-key'] || req.body.clientApiKey || null
       const generated = await generateCodingProblemWithAI({
         topic: topic.trim(),
         difficulty: difficulty || 'Medium',
         languages: Array.isArray(languages) && languages.length ? languages : ['python', 'javascript', 'cpp', 'java'],
         facultyNotes: facultyNotes || '',
         model: model || undefined,
+        clientApiKey,
       })
 
       let preflight = { tested: false, allPassed: true, passedCount: 0, totalCount: 0, details: [] }

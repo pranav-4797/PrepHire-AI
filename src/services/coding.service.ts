@@ -221,9 +221,14 @@ export async function generateProblemWithAI(params: {
   model?: string
   validateWithSandbox?: boolean
 }): Promise<GenerateProblemResponse> {
+  const headers = await authHeaders(true)
+  const clientKey = import.meta.env.VITE_GEMINI_API_KEY
+  if (clientKey) {
+    headers['x-gemini-key'] = clientKey
+  }
   const res = await fetch(`${API_URL}/api/coding/generate-problem`, {
     method: 'POST',
-    headers: await authHeaders(true),
+    headers,
     body: JSON.stringify(params),
   })
   return handle(res, 'Failed to generate problem with AI')
