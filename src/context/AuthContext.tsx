@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextUser)
       if (!nextUser?.email) {
         setProfile(null)
+        try { localStorage.removeItem('prephire_user_role') } catch { /* ignore */ }
         setLoading(false)
         return
       }
@@ -29,6 +30,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const nextProfile = await ensureUserProfile(nextUser.uid, nextUser.email, nextUser.displayName)
       setProfile(nextProfile)
+      if (nextProfile?.role) {
+        try { localStorage.setItem('prephire_user_role', nextProfile.role) } catch { /* ignore */ }
+      }
       setLoading(false)
     })
   }, [])
@@ -111,7 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false)
         }
       },
-      logout: logoutUser,
+      logout: async () => {
+        try { localStorage.removeItem('prephire_user_role') } catch { /* ignore */ }
+        await logoutUser()
+      },
     }),
     [loading, profile, user],
   )

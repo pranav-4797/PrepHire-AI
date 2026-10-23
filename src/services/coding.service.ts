@@ -120,8 +120,35 @@ const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
 async function authHeaders(json = false): Promise<Record<string, string>> {
   const headers: Record<string, string> = {}
   if (json) headers['Content-Type'] = 'application/json'
-  const token = await auth.currentUser?.getIdToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let user = auth.currentUser
+  if (!user) {
+    user = await new Promise<typeof auth.currentUser>((resolve) => {
+      const unsub = auth.onAuthStateChanged((u) => {
+        unsub()
+        resolve(u)
+      })
+      setTimeout(() => resolve(auth.currentUser), 1500)
+    })
+  }
+
+  if (user) {
+    try {
+      const token = await user.getIdToken()
+      if (token) headers['Authorization'] = `Bearer ${token}`
+    } catch (e) {
+      console.warn('Failed to get Firebase ID token:', e)
+    }
+    if (user.email) headers['x-user-email'] = user.email
+  }
+
+  try {
+    const savedRole = localStorage.getItem('prephire_user_role')
+    if (savedRole) headers['x-user-role'] = savedRole
+  } catch {
+    /* ignore */
+  }
+
   return headers
 }
 
