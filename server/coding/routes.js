@@ -173,15 +173,15 @@ export function registerCodingRoutes(app, { serverDir }) {
               timeLimitMs: generated.timeLimitMs || 2000,
               memoryLimitMb: generated.memoryLimitMb || 256,
             })
-            const passed = (outcome.results || []).filter((r) => r.passed).length
-            const total = allTests.length
+            const passed = outcome.passedCount ?? (outcome.testResults || []).filter((r) => r.passed).length
+            const total = outcome.totalCount || allTests.length
             preflight = {
               tested: true,
               allPassed: outcome.verdict === 'Accepted' || passed === total,
               passedCount: passed,
               totalCount: total,
               verdict: outcome.verdict || (passed === total ? 'Accepted' : 'Wrong Answer'),
-              details: outcome.results || [],
+              details: outcome.testResults || [],
             }
           } catch (execErr) {
             console.warn('Sandbox pre-validation error (non-fatal):', execErr.message)

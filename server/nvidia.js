@@ -74,8 +74,15 @@ export async function callNvidia(prompt, sys, { model = DEFAULT_NVIDIA_MODEL, te
  */
 function cleanAndParseJson(raw) {
   let text = (raw || '').trim()
-  if (text.startsWith('```')) {
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenceMatch && fenceMatch[1]) {
+    text = fenceMatch[1].trim()
+  } else {
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start !== -1 && end !== -1 && end > start) {
+      text = text.substring(start, end + 1).trim()
+    }
   }
   return JSON.parse(text)
 }
@@ -164,7 +171,14 @@ Ensure:
     languages: Array.isArray(problem.languages) && problem.languages.length ? problem.languages : languages,
     starterCode: problem.starterCode || {},
     referenceSolution: problem.referenceSolution || null,
-    sampleTests: Array.isArray(problem.sampleTests) ? problem.sampleTests : [],
-    hiddenTests: Array.isArray(problem.hiddenTests) ? problem.hiddenTests : [],
+    sampleTests: (Array.isArray(problem.sampleTests) ? problem.sampleTests : []).map((t) => ({
+      input: typeof t.input === 'string' ? t.input : JSON.stringify(t.input ?? ''),
+      output: typeof t.output === 'string' ? t.output : JSON.stringify(t.output ?? ''),
+      explanation: t.explanation ? String(t.explanation) : undefined,
+    })),
+    hiddenTests: (Array.isArray(problem.hiddenTests) ? problem.hiddenTests : []).map((t) => ({
+      input: typeof t.input === 'string' ? t.input : JSON.stringify(t.input ?? ''),
+      output: typeof t.output === 'string' ? t.output : JSON.stringify(t.output ?? ''),
+    })),
   }
 }
