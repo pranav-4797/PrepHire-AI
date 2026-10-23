@@ -266,7 +266,7 @@ export function ProblemWorkspace({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.15fr)', gap: 16, alignItems: 'start' }}>
+      <div className="workspace-grid">
         {/* Left: description / submissions */}
         <div style={{ background: T.bgWhite, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ display: 'flex', borderBottom: `1px solid ${T.border}` }}>

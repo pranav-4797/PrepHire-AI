@@ -7,7 +7,7 @@ import {
   TrendingUp, Lightbulb, ArrowLeft, ArrowRight,
   Link, BookOpen, FileText, Trash2, UploadCloud,
   Eye, EyeOff, Download, FileSpreadsheet, Activity, Sliders, Sparkles,
-  Cpu, ExternalLink, Key, Calendar
+  Cpu, ExternalLink, Key, Calendar, CheckCircle2, AlertCircle
 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import { auth } from './firebase/firebase'
@@ -1064,17 +1064,7 @@ function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
       </header>
 
       {/* Hero Section */}
-      <section
-        style={{
-          padding: '80px 48px 60px 48px',
-         
-          margin: '0 auto',
-          display: 'grid',
-          gridTemplateColumns: '1.2fr 1fr',
-          gap: 40,
-          alignItems: 'center',
-        }}
-      >
+      <section className="landing-hero-grid">
         {/* Left Side: Copy */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: T.primaryFix, padding: '6px 14px', borderRadius: 30, width: 'fit-content' }}>
@@ -1149,7 +1139,7 @@ function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
 
       {/* Stats Section */}
       <section id="stats" style={{ background: T.primary, color: '#fff', padding: '50px 24px' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24, textAlign: 'center' }}>
+        <div className="landing-stats-grid">
           {[
             { value: '94%', label: 'Placement Success Rate' },
             { value: '1,200+', label: 'Mock Sessions Run' },
@@ -1171,7 +1161,7 @@ function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
           <p style={{ fontSize: 13, color: T.txtSec }}>Engineered to replicate actual corporate assessment environment standards.</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div className="landing-features-grid">
           <GlassCard style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             <div style={{ padding: 10, background: '#2563EB1A', color: '#2563EB', borderRadius: 10 }}><Settings size={22} /></div>
             <div>
@@ -1214,7 +1204,7 @@ function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
             <p style={{ fontSize: 13, color: T.txtSec }}>Four simple steps to absolute campus placement readiness.</p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
+          <div className="landing-steps-grid">
             {[
               { step: '01', title: 'Portal Registration', desc: 'Sign in to access your customized student dashboard and profile.' },
               { step: '02', title: 'Self-Introduction', desc: 'Submit a personal intro for the AI to align its interview context.' },
@@ -1271,29 +1261,33 @@ function ToastNotification({ toast }: { toast: { message: string; type: 'success
   const bg = toast.type === 'success' ? '#ECFDF5' : toast.type === 'error' ? '#FEF2F2' : '#F3F4F6'
   const border = toast.type === 'success' ? '#10B981' : toast.type === 'error' ? '#EF4444' : '#9CA3AF'
   const color = toast.type === 'success' ? '#065F46' : toast.type === 'error' ? '#991B1B' : '#374151'
-  const icon = toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : 'ℹ️'
+  const Icon = toast.type === 'success' ? CheckCircle2 : toast.type === 'error' ? AlertCircle : Info
 
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 24,
-      right: 24,
-      background: bg,
-      border: `1.5px solid ${border}`,
-      color: color,
-      padding: '12px 20px',
-      borderRadius: 12,
-      boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
-      zIndex: 9999,
-      fontSize: 14,
-      fontWeight: 600,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      animation: 'slideIn 0.3s ease',
-      fontFamily: 'inherit',
-    }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: 'fixed',
+        bottom: 24,
+        right: 24,
+        background: bg,
+        border: `1.5px solid ${border}`,
+        color: color,
+        padding: '12px 20px',
+        borderRadius: 12,
+        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
+        zIndex: 9999,
+        fontSize: 14,
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        animation: 'slideIn 0.3s ease',
+        fontFamily: 'inherit',
+      }}
+    >
+      <Icon size={18} style={{ color, flexShrink: 0 }} />
       <span>{toast.message}</span>
     </div>
   )
@@ -1464,30 +1458,46 @@ function LoginScreen() {
             style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
           >
             {mode === 'register' && (
-              <input
-                style={inp}
-                placeholder="Full name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                autoComplete="name"
-              />
+              <div>
+                <label htmlFor="auth-name" className="sr-only">Full name</label>
+                <input
+                  id="auth-name"
+                  style={inp}
+                  placeholder="Full name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  autoComplete="name"
+                  aria-invalid={!!err}
+                  aria-describedby={err ? "auth-error-msg" : undefined}
+                />
+              </div>
             )}
-            <input
-              style={inp}
-              placeholder="Email address"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              autoComplete="email"
-            />
-            <div style={{ position: 'relative', width: '100%' }}>
+            <div>
+              <label htmlFor="auth-email" className="sr-only">Email address</label>
               <input
+                id="auth-email"
+                style={inp}
+                placeholder="Email address"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                autoComplete="email"
+                aria-invalid={!!err}
+                aria-describedby={err ? "auth-error-msg" : undefined}
+              />
+            </div>
+            <div style={{ position: 'relative', width: '100%' }}>
+              <label htmlFor="auth-password" className="sr-only">Password</label>
+              <input
+                id="auth-password"
                 style={{ ...inp, paddingRight: 44 }}
                 placeholder="Password (min 6 characters)"
                 type={showPassword ? 'text' : 'password'}
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                aria-invalid={!!err}
+                aria-describedby={err ? "auth-error-msg" : undefined}
               />
               <button
                 type="button"
@@ -1513,39 +1523,54 @@ function LoginScreen() {
               </button>
             </div>
             {mode === 'register' && (
-              <select
-                style={inp}
-                value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as UserRole }))}
-              >
-                {['Student', 'Faculty', 'Admin'].map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
+              <div>
+                <label htmlFor="auth-role" className="sr-only">Role</label>
+                <select
+                  id="auth-role"
+                  style={inp}
+                  value={form.role}
+                  onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as UserRole }))}
+                >
+                  {['Student', 'Faculty', 'Admin'].map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
             )}
             {mode === 'register' && form.role !== 'Admin' && (
-              <select
-                style={inp}
-                value={form.branch}
-                onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
-              >
-                <option value="">Select Branch / Department</option>
-                {BRANCHES.map((b) => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
+              <div>
+                <label htmlFor="auth-branch" className="sr-only">Branch or Department</label>
+                <select
+                  id="auth-branch"
+                  style={inp}
+                  value={form.branch}
+                  onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
+                >
+                  <option value="">Select Branch / Department</option>
+                  {BRANCHES.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
             )}
             {mode === 'register' && (form.role === 'Admin' || form.role === 'Faculty') && (
-              <input
-                style={inp}
-                placeholder="Enter Access Code"
-                type="password"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
-              />
+              <div>
+                <label htmlFor="auth-code" className="sr-only">Access Code</label>
+                <input
+                  id="auth-code"
+                  style={inp}
+                  placeholder="Enter Access Code"
+                  type="password"
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value)}
+                />
+              </div>
             )}
             {err && (
               <div
+                id="auth-error-msg"
+                role="alert"
+                aria-live="polite"
                 style={{
                   background: T.errCont,
                   border: `1px solid ${T.error}55`,
@@ -2139,19 +2164,10 @@ const addResource = (chapterIndex: number) => {
     <div style={{ minHeight: '100vh', background: T.bg }}>
       <Navbar user={user} onLogout={onLogout} onHome={() => {}} inInterview={false} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 60px)' }}>
+      <div className="portal-layout">
 
         {/* Sidebar */}
-        <aside
-          style={{
-            background: T.bgWhite,
-            borderRight: `1px solid ${T.border}`,
-            padding: 20,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
+        <aside className="portal-sidebar">
           <div style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.08em' }}>
             Faculty Portal
           </div>
@@ -2197,7 +2213,7 @@ const addResource = (chapterIndex: number) => {
         </aside>
 
         {/* Main Content Area */}
-        <main style={{ padding: 24, overflowY: 'auto' }}>
+        <main className="portal-main" style={{ padding: 24 }}>
           {activeTab === 'overview' && (
             <>
               {/* Welcome */}
@@ -2211,7 +2227,7 @@ const addResource = (chapterIndex: number) => {
               </section>
 
               {/* Stats Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+              <div className="coding-stats-grid" style={{ marginBottom: 24 }}>
                 <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Active Students</span>
                   <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{totalStudentsCount}</span>
@@ -3319,19 +3335,10 @@ function AdminDashboard({
     <div style={{ minHeight: '100vh', background: T.bg }}>
       <Navbar user={user} onLogout={onLogout} onHome={() => {}} inInterview={false} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 60px)' }}>
+      <div className="portal-layout">
         
         {/* Sidebar */}
-        <aside
-          style={{
-            background: T.bgWhite,
-            borderRight: `1px solid ${T.border}`,
-            padding: 20,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
+        <aside className="portal-sidebar">
           <div style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.08em' }}>
             Placement Console
           </div>
@@ -3369,7 +3376,7 @@ function AdminDashboard({
         </aside>
 
         {/* Main Content Area */}
-        <main style={{ padding: 24, overflowY: 'auto' }}>
+        <main className="portal-main" style={{ padding: 24 }}>
           {activeTab === 'overview' && (
             <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: 20 }}>
               <section>
@@ -3382,7 +3389,7 @@ function AdminDashboard({
               </section>
 
               {/* KPI Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <div className="coding-stats-grid">
                 <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Registered Students</span>
                   <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{totalStudents}</span>
@@ -4508,6 +4515,18 @@ export default function App() {
   const [introTimeLimit, _setIntroTimeLimit] = useState(120)
   const [introTimerActive, setIntroTimerActive] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
+
+  // ── Global Escape key listener for modal dialogs ─────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        if (showFeedbackModal) setShowFeedbackModal(false)
+        if (showEndConfirm) setShowEndConfirm(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showFeedbackModal, showEndConfirm])
   const [resumeProfile, setResumeProfile] = useState<ResumeProfile | null>(null)
   const [resumeNotes, setResumeNotes] = useState('')
   const [resumeFileName, setResumeFileName] = useState('')
@@ -5209,18 +5228,9 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
       <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', flexDirection: 'column' }}>
         <Navbar user={user} onLogout={handleLogout} onHome={() => { setStudentTab('interview'); setScreen('home') }} inInterview={false} onFeedback={() => setShowFeedbackModal(true)} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 60px)', flex: 1 }}>
+        <div className="portal-layout">
           {/* Sidebar */}
-          <aside
-            style={{
-              background: T.bgWhite,
-              borderRight: `1px solid ${T.border}`,
-              padding: 20,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
+          <aside className="portal-sidebar">
             <div style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.08em' }}>
               Student Portal
             </div>
@@ -5276,7 +5286,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           </aside>
 
           {/* Main Content */}
-          <main style={{ overflowY: 'auto', position: 'relative', height: 'calc(100vh - 60px)' }}>
+          <main className="portal-main">
             {studentTab === 'interview' ? (
               <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 88px 24px', animation: 'fadeIn 0.4s ease' }}>
                 {/* Welcome */}
@@ -6157,6 +6167,9 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         </div>
         {showFeedbackModal && (
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-modal-title"
             style={{
               position: 'fixed',
               inset: 0,
@@ -6185,7 +6198,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <MessageSquare size={18} style={{ color: T.primary }} />
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: T.primary, margin: 0 }}>Send Feedback</h3>
+                <h3 id="feedback-modal-title" style={{ fontSize: 16, fontWeight: 700, color: T.primary, margin: 0 }}>Send Feedback</h3>
               </div>
               <p style={{ fontSize: 12, color: T.txtSec, margin: 0, lineHeight: 1.5 }}>
                 Help us improve the pilot — report bugs, confusion, or suggestions. Your feedback is visible only to Admins.
@@ -6641,6 +6654,9 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
 
       {showEndConfirm && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="end-interview-title"
           style={{
             position: 'fixed',
             inset: 0,
@@ -6670,7 +6686,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           >
             <AlertTriangle size={36} style={{ color: T.amber, margin: '0 auto' }} />
             <div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: T.primary, marginBottom: 6 }}>
+              <div id="end-interview-title" style={{ fontSize: 17, fontWeight: 700, color: T.primary, marginBottom: 6 }}>
                 End Interview?
               </div>
               <p style={{ fontSize: 13, color: T.txtSec, lineHeight: 1.5, margin: 0 }}>

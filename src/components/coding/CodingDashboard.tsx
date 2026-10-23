@@ -47,7 +47,7 @@ export function CodingDashboard({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div className="coding-stats-grid">
         <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trophy size={13} /> Solved

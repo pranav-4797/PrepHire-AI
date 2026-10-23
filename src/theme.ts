@@ -31,10 +31,15 @@ export const T = {
 
   error:      '#ba1a1a',
   errCont:    '#ffdad6',
+  errorBg:    '#fef2f2',
+  errorBorder:'#f87171',
   green:      '#166534',
   greenBg:    '#dcfce7',
   amber:      '#92400e',
   amberBg:    '#fef3c7',
   teal:       '#0f766e',
   purple:     '#7c3aed',
+  info:       '#2563eb',
+  infoBg:     '#eff6ff',
+  infoBorder: '#bfdbfe',
 }

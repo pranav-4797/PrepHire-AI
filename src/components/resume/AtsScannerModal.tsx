@@ -1,5 +1,4 @@
-// ── PrepHire-AI ATS Resume Scanner & JD Matcher Modal ────────────────────────
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { FileCheck, Sparkles, AlertCircle, CheckCircle, X, ArrowRight, Target } from 'lucide-react'
 import { analyzeResumeAgainstJD, type AtsAnalysisResult } from '../../utils/atsAnalyzer'
 import { T } from '../../theme'
@@ -21,6 +20,17 @@ export const AtsScannerModal: React.FC<AtsScannerModalProps> = ({
   const [analysis, setAnalysis] = useState<AtsAnalysisResult | null>(null)
   const [isScanning, setIsScanning] = useState(false)
 
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const handleScan = () => {
@@ -41,6 +51,10 @@ export const AtsScannerModal: React.FC<AtsScannerModalProps> = ({
 
   return (
     <div
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ats-modal-title"
       style={{
         position: 'fixed',
         inset: 0,
@@ -55,6 +69,7 @@ export const AtsScannerModal: React.FC<AtsScannerModalProps> = ({
       }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: 680,
@@ -95,7 +110,7 @@ export const AtsScannerModal: React.FC<AtsScannerModalProps> = ({
               <Target size={20} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.primary }}>
+              <h3 id="ats-modal-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.primary }}>
                 AI Resume ATS &amp; Job Description Matcher
               </h3>
               <p style={{ margin: 0, fontSize: 12, color: T.txtSec }}>

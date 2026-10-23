@@ -289,3 +289,153 @@ textarea.interview-textarea:focus-visible {
   padding: 16px 24px;
 }
 
+/* ── Screen Reader Only (Accessibility) ───────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ── Responsive Portal Layout ────────────────────────────── */
+.portal-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: calc(100vh - 60px);
+  flex: 1;
+}
+
+.portal-sidebar {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-outline-variant);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portal-main {
+  overflow-y: auto;
+  position: relative;
+  height: calc(100vh - 60px);
+}
+
+@media (max-width: 860px) {
+  .portal-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .portal-sidebar {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--color-outline-variant) !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    padding: 10px 16px !important;
+    white-space: nowrap !important;
+    gap: 8px !important;
+    align-items: center;
+    box-sizing: border-box;
+  }
+  .portal-main {
+    height: auto !important;
+    min-height: calc(100vh - 120px) !important;
+  }
+}
+
+/* ── Responsive Coding Workspace & Stats ─────────────────── */
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.coding-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .coding-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 440px) {
+  .coding-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Responsive Landing Grids ────────────────────────────── */
+.landing-hero-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 40px;
+  align-items: center;
+  padding: 80px 48px 60px 48px;
+  margin: 0 auto;
+}
+@media (max-width: 860px) {
+  .landing-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 40px 20px 32px 20px;
+  }
+}
+
+.landing-stats-grid {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  text-align: center;
+}
+@media (max-width: 680px) {
+  .landing-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+.landing-features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 680px) {
+  .landing-features-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
+.landing-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+@media (max-width: 768px) {
+  .landing-steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+@media (max-width: 460px) {
+  .landing-steps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
