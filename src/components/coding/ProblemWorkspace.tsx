@@ -296,7 +296,17 @@ export function ProblemWorkspace({
             {tab === 'description' ? (
               <>
                 <h2 style={{ fontSize: 17, fontWeight: 700, color: T.primary, margin: '0 0 6px' }}>{problem.title}</h2>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+                  {problem.targetBranch && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: T.goldFixed, color: T.onGold, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      🎯 Assigned to: {problem.targetBranch}
+                    </span>
+                  )}
+                  {problem.dueDate && (
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 8, background: T.bgLow, color: T.txtSec }}>
+                      ⏰ Due: {new Date(problem.dueDate).toLocaleDateString()}
+                    </span>
+                  )}
                   {problem.topics.map((t) => (
                     <span key={t} style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 8, background: T.bgLow, color: T.txtSec }}>{t}</span>
                   ))}

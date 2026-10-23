@@ -169,6 +169,7 @@ export function AdminProblemsManager({
                 <tr style={{ borderBottom: `1px solid ${T.border}`, color: T.txtMut, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>
                   <th style={{ padding: '10px 8px' }}>Title</th>
                   <th style={{ padding: '10px 8px' }}>Difficulty</th>
+                  <th style={{ padding: '10px 8px' }}>Assignment Target</th>
                   <th style={{ padding: '10px 8px' }}>Topics</th>
                   <th style={{ padding: '10px 8px' }}>Status</th>
                   <th style={{ padding: '10px 8px', textAlign: 'right' }}>Actions</th>
@@ -179,6 +180,22 @@ export function AdminProblemsManager({
                   <tr key={p.id} style={{ borderBottom: `1px solid ${T.border}`, fontSize: 13 }}>
                     <td style={{ padding: '10px 8px', fontWeight: 600 }}>{p.title}</td>
                     <td style={{ padding: '10px 8px' }}><DifficultyBadge difficulty={p.difficulty} /></td>
+                    <td style={{ padding: '10px 8px' }}>
+                      {p.targetBranch ? (
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: T.primary, background: T.bgLow, padding: '2px 8px', borderRadius: 6 }}>
+                            🎯 {p.targetBranch}
+                          </span>
+                          {p.dueDate && (
+                            <span style={{ fontSize: 10, color: T.txtMut }}>
+                              Due: {new Date(p.dueDate).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 11, color: T.txtMut }}>All Branches (Open)</span>
+                      )}
+                    </td>
                     <td style={{ padding: '10px 8px' }}>
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         {p.topics.slice(0, 2).map((t) => (

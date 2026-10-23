@@ -2927,7 +2927,7 @@ const addResource = (chapterIndex: number) => {
               {facultyCodingMode === 'studio' ? (
                 <AdminProblemsManager userEmail={user.email} showToast={showToast} isFaculty={true} />
               ) : (
-                <CodingHub userEmail={user.email} userName={user.name} showToast={showToast} />
+                <CodingHub userEmail={user.email} userName={user.name} userDepartment={user.department} showToast={showToast} />
               )}
             </div>
           )}
@@ -6175,7 +6175,12 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
               </div>
             ) : studentTab === 'coding' ? (
               <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
-                <CodingHub userEmail={user?.email || ''} userName={user?.name || ''} showToast={showToast} />
+                <CodingHub
+                  userEmail={user?.email || ''}
+                  userName={user?.name || ''}
+                  userDepartment={user?.department || profile?.department}
+                  showToast={showToast}
+                />
               </div>
             ) : (
               <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>

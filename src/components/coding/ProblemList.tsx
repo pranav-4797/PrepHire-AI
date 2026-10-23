@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Search, Code2, CheckCircle2 } from 'lucide-react'
 import { T } from '../../theme'
 import { DifficultyBadge } from './Badges'
@@ -10,9 +10,11 @@ const DIFFICULTIES = ['All', 'Easy', 'Medium', 'Hard']
 export function ProblemList({
   onSelectProblem,
   solvedProblemIds,
+  studentBranch,
 }: {
   onSelectProblem: (id: string) => void
   solvedProblemIds?: Set<string>
+  studentBranch?: string
 }) {
   const [problems, setProblems] = useState<ProblemSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -20,6 +22,7 @@ export function ProblemList({
   const [search, setSearch] = useState('')
   const [difficulty, setDifficulty] = useState('All')
   const [topic, setTopic] = useState('All')
+  const [assignmentFilter, setAssignmentFilter] = useState<'All' | 'Assigned' | 'Practice'>('All')
 
   useEffect(() => {
     let cancelled = false
@@ -41,14 +44,26 @@ export function ProblemList({
     return ['All', ...Array.from(s).sort()]
   }, [problems])
 
+  const isProblemAssignedToStudent = useCallback((p: ProblemSummary) => {
+    if (!p.targetBranch) return false
+    if (!studentBranch) return true
+    return p.targetBranch.toLowerCase() === studentBranch.toLowerCase()
+  }, [studentBranch])
+
+  const assignedCount = useMemo(() => {
+    return problems.filter((p) => isProblemAssignedToStudent(p)).length
+  }, [problems, isProblemAssignedToStudent])
+
   const filtered = useMemo(() => {
     return problems.filter((p) => {
       if (difficulty !== 'All' && p.difficulty !== difficulty) return false
       if (topic !== 'All' && !p.topics.includes(topic)) return false
       if (search && !p.title.toLowerCase().includes(search.toLowerCase())) return false
+      if (assignmentFilter === 'Assigned' && !isProblemAssignedToStudent(p)) return false
+      if (assignmentFilter === 'Practice' && isProblemAssignedToStudent(p)) return false
       return true
     })
-  }, [problems, difficulty, topic, search])
+  }, [problems, difficulty, topic, search, assignmentFilter, isProblemAssignedToStudent])
 
   return (
     <div>
@@ -100,6 +115,36 @@ export function ProblemList({
               {d}
             </button>
           ))}
+        </div>
+
+        {/* CodeTantra-Style Assignment Filter */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(['All', 'Assigned', 'Practice'] as const).map((mode) => {
+            const isSelected = assignmentFilter === mode
+            return (
+              <button
+                key={mode}
+                onClick={() => setAssignmentFilter(mode)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  border: `1.5px solid ${isSelected ? T.gold : T.outlineVar}`,
+                  background: isSelected ? T.goldFixed : 'transparent',
+                  color: isSelected ? T.onGold : T.txtSec,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                {mode === 'Assigned' && '🎯 '}
+                {mode === 'Assigned' ? `Faculty Assigned (${assignedCount})` : mode === 'Practice' ? 'Open Practice' : 'All Problems'}
+              </button>
+            )
+          })}
         </div>
 
         <select
@@ -182,7 +227,33 @@ export function ProblemList({
                   <Code2 size={16} style={{ color: T.outlineVar }} />
                 )}
               </span>
-              <span style={{ fontWeight: 600, color: T.txtPri }}>{p.title}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600, color: T.txtPri }}>{p.title}</span>
+                  {p.targetBranch && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        background: isProblemAssignedToStudent(p) ? T.goldFixed : T.bgLow,
+                        color: isProblemAssignedToStudent(p) ? T.onGold : T.txtSec,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}
+                    >
+                      🎯 {p.targetBranch}
+                    </span>
+                  )}
+                  {p.dueDate && (
+                    <span style={{ fontSize: 10, color: T.txtMut }}>
+                      Due: {new Date(p.dueDate).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
               <DifficultyBadge difficulty={p.difficulty} />
               <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {p.topics.slice(0, 3).map((t) => (

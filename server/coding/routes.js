@@ -118,6 +118,9 @@ export function registerCodingRoutes(app, { serverDir }) {
       topics: p.topics || [],
       status: p.status,
       languages: p.languages || [],
+      targetBranch: p.targetBranch || null,
+      dueDate: p.dueDate || null,
+      assignedBy: p.assignedBy || null,
     }))
     res.json(listView)
   })
@@ -233,6 +236,9 @@ export function registerCodingRoutes(app, { serverDir }) {
       languages: req.body.languages?.length ? req.body.languages : SUPPORTED_LANGUAGES,
       starterCode: req.body.starterCode || {},
       status: req.body.status === 'published' ? 'published' : 'draft',
+      targetBranch: req.body.targetBranch || null,
+      dueDate: req.body.dueDate || null,
+      assignedBy: req.body.assignedBy || (req.authUser?.email ? req.authUser.email : null),
       createdByEmail: req.authUser?.email || null,
       createdAt: now,
       updatedAt: now,

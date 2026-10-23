@@ -4,6 +4,7 @@ import { Plus, Trash2, Save, UploadCloud, Sparkles, CheckCircle2, AlertTriangle,
 import { T } from '../../theme'
 import { createProblem, updateProblem, listLanguages, generateProblemWithAI } from '../../services/coding.service'
 import type { Problem, TestCase, LanguageOption, Difficulty, GenerateProblemPreflight } from '../../services/coding.service'
+import { BRANCHES } from '../../constants/branches'
 
 const inputStyle: CSSProperties = {
   width: '100%',
@@ -116,6 +117,8 @@ const EMPTY_FORM: Partial<Problem> = {
   languages: [],
   starterCode: {},
   status: 'draft',
+  targetBranch: null,
+  dueDate: null,
 }
 
 export function AdminProblemEditor({
@@ -337,6 +340,29 @@ export function AdminProblemEditor({
             <select style={inputStyle} value={form.difficulty || 'Easy'} onChange={(e) => set('difficulty', e.target.value as Difficulty)}>
               {(['Easy', 'Medium', 'Hard'] as Difficulty[]).map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
+          </Field>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, background: T.bgLow, padding: 12, borderRadius: 10, border: `1px dashed ${T.outlineVar}` }}>
+          <Field label="🎯 CodeTantra-Style Assignment: Target Branch">
+            <select
+              style={inputStyle}
+              value={form.targetBranch || ''}
+              onChange={(e) => set('targetBranch', e.target.value ? e.target.value : null)}
+            >
+              <option value="">All Branches / Open Practice</option>
+              {BRANCHES.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="⏰ Submission Due Date (Optional)">
+            <input
+              type="date"
+              style={inputStyle}
+              value={form.dueDate ? form.dueDate.split('T')[0] : ''}
+              onChange={(e) => set('dueDate', e.target.value ? new Date(e.target.value).toISOString() : null)}
+            />
           </Field>
         </div>
 

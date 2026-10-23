@@ -30,6 +30,9 @@ export interface ProblemSummary {
   topics: string[]
   status: ProblemStatus
   languages: string[]
+  targetBranch?: string | null
+  dueDate?: string | null
+  assignedBy?: string | null
 }
 
 export interface Problem {
@@ -50,6 +53,9 @@ export interface Problem {
   languages: string[]
   starterCode: Record<string, string>
   status: ProblemStatus
+  targetBranch?: string | null
+  dueDate?: string | null
+  assignedBy?: string | null
   createdByEmail?: string
   createdAt?: string
   updatedAt?: string
