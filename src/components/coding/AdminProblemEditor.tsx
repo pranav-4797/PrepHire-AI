@@ -152,6 +152,17 @@ export function AdminProblemEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (!showAiModal) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !aiGenerating) {
+        setShowAiModal(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showAiModal, aiGenerating])
+
   function set<K extends keyof Problem>(key: K, value: Problem[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
@@ -469,6 +480,9 @@ export function AdminProblemEditor({
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-generator-modal-title"
             style={{
               width: '100%',
               maxWidth: 580,
@@ -508,7 +522,7 @@ export function AdminProblemEditor({
                   <Cpu size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Generate Problem</h3>
+                  <h3 id="ai-generator-modal-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Generate Problem</h3>
                   <div style={{ fontSize: 11, opacity: 0.9 }}>
                     Draft problem statement, starter code, and verified test cases.
                   </div>

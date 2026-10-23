@@ -1898,6 +1898,7 @@ function FacultyDashboard({
   })
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
   const [courseType, setCourseType] = useState<'build' | 'import'>('build')
+  const [facultyCodingMode, setFacultyCodingMode] = useState<'studio' | 'practice'>('studio')
 
   const filteredSessions = branchSessions.filter((s) => {
     const matchesSearch =
@@ -2187,7 +2188,7 @@ const addResource = (chapterIndex: number) => {
             { id: 'overview', label: 'Assessment Overview' },
             { id: 'ranking', label: 'Student Rankings' },
             { id: 'courses', label: 'Courses Management' },
-            { id: 'coding', label: 'Coding Practice' },
+            { id: 'coding', label: 'Coding Platform' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -2844,8 +2845,90 @@ const addResource = (chapterIndex: number) => {
           )}
 
           {activeTab === 'coding' && (
-            <div style={{ animation: 'fadeIn 0.3s ease' }}>
-              <CodingHub userEmail={user.email} userName={user.name} showToast={showToast} />
+            <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Dual-Mode Selector: Question Studio vs Student Practice */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  padding: '12px 16px',
+                  background: '#ffffff',
+                  border: `1px solid ${T.outlineVar}`,
+                  borderRadius: 12,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.primary }}>
+                    Faculty Coding Hub
+                  </div>
+                  <div style={{ fontSize: 12, color: T.txtSec }}>
+                    Switch between Department Question Studio (authoring & AI problem generator) and Student Practice mode.
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    background: T.bgLow,
+                    padding: 3,
+                    borderRadius: 10,
+                    border: `1px solid ${T.outlineVar}`,
+                    gap: 4,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFacultyCodingMode('studio')}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      background: facultyCodingMode === 'studio' ? '#ffffff' : 'transparent',
+                      color: facultyCodingMode === 'studio' ? T.primary : T.txtSec,
+                      boxShadow: facultyCodingMode === 'studio' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                      transition: 'all 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>✨ Question Studio & AI Generator</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFacultyCodingMode('practice')}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      background: facultyCodingMode === 'practice' ? '#ffffff' : 'transparent',
+                      color: facultyCodingMode === 'practice' ? T.primary : T.txtSec,
+                      boxShadow: facultyCodingMode === 'practice' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                      transition: 'all 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>💻 Student Practice Mode</span>
+                  </button>
+                </div>
+              </div>
+
+              {facultyCodingMode === 'studio' ? (
+                <AdminProblemsManager userEmail={user.email} showToast={showToast} isFaculty={true} />
+              ) : (
+                <CodingHub userEmail={user.email} userName={user.name} showToast={showToast} />
+              )}
             </div>
           )}
         </main>

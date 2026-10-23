@@ -18,9 +18,11 @@ function GlassCard({ children, style = {} }: { children: ReactNode; style?: CSSP
 export function AdminProblemsManager({
   userEmail: _userEmail,
   showToast,
+  isFaculty = false,
 }: {
   userEmail?: string
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  isFaculty?: boolean
 }) {
   const [problems, setProblems] = useState<ProblemSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -97,14 +99,16 @@ export function AdminProblemsManager({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <section>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: T.primary, marginBottom: 4 }}>
-          Coding Question Bank
+          {isFaculty ? 'Department Question Studio & AI Generator' : 'Coding Question Bank'}
         </h1>
         <p className="text-body" style={{ color: T.txtSec }}>
-          Create, edit, publish, and retire coding problems for the student judge.
+          {isFaculty
+            ? 'Author coding challenges, generate industry-grade problems with AI, pre-validate via Piston sandbox, and publish to students.'
+            : 'Create, edit, publish, and retire coding problems for the student judge.'}
         </p>
       </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div className="coding-stats-grid">
         <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase' }}>Total Problems</span>
           <span style={{ fontSize: 24, fontWeight: 800, color: T.primary }}>{problems.length}</span>
@@ -206,3 +210,5 @@ export function AdminProblemsManager({
     </div>
   )
 }
+
+export const ProblemsManager = AdminProblemsManager

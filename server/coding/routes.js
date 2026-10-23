@@ -14,7 +14,7 @@
 import express from 'express'
 import { createCodingStore } from './store.js'
 import { runTestCases, SUPPORTED_LANGUAGES, LANGUAGE_CONFIG } from './judge.js'
-import { requireAdmin as requireAdminAuth, requireAuth, attachUserOptional } from './authMiddleware.js'
+import { requireAdmin as requireAdminAuth, requireFacultyOrAdmin as requireFacultyOrAdminAuth, requireAuth, attachUserOptional } from './authMiddleware.js'
 import { callGemini, isRateLimited } from '../gemini.js'
 import { generateCodingProblemWithAI } from '../nvidia.js'
 
@@ -23,6 +23,7 @@ export function registerCodingRoutes(app, { serverDir }) {
   const router = express.Router()
 
   const requireAdmin = requireAdminAuth()
+  const requireFacultyOrAdmin = requireFacultyOrAdminAuth()
 
   function isPrivileged(req) {
     const role = (req.authUser?.role || '').toLowerCase()
@@ -207,7 +208,7 @@ export function registerCodingRoutes(app, { serverDir }) {
     }
   })
 
-  router.post('/problems', requireAdmin, (req, res) => {
+  router.post('/problems', requireFacultyOrAdmin, (req, res) => {
     const errors = validateProblemPayload(req.body)
     if (errors.length) return res.status(400).json({ error: errors.join('; ') })
 
@@ -239,7 +240,7 @@ export function registerCodingRoutes(app, { serverDir }) {
     res.status(201).json({ id: newProblem.id, problem: newProblem })
   })
 
-  router.put('/problems/:id', requireAdmin, (req, res) => {
+  router.put('/problems/:id', requireFacultyOrAdmin, (req, res) => {
     const problems = store.listProblems()
     const index = problems.findIndex((p) => p.id === req.params.id)
     if (index === -1) return res.status(404).json({ error: 'Problem not found' })
@@ -259,7 +260,7 @@ export function registerCodingRoutes(app, { serverDir }) {
     res.json({ success: true, problem: merged })
   })
 
-  router.delete('/problems/:id', requireAdmin, (req, res) => {
+  router.delete('/problems/:id', requireFacultyOrAdmin, (req, res) => {
     const problems = store.listProblems()
     const exists = problems.some((p) => p.id === req.params.id)
     if (!exists) return res.status(404).json({ error: 'Problem not found' })
