@@ -5371,7 +5371,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           {/* Main Content */}
           <main className="portal-main">
             {studentTab === 'interview' ? (
-              <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 88px 24px', animation: 'fadeIn 0.4s ease' }}>
+              <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 32px 24px', animation: 'fadeIn 0.4s ease' }}>
                 {/* Welcome */}
                 <section
                   style={{
@@ -5615,6 +5615,70 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                             boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                           }}
                         />
+                      </div>
+                    </GlassCard>
+
+                    {/* Start Interview Action Card */}
+                    <GlassCard style={{
+                      marginBottom: 0,
+                      background: domain ? 'linear-gradient(135deg, #0A2540 0%, #1A365D 100%)' : T.bgWhite,
+                      border: `1.5px solid ${domain ? T.primary : T.outlineVar}`,
+                      color: domain ? '#ffffff' : T.txtSec,
+                      transition: 'all 0.25s ease',
+                      boxShadow: domain ? '0 10px 28px rgba(10,37,64,0.16)' : 'none',
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: domain ? T.gold : T.txtMut }}>
+                            Session Ready
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4, color: domain ? '#ffffff' : T.txtPri, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {domain && activeDomain ? (
+                              <>
+                                <span>{activeDomain.icon}</span>
+                                <span>{activeDomain.label} Interview</span>
+                              </>
+                            ) : (
+                              'Ready to Practice?'
+                            )}
+                          </div>
+                          <div style={{ fontSize: 12, marginTop: 4, lineHeight: 1.4, color: domain ? 'rgba(255,255,255,0.8)' : T.txtSec }}>
+                            {domain && activeDomain
+                              ? `${level} · ${voiceEnabled ? 'Voice Mode' : 'Text Mode'}${selectedCompanyTrack ? ` · ${COMPANY_TRACKS.find(t => t.id === selectedCompanyTrack)?.name || selectedCompanyTrack}` : ''}`
+                              : 'Select an interview domain and company track on the left to activate your mock interview.'}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => domain && startInterview()}
+                          disabled={!domain}
+                          style={{
+                            width: '100%',
+                            padding: '13px 20px',
+                            borderRadius: 10,
+                            border: 'none',
+                            background: domain ? T.gold : '#E5E7EB',
+                            color: domain ? T.onGold : T.txtMut,
+                            fontSize: 14,
+                            fontWeight: 700,
+                            cursor: domain ? 'pointer' : 'not-allowed',
+                            transition: 'all 0.18s ease',
+                            fontFamily: 'inherit',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            boxShadow: domain ? '0 4px 14px rgba(230,168,34,0.35)' : 'none',
+                          }}
+                        >
+                          {domain && activeDomain ? (
+                            <>
+                              Start Interview — {activeDomain.label} <ArrowRight size={16} />
+                            </>
+                          ) : (
+                            'Select a domain to begin'
+                          )}
+                        </button>
                       </div>
                     </GlassCard>
                   </div>
@@ -6204,53 +6268,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
               </div>
             )}
 
-            {studentTab === 'interview' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  zIndex: 40,
-                  background: T.bg,
-                  borderTop: `1px solid ${T.border}`,
-                  padding: '16px 24px',
-                  display: 'flex',
-                  justifyContent: 'center'
-                }}
-              >
-                <div style={{ width: '100%', maxWidth: 360 }}>
-                  <button
-                    onClick={() => domain && startInterview()}
-                    style={{
-                      width: '100%',
-                      padding: '12px 24px',
-                      borderRadius: 10,
-                      border: 'none',
-                      background: domain ? T.primary : '#E5E7EB',
-                      color: domain ? '#fff' : T.txtMut,
-                      fontSize: 14,
-                      fontWeight: 700,
-                      cursor: domain ? 'pointer' : 'default',
-                      transition: 'all 0.18s',
-                      fontFamily: 'inherit',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    {domain && activeDomain ? (
-                      <>
-                        Start Interview — {activeDomain.icon} {activeDomain.label} <ArrowRight size={16} />
-                      </>
-                    ) : (
-                      'Select a domain to begin'
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
+
           </main>
         </div>
         {showFeedbackModal && (
