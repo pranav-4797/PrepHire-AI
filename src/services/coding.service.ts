@@ -13,6 +13,8 @@ export type Verdict =
   | 'Accepted'
   | 'Wrong Answer'
   | 'Time Limit Exceeded'
+  | 'Memory Limit Exceeded'
+  | 'Idleness Limit Exceeded'
   | 'Runtime Error'
   | 'Compilation Error'
 
@@ -69,6 +71,7 @@ export interface TestResult {
   actualOutput?: string
   stderr?: string
   timeMs?: number
+  memoryKb?: number
   hidden: boolean
 }
 
@@ -299,6 +302,80 @@ export async function submitCode(
   return handle(res, 'Failed to submit code')
 }
 
+// ── SSE Streaming Submit (Codeforces-style per-test progress) ──────────────
+// Opens an SSE connection to the streaming submit endpoint, calling onProgress
+// for each test case verdict as it arrives, and returning the final Submission.
+export interface JudgeProgressEvent {
+  type: 'compiling' | 'test' | 'complete' | 'submission' | 'error'
+  index?: number
+  total?: number
+  verdict?: string
+  passed?: boolean
+  timeMs?: number
+  memoryKb?: number
+  passedCount?: number
+  totalCount?: number
+  runtimeMs?: number
+  testResults?: TestResult[]
+  submission?: Submission
+  error?: string
+}
+
+export async function submitCodeStreaming(
+  problemId: string,
+  code: string,
+  language: string,
+  name: string,
+  onProgress: (event: JudgeProgressEvent) => void,
+): Promise<Submission> {
+  const headers = await authHeaders(true)
+  const res = await fetch(`${API_URL}/api/coding/problems/${problemId}/submit-stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ code, language, name }),
+  })
+
+  if (!res.ok) {
+    const msg = await res.text().catch(() => 'Failed to submit code')
+    throw new Error(msg)
+  }
+
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('Streaming not supported')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalSubmission: Submission | null = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const event: JudgeProgressEvent = JSON.parse(line.slice(6))
+          onProgress(event)
+          if (event.type === 'submission' && event.submission) {
+            finalSubmission = event.submission
+          }
+        } catch {
+          /* skip malformed SSE lines */
+        }
+      }
+    }
+  }
+
+  if (!finalSubmission) {
+    throw new Error('No final submission received from judge')
+  }
+  return finalSubmission
+}
+
 export interface CodeReview {
   correctnessNote: string
   complexity: string
@@ -378,6 +455,8 @@ export const VERDICT_COLORS: Record<Verdict, { fg: string; bg: string }> = {
   Accepted: { fg: '#166534', bg: '#dcfce7' },
   'Wrong Answer': { fg: '#ba1a1a', bg: '#ffdad6' },
   'Time Limit Exceeded': { fg: '#92400e', bg: '#fef3c7' },
+  'Memory Limit Exceeded': { fg: '#6d28d9', bg: '#ede9fe' },
+  'Idleness Limit Exceeded': { fg: '#9a3412', bg: '#ffedd5' },
   'Runtime Error': { fg: '#ba1a1a', bg: '#ffdad6' },
   'Compilation Error': { fg: '#7c3aed', bg: '#ede9fe' },
 }

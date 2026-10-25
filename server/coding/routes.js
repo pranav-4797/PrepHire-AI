@@ -13,7 +13,7 @@
 
 import express from 'express'
 import { createCodingStore } from './store.js'
-import { runTestCases, SUPPORTED_LANGUAGES, LANGUAGE_CONFIG } from './judge.js'
+import { runTestCases, runTestCasesStreaming, SUPPORTED_LANGUAGES, LANGUAGE_CONFIG } from './judge.js'
 import { requireAdmin as requireAdminAuth, requireFacultyOrAdmin as requireFacultyOrAdminAuth, requireAuth, attachUserOptional } from './authMiddleware.js'
 import { callGemini, isRateLimited } from '../gemini.js'
 import { generateCodingProblemWithAI } from '../nvidia.js'
@@ -306,6 +306,88 @@ export function registerCodingRoutes(app, { serverDir }) {
     } catch (err) {
       console.error('Run failed:', err)
       res.status(500).json({ error: 'Failed to execute code.' })
+    }
+  })
+
+  // ── SSE Streaming Submit (Codeforces-style "Running on test X" progress) ──
+  // Returns Server-Sent Events with per-test-case verdicts as they complete,
+  // enabling a real-time progress bar in the frontend.
+  router.post('/problems/:id/submit-stream', requireAuth(), async (req, res) => {
+    const { code, language, name } = req.body
+    const email = req.authUser.email
+    if (!code || !language || !email) {
+      return res.status(400).json({ error: 'code, language are required and you must be signed in' })
+    }
+
+    const problem = store.listProblems().find((p) => p.id === req.params.id)
+    if (!problem) return res.status(404).json({ error: 'Problem not found' })
+    if (!SUPPORTED_LANGUAGES.includes(language)) {
+      return res.status(400).json({ error: `Unsupported language: ${language}` })
+    }
+
+    // Set up SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+
+    const allTests = [
+      ...(problem.sampleTests || []).map((t) => ({ ...t, hidden: false })),
+      ...(problem.hiddenTests || []).map((t) => ({ ...t, hidden: true })),
+    ]
+
+    try {
+      const result = await runTestCasesStreaming({
+        code,
+        language,
+        testCases: allTests,
+        timeLimitMs: problem.timeLimitMs,
+        memoryLimitMb: problem.memoryLimitMb,
+        onProgress: (event) => {
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify(event)}\n\n`)
+          }
+        },
+      })
+
+      // Persist submission (same as synchronous endpoint)
+      const submissions = store.listSubmissions()
+      const submission = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        problemId: problem.id,
+        problemTitle: problem.title,
+        difficulty: problem.difficulty,
+        userEmail: email,
+        userName: name || email.split('@')[0],
+        language,
+        code,
+        type: 'submit',
+        verdict: result.verdict,
+        passedCount: result.passedCount,
+        totalCount: result.totalCount,
+        runtimeMs: result.runtimeMs,
+        memoryKb: result.memoryKb,
+        testResults: result.testResults.map((r) => (r.hidden ? { passed: r.passed, verdict: r.verdict, hidden: true, timeMs: r.timeMs, memoryKb: r.memoryKb } : r)),
+        submittedAt: new Date().toISOString(),
+      }
+      submissions.push(submission)
+      store.saveSubmissions(submissions)
+
+      // Send final submission record
+      res.write(`data: ${JSON.stringify({ type: 'submission', submission: { ...submission, code: undefined } })}\n\n`)
+      res.end()
+
+      if (result.verdict === 'Accepted') {
+        // Could trigger leaderboard update here in the future
+      }
+    } catch (err) {
+      console.error('Streaming submit failed:', err)
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: err.message || 'Execution failed' })}\n\n`)
+        res.end()
+      }
     }
   })
 

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { T } from '../../theme'
 import { DIFFICULTY_COLORS, VERDICT_COLORS } from '../../services/coding.service'
 import type { Difficulty, Verdict } from '../../services/coding.service'
-import { CheckCircle2, XCircle, Clock, AlertTriangle, FileWarning } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, AlertTriangle, FileWarning, HardDrive, Hourglass } from 'lucide-react'
 
 export function DifficultyBadge({ difficulty, size = 'md' }: { difficulty: Difficulty; size?: 'sm' | 'md' }) {
   const c = DIFFICULTY_COLORS[difficulty]
@@ -29,12 +29,16 @@ const VERDICT_ICON: Record<Verdict, ReactNode> = {
   Accepted: <CheckCircle2 size={13} />,
   'Wrong Answer': <XCircle size={13} />,
   'Time Limit Exceeded': <Clock size={13} />,
+  'Memory Limit Exceeded': <HardDrive size={13} />,
+  'Idleness Limit Exceeded': <Hourglass size={13} />,
   'Runtime Error': <AlertTriangle size={13} />,
   'Compilation Error': <FileWarning size={13} />,
 }
 
-export function VerdictBadge({ verdict, size = 'md' }: { verdict: Verdict; size?: 'sm' | 'md' }) {
-  const c = VERDICT_COLORS[verdict]
+const FALLBACK_VERDICT_COLOR = { fg: '#64748b', bg: '#f1f5f9' }
+
+export function VerdictBadge({ verdict, size = 'md' }: { verdict: Verdict | string; size?: 'sm' | 'md' }) {
+  const c = VERDICT_COLORS[verdict as Verdict] || FALLBACK_VERDICT_COLOR
   return (
     <span
       style={{
@@ -50,7 +54,7 @@ export function VerdictBadge({ verdict, size = 'md' }: { verdict: Verdict; size?
         whiteSpace: 'nowrap',
       }}
     >
-      {VERDICT_ICON[verdict]}
+      {VERDICT_ICON[verdict as Verdict] || <AlertTriangle size={13} />}
       {verdict}
     </span>
   )

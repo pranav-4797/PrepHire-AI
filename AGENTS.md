@@ -76,6 +76,17 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Client-side ATS resume analyzer & JD gap matrix**: In-browser keyword, metric, and format gap parser (`atsAnalyzer.ts` & `AtsScannerModal.tsx`) providing candidates with match percentages, missing competencies, and real-time guidance before campus interviews.
 - **NVIDIA NIM AI coding problem generator & Piston sandbox pre-validation**: Added `POST /api/coding/generate-problem` powered by NVIDIA NIM (`qwen/qwen2.5-coder-32b-instruct` / `nvidia/llama-3.1-nemotron-70b-instruct` in `server/nvidia.js`), featuring automated Piston execution of the generated reference solution against all generated test cases to prevent hallucinations, and a one-click generation modal in `AdminProblemEditor.tsx`.
 
+## Recent fixes (2026-10-25)
+
+- **Codeforces/CodeChef-grade judge architecture**: Re-engineered `server/coding/judge.js` with 7 verdict types (AC, WA, TLE, **MLE**, **ILE**, RE, CE), per-test-case resource tracking (`timeMs` + `memoryKb`), improved TLE/MLE detection from Piston signals, and a streaming judge engine (`runTestCasesStreaming()`) for SSE progress.
+- **SSE streaming submit endpoint**: New `POST /api/coding/problems/:id/submit-stream` returns Server-Sent Events with per-test verdicts as they complete (Codeforces-style "Running on test X").
+- **Live judge progress UI**: `JudgeProgressBar` component in `ProblemWorkspace.tsx` shows animated test-by-test progress dots with pass/fail indicators during submission.
+- **Keyboard shortcuts**: `Ctrl+Enter` = Run, `Ctrl+Shift+Enter` = Submit, with visible kbd badges on action buttons.
+- **Code reset button**: One-click reset to starter template with confirmation dialog.
+- **Copy-to-clipboard**: All sample test I/O blocks and failed test results have copy buttons.
+- **Enhanced submission table**: Columnar layout (When · Language · Verdict · Time · Memory · Tests) with relative timestamps and hover highlights.
+- **Results summary bar**: Aggregate stats (X/Y passed · Peak time · Peak memory) above per-test breakdown.
+
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit
