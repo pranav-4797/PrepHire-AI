@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
 import {
   ArrowLeft, Play, Send, Clock, Cpu, Loader2, CheckCircle2, XCircle, History, Sparkles,
-  RotateCcw, Copy, Check, Keyboard, HardDrive,
+  RotateCcw, Copy, Check, Keyboard, HardDrive, Code2,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { DifficultyBadge, VerdictBadge } from './Badges'
@@ -13,6 +13,7 @@ import {
 } from '../../services/coding.service'
 import type { Problem, RunResult, Submission, LanguageOption, CodeReview, JudgeProgressEvent } from '../../services/coding.service'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
+import { cleanCppCode, COMPETITIVE_STARTER_TEMPLATES } from '../../utils/codeSanitizer'
 import { ErrorAlert } from '../common/ErrorAlert'
 
 function Btn({
@@ -218,7 +219,11 @@ export function ProblemWorkspace({
         const defaultLang = p.languages[0] || 'javascript'
         setLanguage(defaultLang)
         const saved = loadAutosavedCode(userEmail, problemId, defaultLang)
-        setCode(saved ?? p.starterCode?.[defaultLang] ?? '')
+        let initialCode = saved ?? p.starterCode?.[defaultLang] ?? COMPETITIVE_STARTER_TEMPLATES[defaultLang] ?? ''
+        if (defaultLang === 'cpp') {
+          initialCode = cleanCppCode(initialCode)
+        }
+        setCode(initialCode)
       })
       .catch((err) => !cancelled && setError(sanitizeErrorMessage(err, 'Failed to load problem statement.')))
       .finally(() => !cancelled && setLoading(false))
@@ -251,7 +256,11 @@ export function ProblemWorkspace({
     if (!problem) return
     setLanguage(nextLang)
     const saved = loadAutosavedCode(userEmail, problemId, nextLang)
-    setCode(saved ?? problem.starterCode?.[nextLang] ?? '')
+    let nextCode = saved ?? problem.starterCode?.[nextLang] ?? COMPETITIVE_STARTER_TEMPLATES[nextLang] ?? ''
+    if (nextLang === 'cpp') {
+      nextCode = cleanCppCode(nextCode)
+    }
+    setCode(nextCode)
     setRunResult(null)
     setSubmitResult(null)
     setReview(null)
@@ -267,9 +276,12 @@ export function ProblemWorkspace({
     }, 600)
   }
 
-  function handleResetCode() {
+  function handleResetToStarter() {
     if (!problem) return
-    const starter = problem.starterCode?.[language] ?? ''
+    let starter = problem.starterCode?.[language] ?? COMPETITIVE_STARTER_TEMPLATES[language] ?? ''
+    if (language === 'cpp') {
+      starter = cleanCppCode(starter)
+    }
     setCode(starter)
     saveAutosavedCode(userEmail, problemId, language, starter)
     setShowResetConfirm(false)
@@ -277,7 +289,19 @@ export function ProblemWorkspace({
     setSubmitResult(null)
     setReview(null)
     setReviewError('')
-    showToast?.('Code reset to starter template', 'info')
+    showToast?.('Code reset to problem starter skeleton', 'info')
+  }
+
+  function handleResetToCleanTemplate() {
+    const clean = COMPETITIVE_STARTER_TEMPLATES[language] || ''
+    setCode(clean)
+    saveAutosavedCode(userEmail, problemId, language, clean)
+    setShowResetConfirm(false)
+    setRunResult(null)
+    setSubmitResult(null)
+    setReview(null)
+    setReviewError('')
+    showToast?.('Code reset to clean competitive template (solve from scratch)', 'info')
   }
 
   async function loadSubmissions() {
@@ -623,14 +647,23 @@ export function ProblemWorkspace({
                   <option key={l.id} value={l.id}>{l.label}</option>
                 ))}
               </select>
-              {/* Reset to starter code button */}
+              {/* Reset dialog trigger */}
               <Btn
                 onClick={() => setShowResetConfirm(true)}
                 variant="ghost"
-                title="Reset code to starter template"
+                title="Reset code template"
                 style={{ padding: '7px 10px', fontSize: 11 }}
               >
                 <RotateCcw size={12} /> Reset
+              </Btn>
+              {/* Quick clean competitive template (Codeforces-style scratch) */}
+              <Btn
+                onClick={handleResetToCleanTemplate}
+                variant="ghost"
+                title="Solve from scratch: load clean Codeforces/CodeChef competitive template"
+                style={{ padding: '7px 10px', fontSize: 11 }}
+              >
+                <Code2 size={12} /> Scratch
               </Btn>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -695,15 +728,21 @@ export function ProblemWorkspace({
             <div style={{
               background: T.bgWhite, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16,
               display: 'flex', flexDirection: 'column', gap: 10,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
             }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>Reset Code?</div>
-              <div style={{ fontSize: 12, color: T.txtSec }}>
-                This will replace your current code with the starter template. Unsaved changes will be lost.
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>Reset Code Template</div>
+              <div style={{ fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>
+                Choose how you want to reset your editor. Unsaved changes will be replaced:
               </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <Btn onClick={() => setShowResetConfirm(false)} variant="ghost" style={{ padding: '6px 14px', fontSize: 12 }}>Cancel</Btn>
-                <Btn onClick={handleResetCode} variant="primary" style={{ padding: '6px 14px', fontSize: 12 }}>
-                  <RotateCcw size={12} /> Reset
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <Btn onClick={() => setShowResetConfirm(false)} variant="ghost" style={{ padding: '6px 14px', fontSize: 12 }}>
+                  Cancel
+                </Btn>
+                <Btn onClick={handleResetToStarter} variant="outline" title="Reset to the unsolved problem starter stub" style={{ padding: '6px 14px', fontSize: 12 }}>
+                  <RotateCcw size={12} /> Problem Stub
+                </Btn>
+                <Btn onClick={handleResetToCleanTemplate} variant="primary" title="Reset to clean Codeforces/CodeChef competitive template without driver code" style={{ padding: '6px 14px', fontSize: 12 }}>
+                  <Code2 size={12} /> Clean Scratch Template
                 </Btn>
               </div>
             </div>

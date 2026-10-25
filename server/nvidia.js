@@ -111,11 +111,11 @@ function generateOfflineFallbackProblem({ topic, difficulty = 'Medium', language
       memoryLimitMb: 256,
       languages,
       starterCode: {
-        python: `def selection_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        min_idx = i\n        for j in range(i + 1, n):\n            if arr[j] < arr[min_idx]:\n                min_idx = j\n        arr[i], arr[min_idx] = arr[min_idx], arr[i]\n    return arr\n\nif __name__ == '__main__':\n    import sys\n    lines = sys.stdin.read().split()\n    if lines:\n        n = int(lines[0])\n        arr = [int(x) for x in lines[1:n+1]]\n        res = selection_sort(arr)\n        print(*(res))`,
-        cpp: `#include <iostream>\n#include <vector>\nusing namespace std;\n\nvoid selectionSort(vector<int>& arr) {\n    int n = arr.size();\n    for (int i = 0; i < n; i++) {\n        int min_idx = i;\n        for (int j = i + 1; j < n; j++) {\n            if (arr[j] < arr[min_idx]) min_idx = j;\n        }\n        swap(arr[i], arr[min_idx]);\n    }\n}\n\nint main() {\n    int n;\n    if (cin >> n) {\n        vector<int> arr(n);\n        for (int i = 0; i < n; i++) cin >> arr[i];\n        selectionSort(arr);\n        for (int i = 0; i < n; i++) {\n            cout << arr[i] << (i == n - 1 ? "" : " ");\n        }\n        cout << endl;\n    }\n    return 0;\n}`,
-        java: `import java.util.*;\n\npublic class Main {\n    public static void selectionSort(int[] arr) {\n        int n = arr.length;\n        for (int i = 0; i < n; i++) {\n            int minIdx = i;\n            for (int j = i + 1; j < n; j++) {\n                if (arr[j] < arr[minIdx]) minIdx = j;\n            }\n            int temp = arr[i];\n            arr[i] = arr[minIdx];\n            arr[minIdx] = temp;\n        }\n    }\n\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        if (sc.hasNextInt()) {\n            int n = sc.nextInt();\n            int[] arr = new int[n];\n            for (int i = 0; i < n; i++) arr[i] = sc.nextInt();\n            selectionSort(arr);\n            for (int i = 0; i < n; i++) {\n                System.out.print(arr[i] + (i == n - 1 ? "" : " "));\n            }\n            System.out.println();\n        }\n    }\n}`,
-        javascript: `const fs = require('fs');\n\nfunction selectionSort(arr) {\n  const n = arr.length;\n  for (let i = 0; i < n; i++) {\n    let minIdx = i;\n    for (let j = i + 1; j < n; j++) {\n      if (arr[j] < arr[minIdx]) minIdx = j;\n    }\n    const temp = arr[i];\n    arr[i] = arr[minIdx];\n    arr[minIdx] = temp;\n  }\n  return arr;\n}\n\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\nif (input.length > 0 && input[0] !== '') {\n  const n = parseInt(input[0], 10);\n  const arr = input.slice(1, n + 1).map(Number);\n  console.log(selectionSort(arr).join(' '));\n}`,
-        c: `#include <stdio.h>\n\nvoid selectionSort(int arr[], int n) {\n    for (int i = 0; i < n; i++) {\n        int min_idx = i;\n        for (int j = i + 1; j < n; j++) {\n            if (arr[j] < arr[min_idx]) min_idx = j;\n        }\n        int temp = arr[i];\n        arr[i] = arr[min_idx];\n        arr[min_idx] = temp;\n    }\n}\n\nint main() {\n    int n;\n    if (scanf("%d", &n) == 1) {\n        int arr[n];\n        for (int i = 0; i < n; i++) scanf("%d", &arr[i]);\n        selectionSort(arr, n);\n        for (int i = 0; i < n; i++) {\n            printf("%d%s", arr[i], (i == n - 1 ? "" : " "));\n        }\n        printf("\\n");\n    }\n    return 0;\n}`,
+        python: `def selection_sort(arr):\n    # TODO: Implement Selection Sort algorithm to sort arr in non-decreasing order\n    return arr\n\nif __name__ == '__main__':\n    import sys\n    lines = sys.stdin.read().split()\n    if lines:\n        n = int(lines[0])\n        arr = [int(x) for x in lines[1:n+1]]\n        selection_sort(arr)\n        print(*(arr))`,
+        cpp: `#include <iostream>\n#include <vector>\nusing namespace std;\n\nvoid selectionSort(vector<int>& arr) {\n    // TODO: Implement Selection Sort algorithm to sort arr in non-decreasing order\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int n;\n    if (cin >> n) {\n        vector<int> arr(n);\n        for (int i = 0; i < n; i++) cin >> arr[i];\n        selectionSort(arr);\n        for (int i = 0; i < n; i++) {\n            cout << arr[i] << (i == n - 1 ? "" : " ");\n        }\n        cout << "\\n";\n    }\n    return 0;\n}`,
+        java: `import java.util.*;\n\npublic class Main {\n    public static void selectionSort(int[] arr) {\n        // TODO: Implement Selection Sort algorithm to sort arr in non-decreasing order\n    }\n\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        if (sc.hasNextInt()) {\n            int n = sc.nextInt();\n            int[] arr = new int[n];\n            for (int i = 0; i < n; i++) arr[i] = sc.nextInt();\n            selectionSort(arr);\n            for (int i = 0; i < n; i++) {\n                System.out.print(arr[i] + (i == n - 1 ? "" : " "));\n            }\n            System.out.println();\n        }\n    }\n}`,
+        javascript: `const fs = require('fs');\n\nfunction selectionSort(arr) {\n  // TODO: Implement Selection Sort algorithm to sort arr in non-decreasing order\n  return arr;\n}\n\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\nif (input.length > 0 && input[0] !== '') {\n  const n = parseInt(input[0], 10);\n  const arr = input.slice(1, n + 1).map(Number);\n  selectionSort(arr);\n  console.log(arr.join(' '));\n}`,
+        c: `#include <stdio.h>\n\nvoid selectionSort(int arr[], int n) {\n    // TODO: Implement Selection Sort algorithm to sort arr in non-decreasing order\n}\n\nint main() {\n    int n;\n    if (scanf("%d", &n) == 1) {\n        int arr[n];\n        for (int i = 0; i < n; i++) scanf("%d", &arr[i]);\n        selectionSort(arr, n);\n        for (int i = 0; i < n; i++) {\n            printf("%d%s", arr[i], (i == n - 1 ? "" : " "));\n        }\n        printf("\\n");\n    }\n    return 0;\n}`,
       },
       referenceSolution: {
         language: 'python',
@@ -150,10 +150,10 @@ function generateOfflineFallbackProblem({ topic, difficulty = 'Medium', language
     memoryLimitMb: 256,
     languages,
     starterCode: {
-      python: `def solve(arr):\n    # TODO: Implement your solution\n    return arr\n\nif __name__ == '__main__':\n    import sys\n    lines = sys.stdin.read().split()\n    if lines:\n        n = int(lines[0])\n        arr = [int(x) for x in lines[1:n+1]]\n        res = solve(arr)\n        print(*(res))`,
-      cpp: `#include <iostream>\n#include <vector>\nusing namespace std;\n\nvector<int> solve(vector<int>& arr) {\n    // TODO: Implement solution\n    return arr;\n}\n\nint main() {\n    int n;\n    if (cin >> n) {\n        vector<int> arr(n);\n        for (int i = 0; i < n; i++) cin >> arr[i];\n        vector<int> res = solve(arr);\n        for (int i = 0; i < res.size(); i++) {\n            cout << res[i] << (i == res.size() - 1 ? "" : " ");\n        }\n        cout << endl;\n    }\n    return 0;\n}`,
-      java: `import java.util.*;\n\npublic class Main {\n    public static int[] solve(int[] arr) {\n        // TODO: Implement solution\n        return arr;\n    }\n\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        if (sc.hasNextInt()) {\n            int n = sc.nextInt();\n            int[] arr = new int[n];\n            for (int i = 0; i < n; i++) arr[i] = sc.nextInt();\n            int[] res = solve(arr);\n            for (int i = 0; i < res.length; i++) {\n                System.out.print(res[i] + (i == res.length - 1 ? "" : " "));\n            }\n            System.out.println();\n        }\n    }\n}`,
-      javascript: `const fs = require('fs');\n\nfunction solve(arr) {\n  // TODO: Implement solution\n  return arr;\n}\n\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\nif (input.length > 0 && input[0] !== '') {\n  const n = parseInt(input[0], 10);\n  const arr = input.slice(1, n + 1).map(Number);\n  console.log(solve(arr).join(' '));\n}`,
+      python: `def solve(arr):\n    # TODO: Implement your solution here\n    return arr\n\nif __name__ == '__main__':\n    import sys\n    lines = sys.stdin.read().split()\n    if lines:\n        n = int(lines[0])\n        arr = [int(x) for x in lines[1:n+1]]\n        res = solve(arr)\n        print(*(res))`,
+      cpp: `#include <iostream>\n#include <vector>\nusing namespace std;\n\nvoid solve() {\n    // Fast I/O\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n\n    int n;\n    if (!(cin >> n)) return;\n    vector<long long> arr(n);\n    for (int i = 0; i < n; i++) cin >> arr[i];\n\n    // TODO: Implement your solution here\n}\n\nint main() {\n    solve();\n    return 0;\n}`,
+      java: `import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        if (sc.hasNextInt()) {\n            int n = sc.nextInt();\n            long[] arr = new long[n];\n            for (int i = 0; i < n; i++) arr[i] = sc.nextLong();\n            \n            // TODO: Implement your solution here\n        }\n    }\n}`,
+      javascript: `const fs = require('fs');\n\nfunction solve() {\n  const input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\n  if (!input || input.length === 0 || input[0] === '') return;\n  const n = parseInt(input[0], 10);\n  const arr = input.slice(1, n + 1).map(Number);\n\n  // TODO: Implement your solution here\n}\n\nsolve();`,
     },
     referenceSolution: {
       language: 'python',
@@ -168,6 +168,68 @@ function generateOfflineFallbackProblem({ topic, difficulty = 'Medium', language
       { input: '2\n-5 10', output: '-5 10' },
     ],
   }
+}
+
+/**
+ * Sanitizes C++ code in starter templates to adhere to competitive programming conventions:
+ * 1. Guarantees `using namespace std;` is declared immediately after `#include <iostream>`
+ * 2. Removes robotic `std::cin`, `std::cout`, `std::endl`, `std::vector`, `std::string`
+ */
+function sanitizeCppStarterCode(code) {
+  if (!code || typeof code !== 'string') return code || ''
+  let sanitized = code
+
+  const hasIostream = /#include\s*<iostream>/i.test(sanitized) || /#include\s*<bits\/stdc\+\+\.h>/i.test(sanitized)
+  const hasUsingStd = /using\s+namespace\s+std\s*;/i.test(sanitized)
+
+  if (hasIostream && !hasUsingStd) {
+    const lines = sanitized.split('\n')
+    let lastIncludeIdx = -1
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().startsWith('#include')) {
+        lastIncludeIdx = i
+      }
+    }
+    if (lastIncludeIdx !== -1) {
+      lines.splice(lastIncludeIdx + 1, 0, 'using namespace std;')
+      sanitized = lines.join('\n')
+    } else {
+      sanitized = 'using namespace std;\n\n' + sanitized
+    }
+  }
+
+  if (hasIostream || /using\s+namespace\s+std\s*;/i.test(sanitized)) {
+    sanitized = sanitized
+      .replace(/\bstd::cin\b/g, 'cin')
+      .replace(/\bstd::cout\b/g, 'cout')
+      .replace(/\bstd::endl\b/g, 'endl')
+      .replace(/\bstd::vector\b/g, 'vector')
+      .replace(/\bstd::string\b/g, 'string')
+      .replace(/\bstd::pair\b/g, 'pair')
+      .replace(/\bstd::map\b/g, 'map')
+      .replace(/\bstd::unordered_map\b/g, 'unordered_map')
+      .replace(/\bstd::set\b/g, 'set')
+      .replace(/\bstd::unordered_set\b/g, 'unordered_set')
+      .replace(/\bstd::swap\b/g, 'swap')
+      .replace(/\bstd::min\b/g, 'min')
+      .replace(/\bstd::max\b/g, 'max')
+      .replace(/\bstd::sort\b/g, 'sort')
+  }
+
+  return sanitized
+}
+
+/**
+ * Sanitizes starter codes across all requested languages.
+ */
+function sanitizeStarterCodeMap(starterMap = {}) {
+  const result = { ...starterMap }
+  for (const [lang, code] of Object.entries(result)) {
+    if (lang === 'cpp' && typeof code === 'string') {
+      result[lang] = sanitizeCppStarterCode(code)
+    }
+  }
+  return result
 }
 
 /**
@@ -187,10 +249,14 @@ CRITICAL FORMAT RULE: You MUST return a single, valid JSON object ONLY. No markd
 
 THE PREPHIRE SANDBOX CONVENTION:
 1. Piston executes code via standard input (stdin) and verifies against expected standard output (stdout).
-2. For each requested language, provide starter code that includes:
-   - A clean solution function (e.g., \`def solve(...):\`)
-   - An I/O driver at the bottom that parses \`sys.stdin\` / \`process.stdin\` / \`cin\` / \`Scanner\`, calls the function, and prints the result to stdout.
-3. Provide an optimal \`referenceSolution\` in Python 3 that fully solves the problem and passes all test cases via stdin/stdout.
+2. STARTER CODE RULES (STRICT — NEVER WRITE THE FULL SOLUTION IN STARTER CODE):
+   - Starter code must be an UNSOLVED skeleton/stub for students to write their logic into.
+   - For C++: Include \`#include <iostream>\` and ALWAYS declare \`using namespace std;\` on the next line. NEVER use \`std::cin\`, \`std::cout\`, \`std::endl\`, \`std::vector\`, or \`std::string\` — always write \`cin\`, \`cout\`, \`endl\`, \`vector\`, \`string\`.
+   - Provide an unsolved function skeleton (e.g., \`// TODO: Implement your solution here\`) and a minimal I/O reader in \`int main()\`, OR a clean competitive \`main()\` template that reads inputs and leaves the solution logic empty for the student to solve.
+   - For Python: Provide \`def solve(...):\` with \`# TODO: Implement your solution here\` and \`pass\`.
+   - For Java / JavaScript: Provide empty method skeletons with standard I/O reader.
+   - DO NOT solve the problem inside \`starterCode\`! The student must write the algorithm themselves.
+3. The complete, optimal working algorithmic solution that passes all test cases MUST ONLY be in \`referenceSolution\` (in Python 3).
 4. Output must be strictly normalized: single values or clean lines, no conversational text like "The answer is:".
 5. Test cases must be 100% mathematically correct matching the reference solution. Include 2-3 sample tests with clear explanations and 5-8 comprehensive hidden test cases (testing boundary limits, edge cases, large inputs, zeros, negative numbers).
 
@@ -208,10 +274,10 @@ JSON OUTPUT SCHEMA:
   "memoryLimitMb": 256,
   "languages": ["python", "javascript", "cpp", "java"],
   "starterCode": {
-    "python": "String",
-    "javascript": "String",
-    "cpp": "String",
-    "java": "String"
+    "python": "String (unsolved skeleton)",
+    "javascript": "String (unsolved skeleton)",
+    "cpp": "String (unsolved skeleton with using namespace std; and cin/cout)",
+    "java": "String (unsolved skeleton)"
   },
   "referenceSolution": {
     "language": "python",
@@ -232,10 +298,11 @@ JSON OUTPUT SCHEMA:
 ${facultyNotes ? `- Additional Faculty Instructions: "${facultyNotes}"` : ''}
 
 Ensure:
-1. Starter code for each requested language (${languages.join(', ')}) includes both the core algorithm stub and standard I/O reader.
-2. The referenceSolution is complete, optimal Python 3 code ready to be executed against the test cases in Piston.
-3. Provide at least 2 sample test cases with explanations and 5 diverse hidden test cases (including edge cases).
-4. Return ONLY valid JSON.`
+1. Starter code for each requested language (${languages.join(', ')}) is an UNSOLVED skeleton (leaving the core logic for the student to write).
+2. For C++, always use \`#include <iostream>\` with \`using namespace std;\`, and use \`cin\` / \`cout\` without \`std::\` prefix.
+3. The referenceSolution is complete, optimal Python 3 code ready to be executed against the test cases in Piston.
+4. Provide at least 2 sample test cases with explanations and 5 diverse hidden test cases (including edge cases).
+5. Return ONLY valid JSON.`
 
   try {
     const raw = await callNvidia(userPrompt, systemPrompt, { model, clientApiKey })
@@ -253,7 +320,7 @@ Ensure:
       timeLimitMs: problem.timeLimitMs || 2000,
       memoryLimitMb: problem.memoryLimitMb || 256,
       languages: Array.isArray(problem.languages) && problem.languages.length ? problem.languages : languages,
-      starterCode: problem.starterCode || {},
+      starterCode: sanitizeStarterCodeMap(problem.starterCode || {}),
       referenceSolution: problem.referenceSolution || null,
       sampleTests: (Array.isArray(problem.sampleTests) ? problem.sampleTests : []).map((t) => ({
         input: typeof t.input === 'string' ? t.input : JSON.stringify(t.input ?? ''),

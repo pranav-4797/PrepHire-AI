@@ -6,6 +6,7 @@ import { createProblem, updateProblem, listLanguages, generateProblemWithAI } fr
 import type { Problem, TestCase, LanguageOption, Difficulty, GenerateProblemPreflight } from '../../services/coding.service'
 import { BRANCHES } from '../../constants/branches'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
+import { cleanCppCode } from '../../utils/codeSanitizer'
 
 const inputStyle: CSSProperties = {
   width: '100%',
@@ -203,21 +204,28 @@ export function AdminProblemEditor({
       })
 
       const p = res.problem
-      setForm((prev) => ({
-        ...prev,
-        title: p.title || prev.title,
-        difficulty: p.difficulty || prev.difficulty,
-        statement: p.statement || prev.statement,
-        inputFormat: p.inputFormat || prev.inputFormat,
-        outputFormat: p.outputFormat || prev.outputFormat,
-        constraints: p.constraints || prev.constraints,
-        timeLimitMs: p.timeLimitMs || prev.timeLimitMs || 2000,
-        memoryLimitMb: p.memoryLimitMb || prev.memoryLimitMb || 256,
-        languages: p.languages || aiLangs,
-        starterCode: p.starterCode || prev.starterCode || {},
-        sampleTests: p.sampleTests || prev.sampleTests || [],
-        hiddenTests: p.hiddenTests || prev.hiddenTests || [],
-      }))
+
+      setForm((prev) => {
+        const starterCode = { ...(p.starterCode || prev.starterCode || {}) }
+        if (starterCode.cpp) {
+          starterCode.cpp = cleanCppCode(starterCode.cpp)
+        }
+        return {
+          ...prev,
+          title: p.title || prev.title,
+          difficulty: p.difficulty || prev.difficulty,
+          statement: p.statement || prev.statement,
+          inputFormat: p.inputFormat || prev.inputFormat,
+          outputFormat: p.outputFormat || prev.outputFormat,
+          constraints: p.constraints || prev.constraints,
+          timeLimitMs: p.timeLimitMs || prev.timeLimitMs || 2000,
+          memoryLimitMb: p.memoryLimitMb || prev.memoryLimitMb || 256,
+          languages: p.languages || aiLangs,
+          starterCode,
+          sampleTests: p.sampleTests || prev.sampleTests || [],
+          hiddenTests: p.hiddenTests || prev.hiddenTests || [],
+        }
+      })
 
       if (p.topics && Array.isArray(p.topics)) {
         setTopicsInput(p.topics.join(', '))
@@ -245,7 +253,11 @@ export function AdminProblemEditor({
 
   async function save(status: 'draft' | 'published') {
     const topics = topicsInput.split(',').map((t) => t.trim()).filter(Boolean)
-    const payload: Partial<Problem> = { ...form, topics, status }
+    const starterCode = { ...(form.starterCode || {}) }
+    if (starterCode.cpp) {
+      starterCode.cpp = cleanCppCode(starterCode.cpp)
+    }
+    const payload: Partial<Problem> = { ...form, starterCode, topics, status }
 
     if (!payload.title || !payload.statement) {
       showToast('Title and problem statement are required.', 'error')

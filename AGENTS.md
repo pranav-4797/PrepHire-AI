@@ -90,6 +90,7 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Accessible ErrorAlert & Form feedback**: `ErrorAlert.tsx` with `role="alert"`, `aria-live="polite"`, WCAG-calibrated red accents, and optional dismiss/retry handlers.
 - **Full-screen ErrorBoundary crash recovery**: React `ErrorBoundary.tsx` catches runtime rendering exceptions with Reload/Home recovery actions and zero technical stack leakage.
 - **Custom 404 NotFoundPage**: Route fallback in `App.tsx` (`parsePathname` / `NotFoundPage.tsx`) providing clean recovery to dashboard and hubs.
+- **Clean competitive templates & standard C++ namespace**: Built `codeSanitizer.ts` to mandate `using namespace std;` whenever `<iostream>` is imported in C++, stripping verbose `std::cin`, `std::cout`, `std::endl`, and `std::vector` prefixes. Replaced pre-solved solutions in `starterCode` with clean unsolved skeletons across all 10 seed problems and updated `server/nvidia.js` prompt. Added dual-mode Reset ("Clean Scratch Template" vs "Problem Stub") and 1-click Scratch action in `ProblemWorkspace.tsx`.
 
 ## Gotchas
 
