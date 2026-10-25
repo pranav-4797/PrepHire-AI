@@ -13,7 +13,7 @@
 
 import express from 'express'
 import { createCodingStore } from './store.js'
-import { runTestCases, runTestCasesStreaming, SUPPORTED_LANGUAGES, LANGUAGE_CONFIG } from './judge.js'
+import { runTestCases, runTestCasesStreaming, getActiveJudgeInfo, SUPPORTED_LANGUAGES, LANGUAGE_CONFIG } from './judge.js'
 import { requireAdmin as requireAdminAuth, requireFacultyOrAdmin as requireFacultyOrAdminAuth, requireAuth, attachUserOptional } from './authMiddleware.js'
 import { callGemini, isRateLimited } from '../gemini.js'
 import { generateCodingProblemWithAI } from '../nvidia.js'
@@ -80,6 +80,15 @@ export function registerCodingRoutes(app, { serverDir }) {
     res.json(
       SUPPORTED_LANGUAGES.map((id) => ({ id, label: LANGUAGE_CONFIG[id].label })),
     )
+  })
+
+  router.get('/judge-status', async (_req, res) => {
+    try {
+      const info = await getActiveJudgeInfo()
+      res.json(info)
+    } catch (e) {
+      res.status(500).json({ error: e.message || 'Failed to get judge status' })
+    }
   })
 
   // ── Problems ──────────────────────────────────────────────────────────

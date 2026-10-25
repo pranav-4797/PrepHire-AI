@@ -1,360 +1,115 @@
-// ── Online Coding Platform — Secure Code Execution Service ─────────────────
-// Student/admin submitted code is executed inside container sandboxes via Piston
-// (https://github.com/engineer-man/piston) with an integrated local compilation
-// fallback (g++, python, node) for high-performance offline resilience.
+// ── Online Coding Platform — Unified Sandboxed Judge Engine ─────────────────
+// Modular code execution service inspired by CodeChef and Codeforces judging standards.
+//
+// Architecture:
+// - Primary: Judge0 (CE / RapidAPI / Self-Hosted Docker) with Base64 protocol,
+//   dynamic language detection, microsecond cgroup tracking, and sandboxing.
+// - Secondary: Piston (Self-Hosted / Demo) with version cache and resource limits.
+// - Fallback: Local toolchains (g++, gcc, python, node) for offline resilience.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { spawn } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
-import os from 'node:os'
+import { executeJudge0, isJudge0Available } from './adapters/judge0.js'
+import { executePiston, isPistonAvailable, PISTON_LANGUAGE_CONFIG } from './adapters/piston.js'
+import { executeLocally } from './adapters/local.js'
 
-const PISTON_API_URL = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston'
-
-// Maps our internal language ids (used in problem.languages / starterCode keys)
-// to the Piston runtime language + a sensible file extension.
+// Maps our internal language IDs to display labels and extensions
 export const LANGUAGE_CONFIG = {
-  javascript: { pistonLang: 'javascript', ext: 'js', label: 'JavaScript' },
+  javascript: { pistonLang: 'javascript', ext: 'js', label: 'JavaScript (Node.js)' },
   python: { pistonLang: 'python', ext: 'py', label: 'Python 3' },
-  java: { pistonLang: 'java', ext: 'java', label: 'Java' },
-  cpp: { pistonLang: 'cpp', ext: 'cpp', label: 'C++' },
-  c: { pistonLang: 'c', ext: 'c', label: 'C' },
+  java: { pistonLang: 'java', ext: 'java', label: 'Java (OpenJDK)' },
+  cpp: { pistonLang: 'cpp', ext: 'cpp', label: 'C++ (GCC)' },
+  c: { pistonLang: 'c', ext: 'c', label: 'C (GCC)' },
 }
 
 export const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_CONFIG)
 
-// Cache of {language -> latest version} resolved from Piston's /runtimes.
-let runtimeCache = null
-let runtimeCacheAt = 0
-const RUNTIME_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+/**
+ * Returns diagnostic metadata about the active judging infrastructure.
+ */
+export async function getActiveJudgeInfo() {
+  const providerConfig = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
+  const judge0Url = process.env.JUDGE0_API_URL || 'https://ce.judge0.com'
+  const pistonUrl = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston'
 
-async function getRuntimeVersion(pistonLang) {
-  const now = Date.now()
-  if (!runtimeCache || now - runtimeCacheAt > RUNTIME_CACHE_TTL_MS) {
-    try {
-      const res = await fetch(`${PISTON_API_URL}/runtimes`)
-      if (res.ok) {
-        const list = await res.json()
-        runtimeCache = {}
-        for (const rt of list) {
-          runtimeCache[rt.language] = rt.version
-          for (const alias of rt.aliases || []) {
-            if (!runtimeCache[alias]) runtimeCache[alias] = rt.version
-          }
-        }
-        runtimeCacheAt = now
-      }
-    } catch (e) {
-      console.warn('⚠️ Failed to fetch Piston runtimes, falling back to "*":', e.message)
+  let activeProvider = providerConfig
+  if (providerConfig === 'auto' || providerConfig === 'judge0') {
+    const j0Ok = await isJudge0Available()
+    if (j0Ok) {
+      activeProvider = 'judge0'
+    } else {
+      const pistonOk = await isPistonAvailable()
+      activeProvider = pistonOk ? 'piston' : 'local'
     }
   }
-  return runtimeCache?.[pistonLang] || '*'
+
+  return {
+    provider: activeProvider,
+    configuredProvider: providerConfig,
+    judge0Url,
+    pistonUrl,
+    supportedLanguages: SUPPORTED_LANGUAGES,
+  }
 }
 
 /**
- * Executes code locally using available host toolchains (g++, python, node)
- * as an automatic fallback when Piston sandbox API is unavailable, rate-limited,
- * or restricted (e.g. public Piston API whitelist policy).
+ * Executes `code` once against a single `stdin` through the configured adapter cascade.
+ * Returns { stdout, stderr, timedOut, memoryExceeded, compileError, runtimeError, idlenessError, serviceError, timeMs, memoryKb }
  */
-async function executeLocally({ code, language, stdin, timeLimitMs }) {
-  const timeoutMs = Math.min(Math.max(timeLimitMs || 2000, 500), 10000)
-  const tmpDir = os.tmpdir()
-  const uid = 'prephire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
-
-  if (language === 'cpp' || language === 'c') {
-    const isCpp = language === 'cpp'
-    const compiler = isCpp ? 'g++' : 'gcc'
-    const srcFile = path.join(tmpDir, `${uid}.${isCpp ? 'cpp' : 'c'}`)
-    const exeFile = path.join(tmpDir, `${uid}${process.platform === 'win32' ? '.exe' : ''}`)
-
-    try {
-      await fs.promises.writeFile(srcFile, code, 'utf8')
-
-      // Compile step
-      const compileRes = await new Promise((resolve) => {
-        const cp = spawn(compiler, ['-O2', srcFile, '-o', exeFile], { timeout: 10000 })
-        let stderr = ''
-        cp.stderr.on('data', (d) => { stderr += d })
-        cp.on('close', (exitCode) => resolve({ success: exitCode === 0, stderr }))
-        cp.on('error', (err) => resolve({ success: false, stderr: `Compiler ${compiler} not available: ${err.message}` }))
-      })
-
-      if (!compileRes.success) {
-        try { await fs.promises.unlink(srcFile) } catch {}
-        return {
-          stdout: '',
-          stderr: compileRes.stderr || 'Compilation failed.',
-          compileError: true,
-          timeMs: 0,
-          memoryKb: 0,
-        }
-      }
-
-      // Execute step
-      const started = Date.now()
-      const runRes = await new Promise((resolve) => {
-        const cp = spawn(exeFile, [], { timeout: timeoutMs })
-        let stdout = ''
-        let stderr = ''
-        cp.stdout.on('data', (d) => { stdout += d })
-        cp.stderr.on('data', (d) => { stderr += d })
-
-        if (stdin) {
-          cp.stdin.write(stdin)
-        }
-        cp.stdin.end()
-
-        cp.on('close', (exitCode, signal) => {
-          const timeMs = Date.now() - started
-          const timedOut = signal === 'SIGTERM' || signal === 'SIGKILL' || timeMs >= timeoutMs
-          resolve({
-            stdout,
-            stderr,
-            timeMs,
-            timedOut,
-            runtimeError: !timedOut && exitCode !== 0,
-            compileError: false,
-            memoryKb: 0,
-          })
-        })
-        cp.on('error', (err) => {
-          resolve({
-            stdout: '',
-            stderr: `Execution failed: ${err.message}`,
-            timeMs: Date.now() - started,
-            runtimeError: true,
-            compileError: false,
-            memoryKb: 0,
-          })
-        })
-      })
-
-      try { await fs.promises.unlink(srcFile) } catch {}
-      try { await fs.promises.unlink(exeFile) } catch {}
-      return runRes
-    } catch (e) {
-      try { await fs.promises.unlink(srcFile) } catch {}
-      try { await fs.promises.unlink(exeFile) } catch {}
-      return { stdout: '', stderr: e.message, runtimeError: true, timeMs: 0, memoryKb: 0 }
-    }
-  }
-
-  if (language === 'python') {
-    const srcFile = path.join(tmpDir, `${uid}.py`)
-    try {
-      await fs.promises.writeFile(srcFile, code, 'utf8')
-      const started = Date.now()
-      const pyCmd = process.platform === 'win32' ? 'python' : 'python3'
-      const runRes = await new Promise((resolve) => {
-        const cp = spawn(pyCmd, [srcFile], { timeout: timeoutMs })
-        let stdout = ''
-        let stderr = ''
-        cp.stdout.on('data', (d) => { stdout += d })
-        cp.stderr.on('data', (d) => { stderr += d })
-
-        if (stdin) {
-          cp.stdin.write(stdin)
-        }
-        cp.stdin.end()
-
-        cp.on('close', (exitCode, signal) => {
-          const timeMs = Date.now() - started
-          const timedOut = signal === 'SIGTERM' || signal === 'SIGKILL' || timeMs >= timeoutMs
-          resolve({
-            stdout,
-            stderr,
-            timeMs,
-            timedOut,
-            runtimeError: !timedOut && exitCode !== 0,
-            compileError: false,
-            memoryKb: 0,
-          })
-        })
-        cp.on('error', (err) => {
-          resolve({
-            stdout: '',
-            stderr: `Python execution failed: ${err.message}`,
-            timeMs: Date.now() - started,
-            runtimeError: true,
-            compileError: false,
-            memoryKb: 0,
-          })
-        })
-      })
-      try { await fs.promises.unlink(srcFile) } catch {}
-      return runRes
-    } catch (e) {
-      try { await fs.promises.unlink(srcFile) } catch {}
-      return { stdout: '', stderr: e.message, runtimeError: true, timeMs: 0, memoryKb: 0 }
-    }
-  }
-
-  if (language === 'javascript') {
-    const srcFile = path.join(tmpDir, `${uid}.js`)
-    try {
-      await fs.promises.writeFile(srcFile, code, 'utf8')
-      const started = Date.now()
-      const runRes = await new Promise((resolve) => {
-        const cp = spawn('node', [srcFile], { timeout: timeoutMs })
-        let stdout = ''
-        let stderr = ''
-        cp.stdout.on('data', (d) => { stdout += d })
-        cp.stderr.on('data', (d) => { stderr += d })
-
-        if (stdin) {
-          cp.stdin.write(stdin)
-        }
-        cp.stdin.end()
-
-        cp.on('close', (exitCode, signal) => {
-          const timeMs = Date.now() - started
-          const timedOut = signal === 'SIGTERM' || signal === 'SIGKILL' || timeMs >= timeoutMs
-          resolve({
-            stdout,
-            stderr,
-            timeMs,
-            timedOut,
-            runtimeError: !timedOut && exitCode !== 0,
-            compileError: false,
-            memoryKb: 0,
-          })
-        })
-        cp.on('error', (err) => {
-          resolve({
-            stdout: '',
-            stderr: `Node.js execution failed: ${err.message}`,
-            timeMs: Date.now() - started,
-            runtimeError: true,
-            compileError: false,
-            memoryKb: 0,
-          })
-        })
-      })
-      try { await fs.promises.unlink(srcFile) } catch {}
-      return runRes
-    } catch (e) {
-      try { await fs.promises.unlink(srcFile) } catch {}
-      return { stdout: '', stderr: e.message, runtimeError: true, timeMs: 0, memoryKb: 0 }
-    }
-  }
-
-  return { stdout: '', stderr: `Unsupported execution runner for ${language}`, serviceError: true, timeMs: 0, memoryKb: 0 }
-}
-
-/**
- * Executes `code` once against a single `stdin`, inside the sandbox.
- * Returns { stdout, stderr, timedOut, memoryExceeded, compileError, runtimeError, idlenessError, timeMs, memoryKb }
- */
-async function executeOnce({ code, language, stdin, timeLimitMs, memoryLimitMb }) {
-  const cfg = LANGUAGE_CONFIG[language]
-  if (!cfg) {
-    return { stdout: '', stderr: `Unsupported language: ${language}`, compileError: true, timeMs: 0, memoryKb: 0 }
-  }
-
-  const version = await getRuntimeVersion(cfg.pistonLang)
-  const runTimeout = Math.min(Math.max(timeLimitMs || 2000, 500), 15000)
-  const memoryLimitBytes = Math.min(Math.max((memoryLimitMb || 256), 16), 512) * 1024 * 1024
-
-  const started = Date.now()
-  let res
-  try {
-    res = await fetch(`${PISTON_API_URL}/execute`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        language: cfg.pistonLang,
-        version,
-        files: [{ name: `main.${cfg.ext}`, content: code }],
-        stdin: stdin ?? '',
-        compile_timeout: 10000,
-        run_timeout: runTimeout,
-        run_memory_limit: memoryLimitBytes,
-      }),
-      signal: AbortSignal.timeout(runTimeout + 15000),
-    })
-  } catch (err) {
-    // If Piston is offline or network fails, seamlessly fall back to local compiler runner
-    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
-  }
-
-  const timeMs = Date.now() - started
-
-  if (!res.ok) {
-    // If Piston returned 401 (whitelist only) or 5xx, fall back to local compiler runner
-    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
-  }
-
-  const data = await res.json()
-
-  // If Piston returned a notice message (e.g. whitelist notice) without run details
-  if (data.message && !data.run && !data.compile) {
-    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
-  }
-
-  // ── Compilation Error ──────────────────────────────────────────────────
-  if (data.compile && data.compile.code !== 0) {
+export async function executeOnce({ code, language, stdin, timeLimitMs, memoryLimitMb }) {
+  if (!SUPPORTED_LANGUAGES.includes(language)) {
     return {
       stdout: '',
-      stderr: data.compile.stderr || data.compile.output || 'Compilation failed.',
+      stderr: `Unsupported language: ${language}`,
       compileError: true,
-      timeMs,
+      runtimeError: false,
+      timedOut: false,
+      memoryExceeded: false,
+      idlenessError: false,
+      serviceError: false,
+      timeMs: 0,
       memoryKb: 0,
     }
   }
 
-  const run = data.run || {}
+  const provider = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
 
-  // ── Parse memory from Piston response ─────────────────────────────────
-  // Piston's self-hosted API may report memory usage in `run.memory` (bytes).
-  // The public demo instance often omits it — we default to 0.
-  const memoryBytes = run.memory || 0
-  const memoryKb = memoryBytes > 0 ? Math.round(memoryBytes / 1024) : 0
-
-  // ── Memory Limit Exceeded ─────────────────────────────────────────────
-  // Detected when process was killed (SIGKILL) AND memory was near/over limit,
-  // OR when Piston explicitly reports memory exceeded via exit signal.
-  const memoryExceeded = (
-    memoryBytes > 0 && memoryBytes >= memoryLimitBytes * 0.95
-  ) || (
-    run.signal === 'SIGKILL' && run.code === null && memoryBytes > memoryLimitBytes * 0.8
-  )
-
-  // ── Time Limit Exceeded ───────────────────────────────────────────────
-  // Piston sends SIGKILL when run_timeout is exceeded. We check the signal
-  // and also compare wall-clock time as a fallback.
-  const timedOut = (
-    run.signal === 'SIGKILL' && !memoryExceeded
-  ) || (
-    timeMs >= runTimeout && run.code !== 0
-  )
-
-  // ── Idleness Limit Exceeded ───────────────────────────────────────────
-  // Process exited normally (code 0) but produced no stdout AND consumed
-  // significant wall time — likely waiting for stdin that never arrives.
-  const idlenessError = (
-    !timedOut && !memoryExceeded && run.code === 0 &&
-    (run.stdout || '').trim() === '' &&
-    (run.stderr || '').trim() === '' &&
-    timeMs > (runTimeout * 0.8)
-  )
-
-  // ── Runtime Error ─────────────────────────────────────────────────────
-  const runtimeError = !timedOut && !memoryExceeded && !idlenessError && run.code !== 0
-
-  return {
-    stdout: run.stdout || '',
-    stderr: run.stderr || '',
-    timedOut: !!timedOut,
-    memoryExceeded: !!memoryExceeded,
-    idlenessError: !!idlenessError,
-    compileError: false,
-    runtimeError: !!runtimeError,
-    timeMs,
-    memoryKb,
+  // 1. Explicit Local mode
+  if (provider === 'local') {
+    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
   }
+
+  // 2. Explicit Piston mode
+  if (provider === 'piston') {
+    const pistonRes = await executePiston({ code, language, stdin, timeLimitMs, memoryLimitMb })
+    if (!pistonRes.serviceError) return pistonRes
+    console.warn('⚠️ Piston service unavailable, falling back to host toolchain:', pistonRes.stderr)
+    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
+  }
+
+  // 3. Judge0 / Auto mode (Default: CodeChef-grade Judge0 sandbox)
+  try {
+    const outcome = await executeJudge0({ code, language, stdin, timeLimitMs, memoryLimitMb })
+    if (!outcome.serviceError) {
+      return outcome
+    }
+    console.warn('ℹ️ Judge0 service unavailable, attempting fallback:', outcome.stderr)
+  } catch (err) {
+    console.warn('ℹ️ Judge0 execution error, attempting fallback:', err.message)
+  }
+
+  // Fallback A: Try Piston if configured
+  if (process.env.PISTON_API_URL && !process.env.PISTON_API_URL.includes('emkc.org')) {
+    try {
+      const pistonRes = await executePiston({ code, language, stdin, timeLimitMs, memoryLimitMb })
+      if (!pistonRes.serviceError) return pistonRes
+    } catch {}
+  }
+
+  // Fallback B: Host compiler/interpreter
+  return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
 }
 
-function normalizeOutput(s) {
+export function normalizeOutput(s) {
   return (s ?? '')
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -365,14 +120,19 @@ function normalizeOutput(s) {
 
 /**
  * Determines the verdict string for a single test case execution outcome.
- * Verdict priority follows Codeforces convention:
- * CE > MLE > TLE > ILE > RE > WA > AC
+ * Priority adheres to competitive programming conventions:
+ * Sandbox Unavailable > Compilation Error > Memory Limit Exceeded >
+ * Time Limit Exceeded > Idleness Limit Exceeded > Runtime Error >
+ * Wrong Answer > Accepted
  */
-function determineVerdict(outcome, expectedOutput, timeLimitMs) {
+export function determineVerdict(outcome, expectedOutput, timeLimitMs, language) {
+  const multiplier = (language === 'python' || language === 'java' || language === 'javascript') ? 2 : 1
+  const effectiveLimitMs = (timeLimitMs || 2000) * multiplier
+
   if (outcome.serviceError) return 'Sandbox Unavailable'
   if (outcome.compileError) return 'Compilation Error'
   if (outcome.memoryExceeded) return 'Memory Limit Exceeded'
-  if (outcome.timedOut || (outcome.timeMs || 0) >= (timeLimitMs || 2000)) return 'Time Limit Exceeded'
+  if (outcome.timedOut || (outcome.timeMs || 0) >= effectiveLimitMs) return 'Time Limit Exceeded'
   if (outcome.idlenessError) return 'Idleness Limit Exceeded'
   if (outcome.runtimeError) return 'Runtime Error'
   if (normalizeOutput(outcome.stdout) !== normalizeOutput(expectedOutput)) return 'Wrong Answer'
@@ -381,10 +141,7 @@ function determineVerdict(outcome, expectedOutput, timeLimitMs) {
 
 /**
  * Runs `code` against a list of test cases and returns per-case verdicts plus
- * an overall summary. Used for both "Run" (sample only) and "Submit" (hidden).
- *
- * Each test result now includes per-case `timeMs` and `memoryKb` tracking,
- * matching the Codeforces/CodeChef result display pattern.
+ * an aggregate summary with peak runtime and peak memory.
  */
 export async function runTestCases({ code, language, testCases, timeLimitMs, memoryLimitMb }) {
   const results = []
@@ -404,7 +161,7 @@ export async function runTestCases({ code, language, testCases, timeLimitMs, mem
     maxTimeMs = Math.max(maxTimeMs, outcome.timeMs || 0)
     peakMemoryKb = Math.max(peakMemoryKb, outcome.memoryKb || 0)
 
-    const verdict = determineVerdict(outcome, tc.output, timeLimitMs)
+    const verdict = determineVerdict(outcome, tc.output, timeLimitMs, language)
     const passed = verdict === 'Accepted'
 
     results.push({
@@ -423,8 +180,8 @@ export async function runTestCases({ code, language, testCases, timeLimitMs, mem
       overallVerdict = verdict
     }
 
-    // Stop early on compile error — same code, no point re-running it.
-    if (verdict === 'Compilation Error') break
+    // Stop early on compile error — same code will not compile for subsequent cases
+    if (verdict === 'Compilation Error' || verdict === 'Sandbox Unavailable') break
   }
 
   const passedCount = results.filter((r) => r.passed).length
@@ -441,8 +198,6 @@ export async function runTestCases({ code, language, testCases, timeLimitMs, mem
 /**
  * Streaming variant of runTestCases — calls `onProgress(event)` after each
  * test case completes, enabling Server-Sent Events (SSE) real-time progress.
- *
- * Inspired by Codeforces's "Running on test X" live judge display.
  *
  * @param {Function} onProgress - Callback receiving progress events:
  *   { type: 'compiling' }
@@ -471,7 +226,7 @@ export async function runTestCasesStreaming({ code, language, testCases, timeLim
     maxTimeMs = Math.max(maxTimeMs, outcome.timeMs || 0)
     peakMemoryKb = Math.max(peakMemoryKb, outcome.memoryKb || 0)
 
-    const verdict = determineVerdict(outcome, tc.output, timeLimitMs)
+    const verdict = determineVerdict(outcome, tc.output, timeLimitMs, language)
     const passed = verdict === 'Accepted'
 
     const testResult = {
@@ -503,8 +258,8 @@ export async function runTestCasesStreaming({ code, language, testCases, timeLim
       memoryKb: outcome.memoryKb,
     })
 
-    // Stop early on compile error
-    if (verdict === 'Compilation Error') break
+    // Stop early on compile or service error
+    if (verdict === 'Compilation Error' || verdict === 'Sandbox Unavailable') break
   }
 
   const passedCount = results.filter((r) => r.passed).length

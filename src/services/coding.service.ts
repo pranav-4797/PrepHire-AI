@@ -124,6 +124,14 @@ export interface LanguageOption {
   label: string
 }
 
+export interface JudgeInfo {
+  provider: string
+  configuredProvider: string
+  judge0Url: string
+  pistonUrl: string
+  supportedLanguages: string[]
+}
+
 const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
 
 async function authHeaders(json = false): Promise<Record<string, string>> {
@@ -178,6 +186,11 @@ async function handle<T>(res: Response, fallbackMsg: string): Promise<T> {
 export async function listLanguages(): Promise<LanguageOption[]> {
   const res = await fetch(`${API_URL}/api/coding/languages`)
   return handle(res, 'Failed to load languages')
+}
+
+export async function getJudgeStatus(): Promise<JudgeInfo> {
+  const res = await fetch(`${API_URL}/api/coding/judge-status`)
+  return handle(res, 'Failed to load judge status')
 }
 
 export async function listProblems(

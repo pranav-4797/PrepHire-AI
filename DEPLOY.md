@@ -63,12 +63,58 @@ pilot:
 |---|---|
 | `GOOGLE_SHARED_DRIVE_FOLDER_ID` | Shared Drive folder for interview video storage |
 | `GOOGLE_SERVICE_ACCOUNT` | Base64 or raw JSON service account credentials |
-| `GEMINI_API_KEY` | **New** — server-side only. Get one at https://aistudio.google.com/apikey. Do **not** prefix it with `VITE_` — that's what caused it to leak into the client bundle before this fix. |
-| `PISTON_API_URL` | Defaults to the public Piston demo instance. Fine for ~20 students doing light coding practice, but it's shared with the rest of the internet and can be flaky. Self-host if you can (see below). |
+| `GEMINI_API_KEY` | Server-side only. Get one at https://aistudio.google.com/apikey. Do **not** prefix it with `VITE_`. |
+| `JUDGE_PROVIDER` | Execution provider mode: `'auto'` (default), `'judge0'`, `'piston'`, or `'local'`. In `'auto'`, prefers Judge0, falls back to Piston, and provides native toolchains (`g++`, `gcc`, `python`, `node`) for offline resilience. |
+| `JUDGE0_API_URL` | URL to Judge0 API. Defaults to public CE: `https://ce.judge0.com`. For self-hosted Docker, use `http://localhost:2358` or internal container DNS. |
+| `JUDGE0_API_KEY` | Optional API key if using RapidAPI (`judge0-ce.p.rapidapi.com`) or an authenticated Judge0 deployment. |
+| `JUDGE0_API_HOST` | RapidAPI host header (e.g. `judge0-ce.p.rapidapi.com`), required only when routing via RapidAPI. |
+| `JUDGE0_AUTH_TOKEN` | Optional auth token header (`X-Auth-Token`) for self-hosted instances with authentication enabled. |
+| `PISTON_API_URL` | Piston sandbox endpoint (defaults to demo instance or self-hosted port 2000). Acts as secondary provider. |
 | `CORS_ORIGIN` | Set to your deployed Firebase Hosting URL |
 
-`render.yaml` already lists `GEMINI_API_KEY` alongside the other secrets —
-Render will prompt you for it during service creation/redeploy.
+`render.yaml` lists these secrets alongside other configuration variables.
+
+### 4.1 Deploying & Configuring Judge0
+
+Judge0 (GPLv3) provides containerized, CodeChef-standard execution with cgroup resource isolation, microsecond timing, and accurate memory telemetry.
+
+#### Option A: Public Free CE (Zero-Setup Default)
+By default, `JUDGE_PROVIDER=auto` and `JUDGE0_API_URL=https://ce.judge0.com`. No keys or Docker setup required. The PrepHire backend communicates via Base64 encoding and auto-polls execution tokens.
+
+#### Option B: Self-Hosted Judge0 CE via Docker Compose (Recommended for Institutional Production)
+To run an isolated Judge0 instance on your own virtual machine or campus server:
+1. Download the official Judge0 Docker Compose release:
+   ```bash
+   wget https://github.com/judge0/judge0/releases/download/v1.14.0/judge0-v1.14.0.zip
+   unzip judge0-v1.14.0.zip && cd judge0-v1.14.0
+   ```
+2. Generate configuration and start containers:
+   ```bash
+   docker-compose up -d db redis
+   sleep 10
+   docker-compose up -d
+   ```
+3. Point PrepHire's `server/.env` to your host:
+   ```env
+   JUDGE_PROVIDER=judge0
+   JUDGE0_API_URL=http://your-server-ip:2358
+   ```
+
+#### Option C: RapidAPI Judge0
+If subscribing through RapidAPI:
+```env
+JUDGE_PROVIDER=judge0
+JUDGE0_API_URL=https://judge0-ce.p.rapidapi.com
+JUDGE0_API_KEY=your_rapidapi_key
+JUDGE0_API_HOST=judge0-ce.p.rapidapi.com
+```
+
+### 4.2 Judge Troubleshooting & Diagnostics
+
+- **Inspect Active Judge Engine**: Query `GET /api/coding/judge-status` on the server to verify which provider is currently active and reachable.
+- **Run the Judge Test Suite**: Execute `npm run test:judge` inside the `server/` directory to run all 9 automated verification checks (C++, Python, JS, TLE, CE, WA, Hidden cases, SSE progress, and concurrency).
+- **Public Queue Congestion**: If using `https://ce.judge0.com` during peak internet hours, submissions may experience queue wait times. The PrepHire judge automatically uses adaptive token polling with extended timeouts and falls back seamlessly to the host toolchain if public queues become unreachable.
+- **Linux cgroup v1 vs v2**: When self-hosting Judge0 on newer Linux distributions (Ubuntu 22.04+, Debian 11+), ensure cgroup v1 compatibility is enabled (`systemd.unified_cgroup_hierarchy=0`) in GRUB if CPU/memory tracking fails.
 
 ## 5. Build and deploy the frontend
 
@@ -84,19 +130,17 @@ firebase deploy --only hosting,firestore:rules
 - [ ] Log in as your Admin account, confirm the Admin console loads.
 - [ ] Run a mock interview end-to-end (resume upload → AI questions →
       report) — this exercises the new `/api/ai/generate` proxy.
-- [ ] Try the coding hub: run and submit a sample problem.
+- [ ] Try the coding hub: run and submit a sample problem. Verify the live SSE
+      progress bar ("Running on test X of N...") completes with Accepted.
 - [ ] As a non-Admin/Faculty account, confirm you get a 403 trying to hit
       `POST /api/courses` or `POST /api/coding/problems` directly (e.g. via
       curl) — this confirms the auth migration took effect.
 
-## 7. Optional but recommended before a wider rollout (not blocking for 20 students)
+## 7. Scalability & Rollout Checklist
 
-- **Self-host Piston** (`docker run -d -p 2000:2000 engineer-man/piston` as a
-  starting point) and point `PISTON_API_URL` at it, instead of the shared
-  public demo instance.
+- **Self-host Judge0** using Option B above for zero rate limits and dedicated departmental compute.
 - Move `server/uploads/courses.json` and `coding_problems.json` /
-  `coding_submissions.json` to a real database if you outgrow single-writer
-  JSON files (fine for a 20-person pilot, a real risk at higher concurrency).
+  `coding_submissions.json` to Firestore if scaling beyond pilot cohorts.
 
 ---
 
