@@ -48,13 +48,16 @@ export async function resolveAuthUser(req) {
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : null
   const headerRole = req.headers['x-user-role'] || null
 
-  if (token && auth) {
+  if (auth) {
+    if (!token) return null
     try {
       const decoded = await auth.verifyIdToken(token)
-      const role = await resolveRole(decoded.uid, headerRole)
+      // Resolve role strictly from Firestore; never allow client header override
+      const role = await resolveRole(decoded.uid, null)
       return { uid: decoded.uid, email: decoded.email || '', role, verified: true }
     } catch (e) {
-      console.warn('⚠️ Rejected invalid/expired ID token, evaluating fallback:', e.message)
+      console.warn('⚠️ Rejected invalid/expired ID token:', e.message)
+      return null
     }
   }
 

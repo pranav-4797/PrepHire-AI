@@ -4104,7 +4104,7 @@ function AdminDashboard({
                     </div>
                     <div style={{ fontSize: 11, color: T.txtMut, marginBottom: 6 }}>qwen/qwen2.5-coder-32b-instruct</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: T.txtSec, background: T.bgWhite, padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.outlineVar}` }}>
-                      <Key size={11} /> nvapi-cXpYk...MCx-Dhgl
+                      <Key size={11} /> nvapi-•••••••• (Managed by Server)
                     </div>
                   </div>
 
@@ -4115,7 +4115,7 @@ function AdminDashboard({
                     </div>
                     <div style={{ fontSize: 11, color: T.txtMut, marginBottom: 6 }}>nvidia/llama-3.1-nemotron-70b-instruct</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: T.txtSec, background: T.bgWhite, padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.outlineVar}` }}>
-                      <Key size={11} /> nvapi-xNIOb...JAJO8cO
+                      <Key size={11} /> nvapi-•••••••• (Managed by Server)
                     </div>
                   </div>
 
@@ -4126,7 +4126,7 @@ function AdminDashboard({
                     </div>
                     <div style={{ fontSize: 11, color: T.txtMut, marginBottom: 6 }}>meta/llama-3.3-70b-instruct</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'monospace', color: T.txtSec, background: T.bgWhite, padding: '4px 8px', borderRadius: 6, border: `1px solid ${T.outlineVar}` }}>
-                      <Key size={11} /> nvapi-Q7_hJ...uyT63N
+                      <Key size={11} /> nvapi-•••••••• (Managed by Server)
                     </div>
                   </div>
                 </div>
