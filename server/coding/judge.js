@@ -10,7 +10,7 @@
 
 import { executeJudge0, isJudge0Available } from './adapters/judge0.js'
 import { executePiston, isPistonAvailable, PISTON_LANGUAGE_CONFIG } from './adapters/piston.js'
-import { executeLocally } from './adapters/local.js'
+import { executeLocally, isLocalCompilerAvailable, compileAndRunBatchLocally } from './adapters/local.js'
 
 // Maps our internal language IDs to display labels and extensions
 export const LANGUAGE_CONFIG = {
@@ -32,19 +32,31 @@ export async function getActiveJudgeInfo() {
   const pistonUrl = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston'
 
   let activeProvider = providerConfig
-  if (providerConfig === 'auto' || providerConfig === 'judge0') {
-    const j0Ok = await isJudge0Available()
-    if (j0Ok) {
-      activeProvider = 'judge0'
+  let nativeCompiler = false
+  const hasLocalCpp = await isLocalCompilerAvailable('cpp')
+
+  if (providerConfig === 'auto') {
+    if (hasLocalCpp) {
+      activeProvider = 'native_compiler'
+      nativeCompiler = true
     } else {
-      const pistonOk = await isPistonAvailable()
-      activeProvider = pistonOk ? 'piston' : 'local'
+      const j0Ok = await isJudge0Available()
+      if (j0Ok) {
+        activeProvider = 'judge0'
+      } else {
+        const pistonOk = await isPistonAvailable()
+        activeProvider = pistonOk ? 'piston' : 'local'
+      }
     }
+  } else if (providerConfig === 'local') {
+    activeProvider = hasLocalCpp ? 'native_compiler' : 'local'
+    nativeCompiler = hasLocalCpp
   }
 
   return {
     provider: activeProvider,
     configuredProvider: providerConfig,
+    nativeCompiler,
     judge0Url,
     pistonUrl,
     supportedLanguages: SUPPORTED_LANGUAGES,
@@ -169,6 +181,18 @@ export async function runTestCases({ code, language, testCases, timeLimitMs, mem
     return { verdict: 'Accepted', passedCount: 0, totalCount: 0, runtimeMs: 0, memoryKb: 0, testResults: [] }
   }
 
+  const provider = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
+  if (provider === 'auto' || provider === 'local') {
+    try {
+      const hasLocal = await isLocalCompilerAvailable(language)
+      if (hasLocal) {
+        return await compileAndRunBatchLocally({ code, language, testCases, timeLimitMs, memoryLimitMb })
+      }
+    } catch (err) {
+      console.warn('⚠️ High-speed native compiler failed, falling back to sandbox cascade:', err.message)
+    }
+  }
+
   // Fast check: evaluate test case 0 first to verify compilation and avoid running all tests on syntax errors
   const firstOutcome = await executeOnce({
     code,
@@ -260,6 +284,18 @@ export async function runTestCasesStreaming({ code, language, testCases, timeLim
     const empty = { verdict: 'Accepted', passedCount: 0, totalCount: 0, runtimeMs: 0, memoryKb: 0, testResults: [] }
     onProgress({ type: 'complete', ...empty })
     return empty
+  }
+
+  const provider = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
+  if (provider === 'auto' || provider === 'local') {
+    try {
+      const hasLocal = await isLocalCompilerAvailable(language)
+      if (hasLocal) {
+        return await compileAndRunBatchLocally({ code, language, testCases, timeLimitMs, memoryLimitMb, onProgress })
+      }
+    } catch (err) {
+      console.warn('⚠️ High-speed native compiler streaming failed, falling back to sandbox cascade:', err.message)
+    }
   }
 
   // Emit compiling phase
