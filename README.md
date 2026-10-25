@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🛡️ **Custom Error Architecture & Stack Obfuscation**: Designed a comprehensive error handling system that completely eliminates raw vendor error dumps (e.g. `Firebase: Error (auth/invalid-credential)`). Centralized `errorSanitizer.ts` maps technical status codes, internal exceptions, and network errors into clean, human-friendly guidance without revealing underlying technologies (Firebase, Piston, Gemini, NVIDIA, Express).
+- 🚨 **Accessible `ErrorAlert` Component**: Built a WCAG-compliant alert notification component featuring `role="alert"`, `aria-live="polite"`, high-contrast crimson typography, soft warning halos, and optional inline retry actions.
+- 💥 **Full-Screen `ErrorBoundary` Recovery Page**: Wrapped the React application root with an enterprise-grade crash recovery boundary. Unexpected rendering exceptions trigger an elegant recovery interface with "Reload Page" and "Return to Safe Dashboard" without displaying code stack traces.
+- 🧭 **Custom 404 "Page Not Found" Screen**: Added a dedicated, glassmorphic 404 view (`NotFoundPage`) for unrecognized routes with instant navigation shortcuts back to the Dashboard, Coding Hub, and Mock Interview.
+
 - 🏗️ **Codeforces/CodeChef-Grade Judge Architecture Upgrade**: Re-engineered the coding sandbox evaluation pipeline with patterns inspired by competitive programming platforms (Codeforces, CodeChef, LeetCode). Added 7 verdict types (Accepted, Wrong Answer, TLE, **Memory Limit Exceeded**, **Idleness Limit Exceeded**, Runtime Error, Compilation Error), per-test-case resource tracking (`timeMs` + `memoryKb`), and a streaming judge engine (`runTestCasesStreaming()`) for SSE progress.
 - 📡 **SSE Streaming Submit with Live Judge Progress**: New `POST /api/coding/problems/:id/submit-stream` endpoint uses Server-Sent Events to stream per-test-case verdicts in real-time. Frontend displays a Codeforces-style "Running on test X of N…" progress bar with animated pass/fail dots as each test completes.
 - ⌨️ **Keyboard Shortcuts**: `Ctrl+Enter` to Run, `Ctrl+Shift+Enter` to Submit — with visible shortcut hints (kbd badges) on action buttons.

@@ -5,6 +5,7 @@ import { T } from '../../theme'
 import { createProblem, updateProblem, listLanguages, generateProblemWithAI } from '../../services/coding.service'
 import type { Problem, TestCase, LanguageOption, Difficulty, GenerateProblemPreflight } from '../../services/coding.service'
 import { BRANCHES } from '../../constants/branches'
+import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 
 const inputStyle: CSSProperties = {
   width: '100%',
@@ -236,7 +237,7 @@ export function AdminProblemEditor({
         showToast('AI problem generated successfully! Review and edit before saving.', 'success')
       }
     } catch (err) {
-      showToast((err as Error).message || 'Failed to generate problem with AI', 'error')
+      showToast(sanitizeErrorMessage(err, 'Failed to generate problem with AI. Please try again.'), 'error')
     } finally {
       setAiGenerating(false)
     }
@@ -274,7 +275,7 @@ export function AdminProblemEditor({
       }
       onSaved()
     } catch (err) {
-      showToast((err as Error).message || 'Failed to save problem', 'error')
+      showToast(sanitizeErrorMessage(err, 'Failed to save problem. Please try again.'), 'error')
     } finally {
       setSaving(false)
     }

@@ -6,6 +6,7 @@ import { DifficultyBadge, StatusPill } from './Badges'
 import { AdminProblemEditor } from './AdminProblemEditor'
 import { listProblems, getProblem, deleteProblem, updateProblem } from '../../services/coding.service'
 import type { ProblemSummary, Problem } from '../../services/coding.service'
+import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 
 function GlassCard({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) {
   return (
@@ -36,7 +37,7 @@ export function AdminProblemsManager({
       const list = await listProblems({ status: 'All' })
       setProblems(list)
     } catch (err) {
-      showToast((err as Error).message || 'Failed to load problems', 'error')
+      showToast(sanitizeErrorMessage(err, 'Failed to load problems. Please try refreshing.'), 'error')
     } finally {
       setLoading(false)
     }
@@ -58,7 +59,7 @@ export function AdminProblemsManager({
       setEditingProblem(full)
       setMode('edit')
     } catch (err) {
-      showToast((err as Error).message || 'Failed to load problem', 'error')
+      showToast(sanitizeErrorMessage(err, 'Failed to load problem statement.'), 'error')
     }
   }
 
@@ -69,7 +70,7 @@ export function AdminProblemsManager({
       showToast('Problem deleted.', 'success')
       load()
     } catch (err) {
-      showToast((err as Error).message || 'Failed to delete problem', 'error')
+      showToast(sanitizeErrorMessage(err, 'Failed to delete problem. Please try again.'), 'error')
     }
   }
 
@@ -80,7 +81,7 @@ export function AdminProblemsManager({
       showToast(nextStatus === 'published' ? 'Problem published.' : 'Problem moved back to draft.', 'success')
       load()
     } catch (err) {
-      showToast((err as Error).message || 'Failed to update status', 'error')
+      showToast(sanitizeErrorMessage(err, 'Failed to update problem status. Please try again.'), 'error')
     }
   }
 

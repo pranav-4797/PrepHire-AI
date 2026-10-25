@@ -4,6 +4,8 @@ import { T } from '../../theme'
 import { DifficultyBadge } from './Badges'
 import { listProblems } from '../../services/coding.service'
 import type { ProblemSummary } from '../../services/coding.service'
+import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
+import { ErrorAlert } from '../common/ErrorAlert'
 
 const DIFFICULTIES = ['All', 'Easy', 'Medium', 'Hard']
 
@@ -31,7 +33,7 @@ export function ProblemList({
       .then((list) => {
         if (!cancelled) setProblems(list)
       })
-      .catch((err) => !cancelled && setError(err.message || 'Failed to load problems'))
+      .catch((err) => !cancelled && setError(sanitizeErrorMessage(err, 'Failed to load problems. Please try refreshing.')))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
@@ -170,7 +172,7 @@ export function ProblemList({
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: T.txtMut }}>Loading problems…</div>
       ) : error ? (
-        <div style={{ textAlign: 'center', padding: 40, color: T.error }}>{error}</div>
+        <ErrorAlert message={error} style={{ margin: '20px 0' }} />
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: T.txtMut }}>
           No problems match your filters.

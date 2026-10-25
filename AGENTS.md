@@ -86,6 +86,10 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Copy-to-clipboard**: All sample test I/O blocks and failed test results have copy buttons.
 - **Enhanced submission table**: Columnar layout (When · Language · Verdict · Time · Memory · Tests) with relative timestamps and hover highlights.
 - **Results summary bar**: Aggregate stats (X/Y passed · Peak time · Peak memory) above per-test breakdown.
+- **Custom error architecture & stack obfuscation**: Centralized `errorSanitizer.ts` translates raw Firebase, Piston, Gemini, Express, and Firestore error dumps into human-friendly explanations without leaking backend tech stacks.
+- **Accessible ErrorAlert & Form feedback**: `ErrorAlert.tsx` with `role="alert"`, `aria-live="polite"`, WCAG-calibrated red accents, and optional dismiss/retry handlers.
+- **Full-screen ErrorBoundary crash recovery**: React `ErrorBoundary.tsx` catches runtime rendering exceptions with Reload/Home recovery actions and zero technical stack leakage.
+- **Custom 404 NotFoundPage**: Route fallback in `App.tsx` (`parsePathname` / `NotFoundPage.tsx`) providing clean recovery to dashboard and hubs.
 
 ## Gotchas
 

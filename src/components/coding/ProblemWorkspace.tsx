@@ -12,6 +12,8 @@ import {
   loadAutosavedCode, saveAutosavedCode, getCodeReview,
 } from '../../services/coding.service'
 import type { Problem, RunResult, Submission, LanguageOption, CodeReview, JudgeProgressEvent } from '../../services/coding.service'
+import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
+import { ErrorAlert } from '../common/ErrorAlert'
 
 function Btn({
   children, onClick, disabled, variant = 'outline', style = {}, title,
@@ -218,7 +220,7 @@ export function ProblemWorkspace({
         const saved = loadAutosavedCode(userEmail, problemId, defaultLang)
         setCode(saved ?? p.starterCode?.[defaultLang] ?? '')
       })
-      .catch((err) => !cancelled && setError(err.message || 'Failed to load problem'))
+      .catch((err) => !cancelled && setError(sanitizeErrorMessage(err, 'Failed to load problem statement.')))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
@@ -378,9 +380,12 @@ export function ProblemWorkspace({
   }
   if (error || !problem) {
     return (
-      <div style={{ textAlign: 'center', padding: 60, color: T.error }}>
-        {error || 'Problem not found'}
-        <div style={{ marginTop: 12 }}>
+      <div style={{ maxWidth: 600, margin: '60px auto', padding: '0 20px' }}>
+        <ErrorAlert
+          message={error || 'The requested coding problem could not be found.'}
+          style={{ marginBottom: 16 }}
+        />
+        <div style={{ textAlign: 'center' }}>
           <Btn onClick={onBack}><ArrowLeft size={14} /> Back to problems</Btn>
         </div>
       </div>
@@ -408,7 +413,7 @@ export function ProblemWorkspace({
       const result = await getCodeReview(problemId, payload)
       setReview(result)
     } catch (err) {
-      const msg = (err as Error).message || 'Failed to get AI review — please try again'
+      const msg = sanitizeErrorMessage(err, 'Failed to generate AI code review — please try again')
       setReviewError(msg)
       if (showToast) showToast(msg, 'error')
     } finally {

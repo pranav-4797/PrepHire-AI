@@ -45,6 +45,9 @@ import { evaluateOfflineSession } from './utils/offlineEvaluator'
 import { COMPANY_TRACKS, getCompanyTrack } from './data/companyTracks'
 import { AtsScannerModal } from './components/resume/AtsScannerModal'
 import { SentenceBoundarySpeaker } from './utils/streamingVoice'
+import { sanitizeErrorMessage } from './utils/errorSanitizer'
+import { ErrorAlert } from './components/common/ErrorAlert'
+import { NotFoundPage } from './components/common/NotFoundPage'
 
 // ── DOMAINS ─────────────────────────────────────────────────────────────────
 interface Domain {
@@ -1341,7 +1344,7 @@ function LoginScreen() {
         })
       }
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Authentication failed.')
+      setErr(sanitizeErrorMessage(error, 'Authentication failed. Please verify your credentials and try again.'))
     } finally {
       setLoading(false)
     }
@@ -1567,21 +1570,11 @@ function LoginScreen() {
               </div>
             )}
             {err && (
-              <div
+              <ErrorAlert
                 id="auth-error-msg"
-                role="alert"
-                aria-live="polite"
-                style={{
-                  background: T.errCont,
-                  border: `1px solid ${T.error}55`,
-                  borderRadius: 8,
-                  padding: '8px 12px',
-                  fontSize: 12,
-                  color: T.error,
-                }}
-              >
-                {err}
-              </div>
+                message={err}
+                onDismiss={() => setErr('')}
+              />
             )}
             <button
               type="submit"
@@ -1945,7 +1938,7 @@ function FacultyDashboard({
       showToast(`Evaluation and remarks submitted for ${selectedSession.studentName}!`, 'success')
       setSelectedSession(null)
     } catch (err: any) {
-      showToast('Failed to save evaluation: ' + (err.message || err), 'error')
+      showToast(sanitizeErrorMessage(err, 'Failed to save evaluation. Please try again.'), 'error')
     } finally {
       setSavingEval(false)
     }
@@ -2117,7 +2110,7 @@ const addResource = (chapterIndex: number) => {
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to save course:', error)
-      showToast('Failed to save course: ' + (error.message || error), 'error')
+      showToast(sanitizeErrorMessage(error, 'Failed to save course. Please try again.'), 'error')
     }
   }
 
@@ -3213,7 +3206,7 @@ function AdminDashboard({
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to approve course:', error)
-      showToast('Failed to approve course: ' + (error.message || error), 'error')
+      showToast(sanitizeErrorMessage(error, 'Failed to approve course. Please try again.'), 'error')
     }
   }
 
@@ -3224,7 +3217,7 @@ function AdminDashboard({
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to reject course:', error)
-      showToast('Failed to reject course: ' + (error.message || error), 'error')
+      showToast(sanitizeErrorMessage(error, 'Failed to reject course. Please try again.'), 'error')
     }
   }
 
@@ -3396,7 +3389,7 @@ function AdminDashboard({
         await onDeleteUser(userId, email || targetUser?.email)
         showToast('User and associated session records deleted.', 'success')
       } catch (err: any) {
-        showToast('Failed to delete user: ' + (err.message || err), 'error')
+        showToast(sanitizeErrorMessage(err, 'Failed to delete user. Please try again.'), 'error')
       }
     }
   }
@@ -4392,12 +4385,15 @@ function AdminDashboard({
 
 // ── ROUTING & URL SYNC HELPERS ──────────────────────────────────────────────
 function parsePathname(pathname: string): {
-  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report'
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound'
   studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history'
   facultyTab?: 'overview' | 'ranking' | 'courses' | 'coding'
   adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'
 } {
   const p = pathname.toLowerCase()
+  if (p === '' || p === '/') {
+    return { screen: 'landing' }
+  }
   if (p === '/auth' || p === '/login') {
     return { screen: 'auth' }
   }
@@ -4440,11 +4436,11 @@ function parsePathname(pathname: string): {
     else if (p.includes('history') || p.includes('assessments') || p.includes('submissions')) tab = 'history'
     return { screen: 'home', studentTab: tab }
   }
-  return { screen: 'landing' }
+  return { screen: 'notFound' }
 }
 
 function getUrlPath(
-  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report',
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound',
   role: string | null | undefined,
   studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history',
   facultyTab: 'overview' | 'ranking' | 'courses' | 'coding',
@@ -4456,6 +4452,7 @@ function getUrlPath(
   if (screen === 'consent') return '/interview/consent'
   if (screen === 'interview') return '/interview/session'
   if (screen === 'report') return '/interview/report'
+  if (screen === 'notFound') return '/404'
   if (screen === 'home') {
     const r = (role || 'student').toLowerCase()
     if (r === 'admin') return `/admin/${adminTab}`
@@ -4471,7 +4468,7 @@ export default function App() {
   const initialRoute = parsePathname(window.location.pathname)
 
   const [screen, setScreen] = useState<
-    'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report'
+    'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound'
   >(initialRoute.screen)
 
   const [user, setUser] = useState<User | null>(null)
@@ -5238,6 +5235,26 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         <div style={{ width: 56, height: 56, borderRadius: '50%', border: `4px solid ${T.primaryFix}`, borderTop: `4px solid ${T.primary}`, animation: 'spin 1s linear infinite' }} />
         <p className="text-heading" style={{ color: T.primary }}>Loading portal...</p>
       </div>
+    )
+  }
+
+  // ── 404 NOT FOUND ──────────────────────────────────────────────────────────
+  if (screen === 'notFound') {
+    return (
+      <NotFoundPage
+        onNavigateHome={() => {
+          setScreen(user ? 'home' : 'landing')
+          if (user) setStudentTab('interview')
+        }}
+        onNavigateCoding={() => {
+          setScreen('home')
+          setStudentTab('coding')
+        }}
+        onNavigateInterview={() => {
+          setScreen('home')
+          setStudentTab('interview')
+        }}
+      />
     )
   }
 

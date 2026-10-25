@@ -5,6 +5,8 @@ import { T } from '../../theme'
 import { DifficultyBadge, VerdictBadge } from './Badges'
 import { getDashboardStats } from '../../services/coding.service'
 import type { DashboardStats, Difficulty } from '../../services/coding.service'
+import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
+import { ErrorAlert } from '../common/ErrorAlert'
 
 function GlassCard({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) {
   return (
@@ -35,7 +37,7 @@ export function CodingDashboard({
     let cancelled = false
     getDashboardStats(userEmail)
       .then((s) => !cancelled && setStats(s))
-      .catch((err) => !cancelled && setError(err.message || 'Failed to load dashboard'))
+      .catch((err) => !cancelled && setError(sanitizeErrorMessage(err, 'Failed to load coding dashboard stats.')))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
@@ -43,7 +45,7 @@ export function CodingDashboard({
   }, [userEmail])
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: T.txtMut }}>Loading dashboard…</div>
-  if (error || !stats) return <div style={{ textAlign: 'center', padding: 40, color: T.error }}>{error}</div>
+  if (error || !stats) return <ErrorAlert message={error || 'Unable to load dashboard metrics.'} style={{ margin: '20px 0' }} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
