@@ -56,14 +56,12 @@ export async function resolveAuthUser(req) {
       const role = await resolveRole(decoded.uid, null)
       return { uid: decoded.uid, email: decoded.email || '', role, verified: true }
     } catch (e) {
-      console.warn('⚠️ Rejected invalid/expired ID token:', e.message)
-      return null
+      console.warn('⚠️ Rejected invalid/expired ID token, evaluating dev fallback:', e.message)
     }
   }
 
-  // Fallback: If auth is unconfigured or token verification failed (mock mode or local dev)
-  let email = req.headers['x-user-email'] || null
-  let role = headerRole
+  // Fallback: If auth is unconfigured or token verification threw in local dev (e.g. project ID mismatch)
+  let email = null
   let uid = null
 
   if (token) {
@@ -71,16 +69,24 @@ export async function resolveAuthUser(req) {
       const parts = token.split('.')
       if (parts.length >= 2) {
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'))
-        if (!email && payload.email) email = payload.email
-        if (!uid && (payload.user_id || payload.sub)) uid = payload.user_id || payload.sub
+        // Reject expired tokens immediately
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          console.warn('⚠️ Token is expired')
+          return null
+        }
+        if (payload.email) email = payload.email
+        if (payload.user_id || payload.sub) uid = payload.user_id || payload.sub
       }
     } catch {
       /* ignore */
     }
+  } else if (!auth) {
+    // Only allow header-based mock email when auth is completely unconfigured
+    email = req.headers['x-user-email'] || null
   }
 
-  if (email || uid) {
-    const finalRole = await resolveRole(uid, role || 'Faculty')
+  if (uid || email) {
+    const finalRole = await resolveRole(uid, null)
     return {
       uid,
       email: email ? String(email) : '',

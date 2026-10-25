@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getFirestore, FieldValue, FieldPath } from 'firebase-admin/firestore'
 import { getAuth } from 'firebase-admin/auth'
