@@ -26,6 +26,16 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🎨 **UI/UX Pro Max AI Question Asking Overhaul & Spotlight Framing**: Re-engineered the Mock Interview question presentation from a flat, dense text block into an interactive, high-hierarchy cockpit inspired by top-tier interview platforms:
+  - 🧩 **Intelligent Two-Phase Decomposition (`questionParser.ts`)**: Automatically parses conversational prelude, feedback, and greetings from the central question, eliminating monolithic walls of text and isolating what the candidate needs to answer.
+  - 🎯 **Spotlight Question Box**: High-contrast, card-within-a-card spotlight with category-calibrated left accent border (`3.5px solid`), uppercase header badge (`TARGET QUESTION`), and readable typography (`13.5px`, `fontWeight: 600`, `lineHeight: 1.65`).
+  - 🎙️ **Live Animated Audio Wave Equalizer & Voice Halo**: Real-time 4-bar animated equalizer that moves dynamically while speech synthesis is speaking, paired with a subtle avatar glow ring.
+  - 🏷️ **Dynamic Technical Competency Badges**: Automatically detects and tags question domains (e.g. `⚡ Architecture & Latency`, `🎯 Project Deep Dive`, `⚖️ Technical Trade-offs`, `🧩 Algorithms & Data Structures`, `🤝 Behavioral (STAR)`).
+  - 💡 **Actionable Candidate Coaching Tips**: Embedded pro-tips under each question providing candidates with structured answering frameworks (STAR methodology, latency benchmarks, tradeoff criteria).
+  - 🔊 **Inline Voice Replay Controls**: Micro-action button (`Listen` / `Stop`) allowing candidates to re-hear questions spoken on demand.
+  - 💬 **Polished Candidate Response Bubble (`CandidateAnswerBubble`)**: Modern candidate answer cards featuring author name, live word count, and smooth gradients.
+  - 📊 **Segmented Stepper Progress Bar**: Replaced plain `Q 1 / 5` badge with an interactive 5-step progress track showing real-time question progression.
+
 - 🚀 **Parallel Test Case Execution & Fast-Abort Optimization**: Re-architected `server/coding/judge.js` with bounded 4-way concurrency (`mapConcurrent`), cutting total run and submit evaluation latency by over 70%. Added instant short-circuit aborts on compilation errors so syntax errors return in under 1 second without wasting compute on remaining test cases. Upgraded streaming submissions (`runTestCasesStreaming`) to broadcast per-test SSE progress in real-time as parallel tests complete.
 - 🔒 **Client-Side Secret Sanitization & Security Hardening**: Conducted an exhaustive security audit across frontend bundles, backend authorization, and environment configurations. Purged private `VITE_GEMINI_API_KEY` from client-side bundles (`src/services/coding.service.ts` and `.env.local`), routing all AI problem generation and interview queries strictly through backend-authenticated server endpoints. Obfuscated partial NVIDIA API key prefixes in administrative UI cards with server-managed indicators.
 - 🛡️ **Zero-Trust Backend Authentication & Role Enforcement**: Hardened `server/coding/authMiddleware.js` against authentication bypasses. Invalid, expired, or tampered Firebase ID tokens are immediately rejected with HTTP 401 instead of falling back to untrusted client headers (`x-user-role`, `x-user-email`). Roles are strictly verified against Firestore server-side.

@@ -438,4 +438,19 @@ textarea.interview-textarea:focus-visible {
   }
 }
 
+/* ── AI Voice Equalizer & Interview Animations ───────────── */
+@keyframes equalizerBar {
+  0% {
+    height: 3px;
+    opacity: 0.5;
+  }
+  100% {
+    height: 14px;
+    opacity: 1;
+  }
+}
 
+.ai-question-card:hover {
+  border-color: rgba(0, 30, 64, 0.16) !important;
+  box-shadow: 0 8px 28px -4px rgba(0, 30, 64, 0.12), 0 3px 8px rgba(0, 30, 64, 0.05) !important;
+}

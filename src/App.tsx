@@ -31,6 +31,7 @@ import { Leaderboard } from './components/Leaderboard'
 import { CodingHub } from './components/coding/CodingHub'
 import { AdminProblemsManager } from './components/coding/AdminProblemsManager'
 import { AudioVisualizer } from './components/interview/AudioVisualizer'
+import { AiQuestionCard, CandidateAnswerBubble } from './components/interview/AiQuestionCard'
 import { CookieBanner } from './components/cookies/CookieBanner'
 import { setCookie, getCookie, hasConsent, openCookiePreferences } from './utils/cookieManager'
 import { analyzeSpeech } from './utils/speechAnalytics'
@@ -6642,15 +6643,55 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
 
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '1.5rem 1rem', animation: 'fadeIn 0.3s ease' }}>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Pill color={T.onGold} bg={T.goldFixed}>Q {Math.min(qCount, 5)} / 5</Pill>
-            {speaking && <Pill color={T.teal} bg="#ccfbf1"><Volume2 size={11} /> Speaking…</Pill>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Step Stepper Badges */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#ffffff',
+                padding: '4px 10px',
+                borderRadius: 20,
+                border: '1px solid rgba(0, 30, 64, 0.1)',
+                boxShadow: '0 1px 4px rgba(0, 30, 64, 0.04)',
+              }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 800, color: T.primary, letterSpacing: '-0.01em' }}>
+                Question {Math.min(qCount, 5)} of 5
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 2 }}>
+                {[1, 2, 3, 4, 5].map((step) => {
+                  const isCurrent = step === Math.min(qCount, 5)
+                  const isPast = step < qCount
+                  return (
+                    <div
+                      key={step}
+                      title={`Question ${step}`}
+                      style={{
+                        width: isCurrent ? 18 : 7,
+                        height: 7,
+                        borderRadius: 4,
+                        background: isCurrent ? T.gold : isPast ? T.primary : 'rgba(0, 30, 64, 0.15)',
+                        transition: 'all 0.3s ease',
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+
+            {speaking && (
+              <Pill color={T.teal} bg="#ccfbf1">
+                <Volume2 size={11} /> Speaking…
+              </Pill>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {speaking && (
               <Btn onClick={stopSpeaking} variant="ghost" size="sm" style={{ color: T.error, borderColor: T.error }}>
-                Stop
+                Stop Audio
               </Btn>
             )}
             <Btn onClick={() => setShowEndConfirm(true)} variant="ghost" size="sm" style={{ color: T.error, borderColor: T.error }}>
@@ -6660,44 +6701,101 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 14, alignItems: 'start' }}>
-          <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div ref={chatRef} style={{ height: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4 }}>
-              {messages.map((m, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                  {m.role === 'system' ? (
-                    <div style={{ fontSize: 11, color: T.txtMut, textAlign: 'center', width: '100%', padding: '2px 0', fontStyle: 'italic' }}>
-                      {m.text}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        maxWidth: '88%',
-                        padding: '10px 14px',
-                        borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                        background: m.role === 'user' ? T.primary : T.bgWhite,
-                        color: m.role === 'user' ? '#fff' : T.txtPri,
-                        fontSize: 13,
-                        lineHeight: 1.65,
-                        border: m.role === 'ai' ? `1px solid ${T.border}` : 'none',
-                        boxShadow: m.role === 'ai' ? '0 1px 4px rgba(0,30,64,0.06)' : 'none',
-                        animation: 'fadeIn 0.3s ease',
-                      }}
-                    >
-                      {m.role === 'ai' && (
-                        <span style={{ fontSize: 10, color: T.onGold, fontWeight: 700, display: 'block', marginBottom: 4 }}>
-                          PrepHire AI
-                        </span>
-                      )}
-                      {m.text}
-                    </div>
-                  )}
-                </div>
-              ))}
+          <GlassCard style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div ref={chatRef} style={{ minHeight: 380, maxHeight: 460, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, paddingRight: 4 }}>
+              {messages.map((m, i) => {
+                const isLatestAi = m.role === 'ai' && i === messages.map((x) => x.role).lastIndexOf('ai')
+                const aiIndex = m.role === 'ai'
+                  ? messages.slice(0, i + 1).filter((x) => x.role === 'ai').length
+                  : undefined
+
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
+                      width: '100%',
+                    }}
+                  >
+                    {m.role === 'system' ? (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: T.txtMut,
+                          textAlign: 'center',
+                          width: '100%',
+                          padding: '6px 12px',
+                          background: 'rgba(0, 30, 64, 0.03)',
+                          borderRadius: 8,
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        {m.text}
+                      </div>
+                    ) : m.role === 'ai' ? (
+                      <AiQuestionCard
+                        text={m.text}
+                        isSpeaking={speaking && isLatestAi}
+                        isLatest={isLatestAi}
+                        qNumber={aiIndex}
+                        onReplayVoice={aiSpeak}
+                        onStopVoice={stopSpeaking}
+                      />
+                    ) : (
+                      <CandidateAnswerBubble
+                        text={m.text}
+                        userName={user?.name || profile?.name || 'Candidate'}
+                      />
+                    )}
+                  </div>
+                )
+              })}
               {loading && (
-                <div style={{ display: 'flex', gap: 5, padding: '10px 14px', background: T.bgWhite, borderRadius: '14px 14px 14px 4px', width: 'fit-content', border: `1px solid ${T.border}` }}>
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary, animation: `bounce 1s ${i * 0.2}s infinite` }} />
-                  ))}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '12px 16px',
+                    background: '#ffffff',
+                    borderRadius: 14,
+                    width: 'fit-content',
+                    border: '1px solid rgba(0, 30, 64, 0.1)',
+                    boxShadow: '0 2px 10px rgba(0, 30, 64, 0.05)',
+                    animation: 'fadeIn 0.3s ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${T.primary} 0%, #1a365d 100%)`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Sparkles size={14} style={{ color: T.gold }} />
+                  </div>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: T.txtSec }}>
+                    PrepHire AI is formulating your next question…
+                  </span>
+                  <div style={{ display: 'flex', gap: 4, marginLeft: 4 }}>
+                    {[0, 1, 2].map((dot) => (
+                      <div
+                        key={dot}
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background: T.primary,
+                          animation: `bounce 1s ${dot * 0.2}s infinite`,
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
