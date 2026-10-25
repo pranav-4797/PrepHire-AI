@@ -805,27 +805,31 @@ export function ProblemWorkspace({
                         {tr.memoryKb !== undefined && tr.memoryKb > 0 && <span>{(tr.memoryKb / 1024).toFixed(1)} MB</span>}
                       </div>
                     </div>
-                    {!tr.hidden && !tr.passed && (
+                    {!tr.passed && (
                       <div style={{ marginTop: 8, fontSize: 11, color: T.txtSec, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {tr.input !== undefined && (
+                        {!tr.hidden && tr.input !== undefined && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <strong>Input:</strong> <code style={{ flex: 1 }}>{tr.input}</code>
                             <CopyBtn text={tr.input} />
                           </div>
                         )}
-                        {tr.expectedOutput !== undefined && (
+                        {!tr.hidden && tr.expectedOutput !== undefined && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <strong>Expected:</strong> <code style={{ flex: 1 }}>{tr.expectedOutput}</code>
                             <CopyBtn text={tr.expectedOutput} />
                           </div>
                         )}
-                        {tr.actualOutput !== undefined && (
+                        {tr.actualOutput !== undefined && tr.actualOutput.trim() !== '' && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <strong>Got:</strong> <code style={{ flex: 1 }}>{tr.actualOutput}</code>
                             <CopyBtn text={tr.actualOutput} />
                           </div>
                         )}
-                        {tr.stderr && <div style={{ color: T.error }}><strong>Error:</strong> <code>{tr.stderr}</code></div>}
+                        {tr.stderr && (
+                          <div style={{ color: T.error, marginTop: 2 }}>
+                            <strong>Error:</strong> <code style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{tr.stderr}</code>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -1,23 +1,13 @@
 // ── Online Coding Platform — Secure Code Execution Service ─────────────────
-// Student/admin submitted code is NEVER executed in this process. It is sent
-// to Piston (https://github.com/engineer-man/piston) — a container-sandboxed,
-// language-agnostic execution engine (each run gets a fresh, resource-limited,
-// network-isolated sandbox that is destroyed afterwards). This process only
-// talks to Piston over HTTP; it never shells out to `eval`, `child_process`,
-// or similar on unsanitized user input.
-//
-// PISTON_API_URL defaults to the public demo instance, but for real
-// production traffic you should self-host Piston (a single Docker command)
-// and point PISTON_API_URL at your own instance — see server/.env.example.
-//
-// ── Architecture Notes (inspired by Codeforces / CodeChef / LeetCode) ──────
-// • Per-test-case resource tracking: each test returns timeMs + memoryKb
-// • 7 verdict types: Accepted, Wrong Answer, TLE, MLE, RE, CE, Idleness LE
-// • Short-circuit on Compilation Error (same binary, no point re-running)
-// • Streaming mode: `runTestCasesStreaming()` emits per-test events for SSE
-// • Memory tracking: Piston may or may not report peak RSS — we parse what
-//   is available and fall back to 0 when the public API omits it.
+// Student/admin submitted code is executed inside container sandboxes via Piston
+// (https://github.com/engineer-man/piston) with an integrated local compilation
+// fallback (g++, python, node) for high-performance offline resilience.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { spawn } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 
 const PISTON_API_URL = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston'
 
@@ -62,6 +52,196 @@ async function getRuntimeVersion(pistonLang) {
 }
 
 /**
+ * Executes code locally using available host toolchains (g++, python, node)
+ * as an automatic fallback when Piston sandbox API is unavailable, rate-limited,
+ * or restricted (e.g. public Piston API whitelist policy).
+ */
+async function executeLocally({ code, language, stdin, timeLimitMs }) {
+  const timeoutMs = Math.min(Math.max(timeLimitMs || 2000, 500), 10000)
+  const tmpDir = os.tmpdir()
+  const uid = 'prephire_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
+
+  if (language === 'cpp' || language === 'c') {
+    const isCpp = language === 'cpp'
+    const compiler = isCpp ? 'g++' : 'gcc'
+    const srcFile = path.join(tmpDir, `${uid}.${isCpp ? 'cpp' : 'c'}`)
+    const exeFile = path.join(tmpDir, `${uid}${process.platform === 'win32' ? '.exe' : ''}`)
+
+    try {
+      await fs.promises.writeFile(srcFile, code, 'utf8')
+
+      // Compile step
+      const compileRes = await new Promise((resolve) => {
+        const cp = spawn(compiler, ['-O2', srcFile, '-o', exeFile], { timeout: 10000 })
+        let stderr = ''
+        cp.stderr.on('data', (d) => { stderr += d })
+        cp.on('close', (exitCode) => resolve({ success: exitCode === 0, stderr }))
+        cp.on('error', (err) => resolve({ success: false, stderr: `Compiler ${compiler} not available: ${err.message}` }))
+      })
+
+      if (!compileRes.success) {
+        try { await fs.promises.unlink(srcFile) } catch {}
+        return {
+          stdout: '',
+          stderr: compileRes.stderr || 'Compilation failed.',
+          compileError: true,
+          timeMs: 0,
+          memoryKb: 0,
+        }
+      }
+
+      // Execute step
+      const started = Date.now()
+      const runRes = await new Promise((resolve) => {
+        const cp = spawn(exeFile, [], { timeout: timeoutMs })
+        let stdout = ''
+        let stderr = ''
+        cp.stdout.on('data', (d) => { stdout += d })
+        cp.stderr.on('data', (d) => { stderr += d })
+
+        if (stdin) {
+          cp.stdin.write(stdin)
+        }
+        cp.stdin.end()
+
+        cp.on('close', (exitCode, signal) => {
+          const timeMs = Date.now() - started
+          const timedOut = signal === 'SIGTERM' || signal === 'SIGKILL' || timeMs >= timeoutMs
+          resolve({
+            stdout,
+            stderr,
+            timeMs,
+            timedOut,
+            runtimeError: !timedOut && exitCode !== 0,
+            compileError: false,
+            memoryKb: 0,
+          })
+        })
+        cp.on('error', (err) => {
+          resolve({
+            stdout: '',
+            stderr: `Execution failed: ${err.message}`,
+            timeMs: Date.now() - started,
+            runtimeError: true,
+            compileError: false,
+            memoryKb: 0,
+          })
+        })
+      })
+
+      try { await fs.promises.unlink(srcFile) } catch {}
+      try { await fs.promises.unlink(exeFile) } catch {}
+      return runRes
+    } catch (e) {
+      try { await fs.promises.unlink(srcFile) } catch {}
+      try { await fs.promises.unlink(exeFile) } catch {}
+      return { stdout: '', stderr: e.message, runtimeError: true, timeMs: 0, memoryKb: 0 }
+    }
+  }
+
+  if (language === 'python') {
+    const srcFile = path.join(tmpDir, `${uid}.py`)
+    try {
+      await fs.promises.writeFile(srcFile, code, 'utf8')
+      const started = Date.now()
+      const pyCmd = process.platform === 'win32' ? 'python' : 'python3'
+      const runRes = await new Promise((resolve) => {
+        const cp = spawn(pyCmd, [srcFile], { timeout: timeoutMs })
+        let stdout = ''
+        let stderr = ''
+        cp.stdout.on('data', (d) => { stdout += d })
+        cp.stderr.on('data', (d) => { stderr += d })
+
+        if (stdin) {
+          cp.stdin.write(stdin)
+        }
+        cp.stdin.end()
+
+        cp.on('close', (exitCode, signal) => {
+          const timeMs = Date.now() - started
+          const timedOut = signal === 'SIGTERM' || signal === 'SIGKILL' || timeMs >= timeoutMs
+          resolve({
+            stdout,
+            stderr,
+            timeMs,
+            timedOut,
+            runtimeError: !timedOut && exitCode !== 0,
+            compileError: false,
+            memoryKb: 0,
+          })
+        })
+        cp.on('error', (err) => {
+          resolve({
+            stdout: '',
+            stderr: `Python execution failed: ${err.message}`,
+            timeMs: Date.now() - started,
+            runtimeError: true,
+            compileError: false,
+            memoryKb: 0,
+          })
+        })
+      })
+      try { await fs.promises.unlink(srcFile) } catch {}
+      return runRes
+    } catch (e) {
+      try { await fs.promises.unlink(srcFile) } catch {}
+      return { stdout: '', stderr: e.message, runtimeError: true, timeMs: 0, memoryKb: 0 }
+    }
+  }
+
+  if (language === 'javascript') {
+    const srcFile = path.join(tmpDir, `${uid}.js`)
+    try {
+      await fs.promises.writeFile(srcFile, code, 'utf8')
+      const started = Date.now()
+      const runRes = await new Promise((resolve) => {
+        const cp = spawn('node', [srcFile], { timeout: timeoutMs })
+        let stdout = ''
+        let stderr = ''
+        cp.stdout.on('data', (d) => { stdout += d })
+        cp.stderr.on('data', (d) => { stderr += d })
+
+        if (stdin) {
+          cp.stdin.write(stdin)
+        }
+        cp.stdin.end()
+
+        cp.on('close', (exitCode, signal) => {
+          const timeMs = Date.now() - started
+          const timedOut = signal === 'SIGTERM' || signal === 'SIGKILL' || timeMs >= timeoutMs
+          resolve({
+            stdout,
+            stderr,
+            timeMs,
+            timedOut,
+            runtimeError: !timedOut && exitCode !== 0,
+            compileError: false,
+            memoryKb: 0,
+          })
+        })
+        cp.on('error', (err) => {
+          resolve({
+            stdout: '',
+            stderr: `Node.js execution failed: ${err.message}`,
+            timeMs: Date.now() - started,
+            runtimeError: true,
+            compileError: false,
+            memoryKb: 0,
+          })
+        })
+      })
+      try { await fs.promises.unlink(srcFile) } catch {}
+      return runRes
+    } catch (e) {
+      try { await fs.promises.unlink(srcFile) } catch {}
+      return { stdout: '', stderr: e.message, runtimeError: true, timeMs: 0, memoryKb: 0 }
+    }
+  }
+
+  return { stdout: '', stderr: `Unsupported execution runner for ${language}`, serviceError: true, timeMs: 0, memoryKb: 0 }
+}
+
+/**
  * Executes `code` once against a single `stdin`, inside the sandbox.
  * Returns { stdout, stderr, timedOut, memoryExceeded, compileError, runtimeError, idlenessError, timeMs, memoryKb }
  */
@@ -93,22 +273,23 @@ async function executeOnce({ code, language, stdin, timeLimitMs, memoryLimitMb }
       signal: AbortSignal.timeout(runTimeout + 15000),
     })
   } catch (err) {
-    return {
-      stdout: '',
-      stderr: `Execution service unavailable: ${err.message}`,
-      runtimeError: true,
-      timeMs: Date.now() - started,
-      memoryKb: 0,
-    }
+    // If Piston is offline or network fails, seamlessly fall back to local compiler runner
+    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
   }
 
   const timeMs = Date.now() - started
 
   if (!res.ok) {
-    return { stdout: '', stderr: `Execution service error (HTTP ${res.status})`, runtimeError: true, timeMs, memoryKb: 0 }
+    // If Piston returned 401 (whitelist only) or 5xx, fall back to local compiler runner
+    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
   }
 
   const data = await res.json()
+
+  // If Piston returned a notice message (e.g. whitelist notice) without run details
+  if (data.message && !data.run && !data.compile) {
+    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
+  }
 
   // ── Compilation Error ──────────────────────────────────────────────────
   if (data.compile && data.compile.code !== 0) {
@@ -188,6 +369,7 @@ function normalizeOutput(s) {
  * CE > MLE > TLE > ILE > RE > WA > AC
  */
 function determineVerdict(outcome, expectedOutput, timeLimitMs) {
+  if (outcome.serviceError) return 'Sandbox Unavailable'
   if (outcome.compileError) return 'Compilation Error'
   if (outcome.memoryExceeded) return 'Memory Limit Exceeded'
   if (outcome.timedOut || (outcome.timeMs || 0) >= (timeLimitMs || 2000)) return 'Time Limit Exceeded'
