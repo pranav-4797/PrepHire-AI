@@ -24,6 +24,11 @@ function getApiKeyForModel(modelName) {
  * Call NVIDIA NIM Chat Completions endpoint with JSON-mode output.
  */
 export async function callNvidia(prompt, sys, { model = DEFAULT_NVIDIA_MODEL, temperature = 0.2, clientApiKey = null } = {}) {
+  const m = (model || '').toLowerCase()
+  if (m.includes('gemini') || !process.env.NVIDIA_API_KEY) {
+    return callGemini(prompt, sys, clientApiKey)
+  }
+
   const apiKey = getApiKeyForModel(model)
   if (!apiKey) {
     console.warn(`⚠️ No NVIDIA API key configured for model "${model}". Falling back to Gemini.`)
@@ -93,9 +98,47 @@ function cleanAndParseJson(raw) {
  */
 function generateOfflineFallbackProblem({ topic, difficulty = 'Medium', languages = ['python', 'javascript', 'cpp', 'java'], facultyNotes = '' }) {
   const t = (topic || '').toLowerCase()
+  const isArithmetic = t.includes('arithmetic') || t.includes('subtraction') || t.includes('multiplication') || t.includes('multiply') || t.includes('subtract') || t.includes('2 number') || t.includes('two number') || (t.includes('sum') && !t.includes('triplet') && !t.includes('3sum'))
   const isSelectionSort = t.includes('selection') || (t.includes('sort') && !t.includes('quick') && !t.includes('merge'))
   const isBinarySearch = t.includes('binary') || t.includes('search')
-  const isTwoSum = t.includes('two') || t.includes('sum')
+
+  if (isArithmetic) {
+    return {
+      title: 'Basic Arithmetic Operations',
+      slug: 'basic-arithmetic-operations',
+      difficulty: 'Easy',
+      topics: ['Math', 'Basic I/O', 'Arithmetic'],
+      statement: `### Problem Statement\nGiven two integers $a$ and $b$ received from standard input, write a program to calculate and display their:\n1. **Sum** ($a + b$)\n2. **Difference** ($a - b$)\n3. **Product** ($a \\times b$)\n\nPrint each result on a separate line.\n\n${facultyNotes ? `> **Faculty Note:** ${facultyNotes}\n` : ''}`,
+      inputFormat: 'A single line containing two space-separated integers a and b.',
+      outputFormat: 'Print three lines:\nLine 1: Sum (a + b)\nLine 2: Difference (a - b)\nLine 3: Product (a * b)',
+      constraints: '-10^4 <= a, b <= 10^4',
+      timeLimitMs: 2000,
+      memoryLimitMb: 256,
+      languages,
+      starterCode: {
+        cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b;\n    if (cin >> a >> b) {\n        // TODO: Print sum, difference, and product on separate lines\n    }\n    return 0;\n}`,
+        python: `import sys\n\ndef main():\n    lines = sys.stdin.read().split()\n    if len(lines) >= 2:\n        a = int(lines[0])\n        b = int(lines[1])\n        # TODO: Print sum, difference, and product on separate lines\n\nif __name__ == '__main__':\n    main()`,
+        java: `import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        if (sc.hasNextInt()) {\n            int a = sc.nextInt();\n            int b = sc.nextInt();\n            // TODO: Print sum, difference, and product on separate lines\n        }\n    }\n}`,
+        javascript: `const fs = require('fs');\n\nfunction solve() {\n  const input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/);\n  if (input.length >= 2) {\n    const a = parseInt(input[0], 10);\n    const b = parseInt(input[1], 10);\n    // TODO: Print sum, difference, and product on separate lines\n  }\n}\n\nsolve();`,
+        c: `#include <stdio.h>\n\nint main() {\n    int a, b;\n    if (scanf("%d %d", &a, &b) == 2) {\n        // TODO: Print sum, difference, and product on separate lines\n    }\n    return 0;\n}`,
+      },
+      referenceSolution: {
+        language: 'python',
+        code: `import sys\n\ndef main():\n    lines = sys.stdin.read().split()\n    if len(lines) >= 2:\n        a = int(lines[0])\n        b = int(lines[1])\n        print(a + b)\n        print(a - b)\n        print(a * b)\n\nif __name__ == '__main__':\n    main()`,
+      },
+      sampleTests: [
+        { input: '5 3', output: '8\n2\n15', explanation: '5 + 3 = 8, 5 - 3 = 2, 5 * 3 = 15' },
+        { input: '10 -2', output: '8\n12\n-20', explanation: '10 + (-2) = 8, 10 - (-2) = 12, 10 * (-2) = -20' },
+      ],
+      hiddenTests: [
+        { input: '0 0', output: '0\n0\n0' },
+        { input: '-5 -5', output: '-10\n0\n25' },
+        { input: '100 200', output: '300\n-100\n20000' },
+        { input: '-50 50', output: '0\n-100\n-2500' },
+        { input: '1 -1', output: '0\n2\n-1' },
+      ],
+    }
+  }
 
   if (isSelectionSort) {
     return {
@@ -248,17 +291,28 @@ Your task is to take a faculty member's brief problem concept and output a compl
 CRITICAL FORMAT RULE: You MUST return a single, valid JSON object ONLY. No markdown, no preface, no trailing text.
 
 THE PREPHIRE SANDBOX CONVENTION:
-1. Piston executes code via standard input (stdin) and verifies against expected standard output (stdout).
-2. STARTER CODE RULES (STRICT — NEVER WRITE THE FULL SOLUTION IN STARTER CODE):
+1. Code executes via standard input (stdin) and verifies against expected standard output (stdout).
+2. SIMPLICITY & EXACT FIT PRINCIPLE (CRITICAL):
+   - Match code complexity strictly to what the user requested!
+   - If the user specifies a simple, basic, or elementary problem (e.g. arithmetic on 2 numbers, even/odd, min/max of two values, basic math, simple strings, basic conditionals):
+     * DO NOT generate array sizes 'n', vectors, dynamic allocations, complex loops, or nested structures!
+     * For 2 numbers, read exactly 2 numbers:
+       - C++: int a, b; if (cin >> a >> b) { /* TODO: write logic */ }
+       - Python: read 2 tokens from standard input
+       - JS: parse 2 numbers from input
+       - Java: int a = sc.nextInt(); int b = sc.nextInt();
+     * Keep the statement concise, starter code clean, and test cases directly matching the required numbers.
+   - If and only if the problem concept is explicitly an array, sorting, tree, matrix, graph, or list algorithm, then use arrays/vectors.
+3. STARTER CODE RULES (STRICT — NEVER WRITE THE FULL SOLUTION IN STARTER CODE):
    - Starter code must be an UNSOLVED skeleton/stub for students to write their logic into.
    - For C++: Include \`#include <iostream>\` and ALWAYS declare \`using namespace std;\` on the next line. NEVER use \`std::cin\`, \`std::cout\`, \`std::endl\`, \`std::vector\`, or \`std::string\` — always write \`cin\`, \`cout\`, \`endl\`, \`vector\`, \`string\`.
-   - Provide an unsolved function skeleton (e.g., \`// TODO: Implement your solution here\`) and a minimal I/O reader in \`int main()\`, OR a clean competitive \`main()\` template that reads inputs and leaves the solution logic empty for the student to solve.
-   - For Python: Provide \`def solve(...):\` with \`# TODO: Implement your solution here\` and \`pass\`.
+   - Provide an unsolved skeleton with minimal I/O reader in \`int main()\`, leaving the core logic for the student to solve.
+   - For Python: Provide concise I/O with \`# TODO: Implement your solution here\` and \`pass\`.
    - For Java / JavaScript: Provide empty method skeletons with standard I/O reader.
    - DO NOT solve the problem inside \`starterCode\`! The student must write the algorithm themselves.
-3. The complete, optimal working algorithmic solution that passes all test cases MUST ONLY be in \`referenceSolution\` (in Python 3).
-4. Output must be strictly normalized: single values or clean lines, no conversational text like "The answer is:".
-5. Test cases must be 100% mathematically correct matching the reference solution. Include 2-3 sample tests with clear explanations and 5-8 comprehensive hidden test cases (testing boundary limits, edge cases, large inputs, zeros, negative numbers).
+4. The complete, optimal working algorithmic solution that passes all test cases MUST ONLY be in \`referenceSolution\` (in Python 3).
+5. Output must be strictly normalized: single values or clean lines, no conversational text like "The answer is:".
+6. Test cases must be 100% mathematically correct matching the reference solution. Include 2-3 sample tests with clear explanations and 5-8 comprehensive hidden test cases.
 
 JSON OUTPUT SCHEMA:
 {

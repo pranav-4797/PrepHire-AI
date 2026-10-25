@@ -97,8 +97,8 @@ export async function executeOnce({ code, language, stdin, timeLimitMs, memoryLi
     console.warn('ℹ️ Judge0 execution error, attempting fallback:', err.message)
   }
 
-  // Fallback A: Try Piston if configured
-  if (process.env.PISTON_API_URL && !process.env.PISTON_API_URL.includes('emkc.org')) {
+  // Fallback A: Try Piston sandbox
+  if (process.env.PISTON_API_URL || true) {
     try {
       const pistonRes = await executePiston({ code, language, stdin, timeLimitMs, memoryLimitMb })
       if (!pistonRes.serviceError) return pistonRes

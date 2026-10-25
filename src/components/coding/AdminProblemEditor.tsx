@@ -145,7 +145,7 @@ export function AdminProblemEditor({
   const [aiDifficulty, setAiDifficulty] = useState<Difficulty>('Medium')
   const [aiLangs, setAiLangs] = useState<string[]>(['python', 'javascript', 'cpp', 'java'])
   const [aiNotes, setAiNotes] = useState('')
-  const [aiModel, setAiModel] = useState('qwen/qwen2.5-coder-32b-instruct')
+  const [aiModel, setAiModel] = useState('gemini-1.5-flash')
   const [aiValidateSandbox, setAiValidateSandbox] = useState(true)
   const [preflightStatus, setPreflightStatus] = useState<GenerateProblemPreflight | null>(null)
 
@@ -602,21 +602,24 @@ export function AdminProblemEditor({
               </div>
 
               <div>
-                <label style={labelStyle}>NVIDIA AI Engine</label>
+                <label style={labelStyle}>AI Problem Generator Engine</label>
                 <select
                   disabled={aiGenerating}
                   value={aiModel}
                   onChange={(e) => setAiModel(e.target.value)}
                   style={inputStyle}
                 >
-                  <option value="qwen/qwen2.5-coder-32b-instruct">
-                    Qwen 2.5 Coder 32B (Recommended — Best Code Accuracy & Multi-Language Stubs)
+                  <option value="gemini-1.5-flash">
+                    Google Gemini AI (Recommended — Ultra-Fast, Clean Stubs & Accurate Tests)
                   </option>
                   <option value="nvidia/llama-3.1-nemotron-70b-instruct">
-                    NVIDIA Llama 3.1 Nemotron 70B (Best Problem Pedagogy & Edge Cases)
+                    NVIDIA Llama 3.1 Nemotron 70B (Pedagogy & Edge Cases)
+                  </option>
+                  <option value="qwen/qwen2.5-coder-32b-instruct">
+                    Qwen 2.5 Coder 32B (NVIDIA NIM)
                   </option>
                   <option value="meta/llama-3.3-70b-instruct">
-                    Meta Llama 3.3 70B Instruct (General Reasoning & Algorithmic Design)
+                    Meta Llama 3.3 70B Instruct (General Reasoning)
                   </option>
                 </select>
               </div>
