@@ -140,16 +140,72 @@ export function determineVerdict(outcome, expectedOutput, timeLimitMs, language)
 }
 
 /**
- * Runs `code` against a list of test cases and returns per-case verdicts plus
- * an aggregate summary with peak runtime and peak memory.
+ * Helper to process an array with bounded concurrency (e.g. 4 workers in parallel).
+ * Guarantees order preservation of the results array.
+ */
+async function mapConcurrent(items, concurrency, fn) {
+  const results = new Array(items.length)
+  let nextIdx = 0
+
+  async function worker() {
+    while (nextIdx < items.length) {
+      const idx = nextIdx++
+      results[idx] = await fn(items[idx], idx)
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length)
+  const workers = Array.from({ length: workerCount }, () => worker())
+  await Promise.all(workers)
+  return results
+}
+
+/**
+ * Runs `code` against a list of test cases in parallel (up to 4 concurrent sandboxes)
+ * and returns per-case verdicts plus an aggregate summary with peak runtime and peak memory.
  */
 export async function runTestCases({ code, language, testCases, timeLimitMs, memoryLimitMb }) {
-  const results = []
-  let overallVerdict = 'Accepted'
-  let maxTimeMs = 0
-  let peakMemoryKb = 0
+  if (!testCases || testCases.length === 0) {
+    return { verdict: 'Accepted', passedCount: 0, totalCount: 0, runtimeMs: 0, memoryKb: 0, testResults: [] }
+  }
 
-  for (const tc of testCases) {
+  // Fast check: evaluate test case 0 first to verify compilation and avoid running all tests on syntax errors
+  const firstOutcome = await executeOnce({
+    code,
+    language,
+    stdin: testCases[0].input,
+    timeLimitMs,
+    memoryLimitMb,
+  })
+
+  const firstVerdict = determineVerdict(firstOutcome, testCases[0].output, timeLimitMs, language)
+  const firstResult = {
+    passed: firstVerdict === 'Accepted',
+    verdict: firstVerdict,
+    input: testCases[0].hidden ? undefined : testCases[0].input,
+    expectedOutput: testCases[0].hidden ? undefined : testCases[0].output,
+    actualOutput: testCases[0].hidden ? undefined : firstOutcome.stdout,
+    stderr: firstOutcome.stderr ? firstOutcome.stderr.slice(0, 2000) : undefined,
+    timeMs: firstOutcome.timeMs,
+    memoryKb: firstOutcome.memoryKb,
+    hidden: !!testCases[0].hidden,
+  }
+
+  // Fast abort: If compilation failed or only 1 test, return immediately (zero wasted time!)
+  if (firstVerdict === 'Compilation Error' || firstVerdict === 'Sandbox Unavailable' || testCases.length === 1) {
+    return {
+      verdict: firstVerdict,
+      passedCount: firstResult.passed ? 1 : 0,
+      totalCount: testCases.length,
+      runtimeMs: firstOutcome.timeMs || 0,
+      memoryKb: firstOutcome.memoryKb || 0,
+      testResults: [firstResult],
+    }
+  }
+
+  // Run remaining test cases concurrently (4 parallel workers)
+  const remainingCases = testCases.slice(1)
+  const remainingOutcomes = await mapConcurrent(remainingCases, 4, async (tc) => {
     const outcome = await executeOnce({
       code,
       language,
@@ -157,15 +213,9 @@ export async function runTestCases({ code, language, testCases, timeLimitMs, mem
       timeLimitMs,
       memoryLimitMb,
     })
-
-    maxTimeMs = Math.max(maxTimeMs, outcome.timeMs || 0)
-    peakMemoryKb = Math.max(peakMemoryKb, outcome.memoryKb || 0)
-
     const verdict = determineVerdict(outcome, tc.output, timeLimitMs, language)
-    const passed = verdict === 'Accepted'
-
-    results.push({
-      passed,
+    return {
+      passed: verdict === 'Accepted',
       verdict,
       input: tc.hidden ? undefined : tc.input,
       expectedOutput: tc.hidden ? undefined : tc.output,
@@ -174,47 +224,100 @@ export async function runTestCases({ code, language, testCases, timeLimitMs, mem
       timeMs: outcome.timeMs,
       memoryKb: outcome.memoryKb,
       hidden: !!tc.hidden,
-    })
-
-    if (!passed && overallVerdict === 'Accepted') {
-      overallVerdict = verdict
     }
+  })
 
-    // Stop early on compile error — same code will not compile for subsequent cases
-    if (verdict === 'Compilation Error' || verdict === 'Sandbox Unavailable') break
+  const allResults = [firstResult, ...remainingOutcomes]
+  let maxTimeMs = firstOutcome.timeMs || 0
+  let peakMemoryKb = firstOutcome.memoryKb || 0
+  let overallVerdict = firstResult.passed ? 'Accepted' : firstVerdict
+
+  for (const r of remainingOutcomes) {
+    maxTimeMs = Math.max(maxTimeMs, r.timeMs || 0)
+    peakMemoryKb = Math.max(peakMemoryKb, r.memoryKb || 0)
+    if (!r.passed && overallVerdict === 'Accepted') {
+      overallVerdict = r.verdict
+    }
   }
 
-  const passedCount = results.filter((r) => r.passed).length
+  const passedCount = allResults.filter((r) => r.passed).length
   return {
-    verdict: results.length === 0 ? 'Runtime Error' : overallVerdict,
+    verdict: allResults.length === 0 ? 'Runtime Error' : overallVerdict,
     passedCount,
     totalCount: testCases.length,
     runtimeMs: maxTimeMs,
     memoryKb: peakMemoryKb,
-    testResults: results,
+    testResults: allResults,
   }
 }
 
 /**
- * Streaming variant of runTestCases — calls `onProgress(event)` after each
- * test case completes, enabling Server-Sent Events (SSE) real-time progress.
- *
- * @param {Function} onProgress - Callback receiving progress events:
- *   { type: 'compiling' }
- *   { type: 'test', index, total, verdict, passed, timeMs, memoryKb }
- *   { type: 'complete', verdict, passedCount, totalCount, runtimeMs, memoryKb, testResults }
+ * Streaming variant of runTestCases — evaluates test cases concurrently while
+ * streaming real-time per-test progress events to Server-Sent Events (SSE).
  */
 export async function runTestCasesStreaming({ code, language, testCases, timeLimitMs, memoryLimitMb, onProgress }) {
-  const results = []
-  let overallVerdict = 'Accepted'
-  let maxTimeMs = 0
-  let peakMemoryKb = 0
+  if (!testCases || testCases.length === 0) {
+    const empty = { verdict: 'Accepted', passedCount: 0, totalCount: 0, runtimeMs: 0, memoryKb: 0, testResults: [] }
+    onProgress({ type: 'complete', ...empty })
+    return empty
+  }
 
   // Emit compiling phase
   onProgress({ type: 'compiling' })
 
-  for (let i = 0; i < testCases.length; i++) {
-    const tc = testCases[i]
+  // Fast check: Evaluate case 0 first
+  const firstOutcome = await executeOnce({
+    code,
+    language,
+    stdin: testCases[0].input,
+    timeLimitMs,
+    memoryLimitMb,
+  })
+
+  const firstVerdict = determineVerdict(firstOutcome, testCases[0].output, timeLimitMs, language)
+  const firstResult = {
+    passed: firstVerdict === 'Accepted',
+    verdict: firstVerdict,
+    input: testCases[0].hidden ? undefined : testCases[0].input,
+    expectedOutput: testCases[0].hidden ? undefined : testCases[0].output,
+    actualOutput: testCases[0].hidden ? undefined : firstOutcome.stdout,
+    stderr: firstOutcome.stderr ? firstOutcome.stderr.slice(0, 2000) : undefined,
+    timeMs: firstOutcome.timeMs,
+    memoryKb: firstOutcome.memoryKb,
+    hidden: !!testCases[0].hidden,
+  }
+
+  onProgress({
+    type: 'test',
+    index: 1,
+    total: testCases.length,
+    verdict: firstVerdict,
+    passed: firstResult.passed,
+    timeMs: firstOutcome.timeMs,
+    memoryKb: firstOutcome.memoryKb,
+  })
+
+  // Fast abort on Compilation Error
+  if (firstVerdict === 'Compilation Error' || firstVerdict === 'Sandbox Unavailable' || testCases.length === 1) {
+    const finalResult = {
+      verdict: firstVerdict,
+      passedCount: firstResult.passed ? 1 : 0,
+      totalCount: testCases.length,
+      runtimeMs: firstOutcome.timeMs || 0,
+      memoryKb: firstOutcome.memoryKb || 0,
+      testResults: [firstResult],
+    }
+    onProgress({ type: 'complete', ...finalResult })
+    return finalResult
+  }
+
+  // Run remaining tests concurrently with 4-way parallelism and stream as each completes
+  const remainingCases = testCases.slice(1)
+  const allResults = new Array(testCases.length)
+  allResults[0] = firstResult
+
+  await mapConcurrent(remainingCases, 4, async (tc, relativeIdx) => {
+    const actualIdx = relativeIdx + 1
     const outcome = await executeOnce({
       code,
       language,
@@ -222,15 +325,9 @@ export async function runTestCasesStreaming({ code, language, testCases, timeLim
       timeLimitMs,
       memoryLimitMb,
     })
-
-    maxTimeMs = Math.max(maxTimeMs, outcome.timeMs || 0)
-    peakMemoryKb = Math.max(peakMemoryKb, outcome.memoryKb || 0)
-
     const verdict = determineVerdict(outcome, tc.output, timeLimitMs, language)
-    const passed = verdict === 'Accepted'
-
     const testResult = {
-      passed,
+      passed: verdict === 'Accepted',
       verdict,
       input: tc.hidden ? undefined : tc.input,
       expectedOutput: tc.hidden ? undefined : tc.output,
@@ -240,40 +337,44 @@ export async function runTestCasesStreaming({ code, language, testCases, timeLim
       memoryKb: outcome.memoryKb,
       hidden: !!tc.hidden,
     }
+    allResults[actualIdx] = testResult
 
-    results.push(testResult)
-
-    if (!passed && overallVerdict === 'Accepted') {
-      overallVerdict = verdict
-    }
-
-    // Emit per-test progress event
+    // Emit live test progress event immediately when each test finishes
     onProgress({
       type: 'test',
-      index: i + 1,
+      index: actualIdx + 1,
       total: testCases.length,
       verdict,
-      passed,
+      passed: testResult.passed,
       timeMs: outcome.timeMs,
       memoryKb: outcome.memoryKb,
     })
+  })
 
-    // Stop early on compile or service error
-    if (verdict === 'Compilation Error' || verdict === 'Sandbox Unavailable') break
+  let maxTimeMs = firstOutcome.timeMs || 0
+  let peakMemoryKb = firstOutcome.memoryKb || 0
+  let overallVerdict = firstResult.passed ? 'Accepted' : firstVerdict
+
+  for (const r of allResults) {
+    if (!r) continue
+    maxTimeMs = Math.max(maxTimeMs, r.timeMs || 0)
+    peakMemoryKb = Math.max(peakMemoryKb, r.memoryKb || 0)
+    if (!r.passed && overallVerdict === 'Accepted') {
+      overallVerdict = r.verdict
+    }
   }
 
-  const passedCount = results.filter((r) => r.passed).length
+  const passedCount = allResults.filter((r) => r?.passed).length
   const finalResult = {
-    verdict: results.length === 0 ? 'Runtime Error' : overallVerdict,
+    verdict: allResults.length === 0 ? 'Runtime Error' : overallVerdict,
     passedCount,
     totalCount: testCases.length,
     runtimeMs: maxTimeMs,
     memoryKb: peakMemoryKb,
-    testResults: results,
+    testResults: allResults,
   }
 
   // Emit final complete event
   onProgress({ type: 'complete', ...finalResult })
-
   return finalResult
 }
