@@ -4518,6 +4518,7 @@ export default function App() {
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [pendingIntroText, setPendingIntroText] = useState<string | null>(null)
+  const [studentTakingQuiz, setStudentTakingQuiz] = useState(false)
   const isPopStateRef = useRef(false)
 
   // ── Browser History & Back/Forward button listener ───────────────────
@@ -5378,65 +5379,80 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
 
     return (
       <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', flexDirection: 'column' }}>
-        <Navbar user={user} onLogout={handleLogout} onHome={() => { setStudentTab('interview'); setScreen('home') }} inInterview={false} onFeedback={() => setShowFeedbackModal(true)} />
+        <Navbar
+          user={user}
+          onLogout={handleLogout}
+          onHome={() => {
+            if (studentTakingQuiz) {
+              if (!window.confirm('You have an active assessment in progress. Leaving will forfeit your current answers. Exit anyway?')) return
+              setStudentTakingQuiz(false)
+            }
+            setStudentTab('interview')
+            setScreen('home')
+          }}
+          inInterview={studentTakingQuiz}
+          onFeedback={() => setShowFeedbackModal(true)}
+        />
 
-        <div className="portal-layout">
+        <div className={`portal-layout ${studentTakingQuiz ? 'assessment-focus-mode' : ''}`}>
           {/* Sidebar */}
-          <aside className="portal-sidebar">
-            <div style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.08em' }}>
-              Student Portal
-            </div>
-            {[
-              { id: 'interview', label: 'Mock Interview' },
-              { id: 'history', label: 'My Assessments' },
-              { id: 'quizzes', label: 'Quizzes & Practice Tests' },
-              { id: 'coding', label: 'Coding Platform' },
-              { id: 'courses', label: 'Resource Library' },
-              { id: 'ranking', label: 'Leaderboard' },
-              { id: 'profile', label: 'Profile' },
-            ].map((tab) => (
+          {!studentTakingQuiz && (
+            <aside className="portal-sidebar">
+              <div style={{ fontSize: 10, fontWeight: 700, color: T.txtMut, textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.08em' }}>
+                Student Portal
+              </div>
+              {[
+                { id: 'interview', label: 'Mock Interview' },
+                { id: 'history', label: 'My Assessments' },
+                { id: 'quizzes', label: 'Quizzes & Practice Tests' },
+                { id: 'coding', label: 'Coding Platform' },
+                { id: 'courses', label: 'Resource Library' },
+                { id: 'ranking', label: 'Leaderboard' },
+                { id: 'profile', label: 'Profile' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setStudentTab(tab.id as typeof studentTab)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    background: studentTab === tab.id ? T.primaryFix : 'transparent',
+                    color: studentTab === tab.id ? T.primary : T.txtSec,
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
               <button
-                key={tab.id}
-                onClick={() => setStudentTab(tab.id as typeof studentTab)}
+                onClick={() => setShowFeedbackModal(true)}
                 style={{
                   textAlign: 'left',
                   padding: '10px 14px',
                   borderRadius: 8,
-                  border: 'none',
+                  border: `1px solid ${T.border}`,
                   cursor: 'pointer',
                   fontSize: 13,
                   fontWeight: 700,
-                  background: studentTab === tab.id ? T.primaryFix : 'transparent',
-                  color: studentTab === tab.id ? T.primary : T.txtSec,
-                  transition: 'all 0.2s',
+                  background: '#EFF6FF',
+                  color: T.primary,
+                  marginTop: 8,
                   fontFamily: 'inherit',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
-                {tab.label}
+                <MessageSquare size={13} /> Feedback
               </button>
-            ))}
-            <button
-              onClick={() => setShowFeedbackModal(true)}
-              style={{
-                textAlign: 'left',
-                padding: '10px 14px',
-                borderRadius: 8,
-                border: `1px solid ${T.border}`,
-                cursor: 'pointer',
-                fontSize: 13,
-                fontWeight: 700,
-                background: '#EFF6FF',
-                color: T.primary,
-                marginTop: 8,
-                fontFamily: 'inherit',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <MessageSquare size={13} /> Feedback
-            </button>
-          </aside>
+            </aside>
+          )}
 
           {/* Main Content */}
           <main className="portal-main">
@@ -6317,7 +6333,15 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                 />
               </div>
             ) : studentTab === 'quizzes' ? (
-              <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
+              <div
+                className="home-screen-content"
+                style={{
+                  maxWidth: studentTakingQuiz ? '100%' : 1280,
+                  margin: '0 auto',
+                  padding: studentTakingQuiz ? '0 16px 24px 16px' : '0 24px 24px 24px',
+                  animation: 'fadeIn 0.4s ease',
+                }}
+              >
                 <StudentQuizHub
                   user={{
                     uid: user?.uid || profile?.uid || '',
@@ -6326,6 +6350,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                     department: user?.department || profile?.department,
                   }}
                   showToast={showToast}
+                  onActiveQuizChange={setStudentTakingQuiz}
                 />
               </div>
             ) : (

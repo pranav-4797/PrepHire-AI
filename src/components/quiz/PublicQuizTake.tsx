@@ -281,6 +281,7 @@ export function PublicQuizTake({
     >
       {/* Header Banner */}
       <div
+        className="dark-theme-banner"
         style={{
           background: 'linear-gradient(135deg, #0A192F 0%, #0F2D59 50%, #1E3A8A 100%)',
           color: '#ffffff',

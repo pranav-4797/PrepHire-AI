@@ -87,6 +87,7 @@ export function QuizPlayer({
   // Responsive mobile state
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 860 : false)
   const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false)
+  const [paletteFilter, setPaletteFilter] = useState<'all' | 'answered' | 'review' | 'unanswered'>('all')
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startTimeRef = useRef<number>(Date.now())
@@ -259,21 +260,82 @@ export function QuizPlayer({
   }, [completedAttempt])
 
   // ── Option Selection ──────────────────────────────────────────────────────
-  function handleSelectOption(optIdx: number) {
+  const handleSelectOption = useCallback((optIdx: number) => {
     if (!currentQ || completedAttempt) return
     setAnswers((prev) => ({
       ...prev,
       [currentQ.id]: optIdx,
     }))
-  }
+  }, [currentQ, completedAttempt])
 
-  function handleToggleReview() {
+  const handleToggleReview = useCallback(() => {
     if (!currentQ) return
     setMarkedForReview((prev) => ({
       ...prev,
       [currentQ.id]: !prev[currentQ.id],
     }))
-  }
+  }, [currentQ])
+
+  // ── Keyboard Shortcuts (A/B/C/D, 1/2/3/4, Arrows, M, C) ────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (
+        showConfirmModal ||
+        showFsWarning ||
+        completedAttempt ||
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return
+      }
+
+      const key = e.key.toLowerCase()
+
+      if (['a', '1'].includes(key) && currentQ?.options?.[0] !== undefined) {
+        e.preventDefault()
+        handleSelectOption(0)
+      } else if (['b', '2'].includes(key) && currentQ?.options?.[1] !== undefined) {
+        e.preventDefault()
+        handleSelectOption(1)
+      } else if (['c', '3'].includes(key) && currentQ?.options?.[2] !== undefined) {
+        e.preventDefault()
+        handleSelectOption(2)
+      } else if (['d', '4'].includes(key) && currentQ?.options?.[3] !== undefined) {
+        e.preventDefault()
+        handleSelectOption(3)
+      } else if (key === 'arrowleft') {
+        e.preventDefault()
+        setCurrentIdx((prev) => Math.max(0, prev - 1))
+      } else if (key === 'arrowright') {
+        e.preventDefault()
+        setCurrentIdx((prev) => Math.min(totalQuestions - 1, prev + 1))
+      } else if (key === 'm') {
+        e.preventDefault()
+        handleToggleReview()
+      } else if (key === 'delete' || key === 'backspace') {
+        if (answers[currentQ?.id] !== undefined) {
+          e.preventDefault()
+          setAnswers((prev) => {
+            const copy = { ...prev }
+            delete copy[currentQ?.id]
+            return copy
+          })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    currentQ,
+    totalQuestions,
+    answers,
+    showConfirmModal,
+    showFsWarning,
+    completedAttempt,
+    handleSelectOption,
+    handleToggleReview,
+  ])
 
   // ── Submission Handler ────────────────────────────────────────────────────
   async function handleFinalSubmit(isAuto = false) {
@@ -489,6 +551,7 @@ export function QuizPlayer({
 
           {/* Timer Display */}
           <div
+            className={isUrgent ? 'timer-urgent' : ''}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -557,6 +620,28 @@ export function QuizPlayer({
             </button>
           )}
         </div>
+
+        {/* Animated Progress Strip */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            background: '#E5E7EB',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${Math.round((answeredCount / totalQuestions) * 100)}%`,
+              background: 'linear-gradient(90deg, #2563EB, #10B981)',
+              transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          />
+        </div>
       </GlassCard>
 
       {/* Main Grid: Question Card on Left, Palette & Proctoring on Right */}
@@ -592,10 +677,34 @@ export function QuizPlayer({
               Question {currentIdx + 1} of {totalQuestions}
             </span>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
               <span style={{ fontSize: '0.8rem', color: T.txtSec, fontWeight: 600 }}>
                 +{currentQ?.points || 1} pt
               </span>
+
+              {answers[currentQ?.id] !== undefined && (
+                <button
+                  onClick={() => {
+                    setAnswers((prev) => {
+                      const copy = { ...prev }
+                      delete copy[currentQ?.id]
+                      return copy
+                    })
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#6B7280',
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: '0.2rem 0.4rem',
+                  }}
+                  title="Clear choice (or press Backspace/Delete)"
+                >
+                  Clear choice
+                </button>
+              )}
 
               <button
                 onClick={handleToggleReview}
@@ -613,6 +722,7 @@ export function QuizPlayer({
                   cursor: 'pointer',
                   minHeight: 34,
                 }}
+                title="Mark for review (Hot-key: M)"
               >
                 <Bookmark size={13} fill={markedForReview[currentQ?.id] ? '#B45309' : 'none'} />
                 {markedForReview[currentQ?.id] ? 'Marked' : 'Mark Review'}
@@ -623,10 +733,11 @@ export function QuizPlayer({
           {/* Question Text */}
           <div
             style={{
-              fontSize: isMobile ? '1rem' : '1.1rem',
-              fontWeight: 600,
+              fontSize: isMobile ? '1.02rem' : '1.15rem',
+              fontWeight: 650,
               color: T.txtPri,
               lineHeight: 1.6,
+              letterSpacing: '-0.01em',
             }}
           >
             {currentQ?.question}
@@ -661,48 +772,66 @@ export function QuizPlayer({
                 <div
                   key={optIdx}
                   onClick={() => handleSelectOption(optIdx)}
+                  className={`quiz-option-card ${isSelected ? 'selected' : ''}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'space-between',
                     gap: '0.85rem',
-                    padding: isMobile ? '0.75rem 1rem' : '0.9rem 1.15rem',
-                    borderRadius: 10,
+                    padding: isMobile ? '0.85rem 1rem' : '0.95rem 1.25rem',
+                    borderRadius: 12,
                     border: isSelected ? '2px solid #2563EB' : '1px solid #E5E7EB',
                     background: isSelected ? '#EFF6FF' : '#ffffff',
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: isSelected ? '0 2px 8px rgba(37, 99, 235, 0.12)' : 'none',
-                    minHeight: 48,
+                    boxShadow: isSelected ? '0 4px 14px -2px rgba(37, 99, 235, 0.16)' : 'none',
+                    minHeight: 52,
+                    userSelect: 'none',
                   }}
                 >
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 8,
-                      background: isSelected ? '#2563EB' : '#F3F4F6',
-                      color: isSelected ? '#ffffff' : T.txtSec,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {letter}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1 }}>
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: isSelected ? '#2563EB' : '#F1F5F9',
+                        color: isSelected ? '#ffffff' : '#475569',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '0.88rem',
+                        flexShrink: 0,
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {letter}
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: isMobile ? '0.92rem' : '0.98rem',
+                        color: isSelected ? '#1E40AF' : T.txtPri,
+                        fontWeight: isSelected ? 600 : 450,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {opt}
+                    </span>
                   </div>
 
-                  <span
+                  {/* Radio Selection Indicator */}
+                  <div
                     style={{
-                      fontSize: isMobile ? '0.9rem' : '0.95rem',
-                      color: isSelected ? '#2563EB' : T.txtPri,
-                      fontWeight: isSelected ? 600 : 400,
-                      lineHeight: 1.45,
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      border: isSelected ? '6px solid #2563EB' : '2px solid #CBD5E1',
+                      background: '#ffffff',
+                      flexShrink: 0,
+                      transition: 'all 0.15s ease',
                     }}
-                  >
-                    {opt}
-                  </span>
+                  />
                 </div>
               )
             })}
@@ -715,7 +844,7 @@ export function QuizPlayer({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                paddingTop: '0.75rem',
+                paddingTop: '0.85rem',
                 borderTop: '1px solid #F3F4F6',
                 marginTop: '0.5rem',
               }}
@@ -726,18 +855,19 @@ export function QuizPlayer({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.35rem',
+                  gap: '0.45rem',
                   background: currentIdx === 0 ? '#F9FAFB' : '#F3F4F6',
                   color: currentIdx === 0 ? '#9CA3AF' : T.txtPri,
                   border: 'none',
                   borderRadius: 8,
-                  padding: '0.55rem 1.1rem',
+                  padding: '0.6rem 1.15rem',
                   fontSize: '0.85rem',
                   fontWeight: 600,
                   cursor: currentIdx === 0 ? 'not-allowed' : 'pointer',
                 }}
+                title="Previous question (Hot-key: ←)"
               >
-                <ArrowLeft size={15} /> Previous
+                <ArrowLeft size={15} /> Previous <span style={{ fontSize: '0.72rem', opacity: 0.65 }}>[←]</span>
               </button>
 
               {currentIdx < totalQuestions - 1 ? (
@@ -746,19 +876,20 @@ export function QuizPlayer({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.35rem',
+                    gap: '0.45rem',
                     background: T.primary,
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,
-                    padding: '0.55rem 1.25rem',
+                    padding: '0.6rem 1.35rem',
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     cursor: 'pointer',
                     boxShadow: '0 2px 8px rgba(0, 30, 64, 0.2)',
                   }}
+                  title="Next question (Hot-key: →)"
                 >
-                  Next <ArrowRight size={15} />
+                  Next <ArrowRight size={15} /> <span style={{ fontSize: '0.72rem', opacity: 0.7 }}>[→]</span>
                 </button>
               ) : (
                 <button
@@ -766,12 +897,12 @@ export function QuizPlayer({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.35rem',
+                    gap: '0.45rem',
                     background: '#059669',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,
-                    padding: '0.55rem 1.25rem',
+                    padding: '0.6rem 1.35rem',
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -817,8 +948,8 @@ export function QuizPlayer({
             />
 
             {/* Question Palette */}
-            <GlassCard style={{ padding: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <GlassCard style={{ padding: '1.15rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
                 <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: T.txtPri }}>
                   Question Palette
                 </h4>
@@ -830,6 +961,7 @@ export function QuizPlayer({
                       border: 'none',
                       color: T.txtSec,
                       cursor: 'pointer',
+                      padding: '0.2rem',
                     }}
                   >
                     <X size={16} />
@@ -837,16 +969,57 @@ export function QuizPlayer({
                 )}
               </div>
 
+              {/* Filter Pills */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  flexWrap: 'wrap',
+                  marginBottom: '0.85rem',
+                }}
+              >
+                {[
+                  { id: 'all', label: `All (${totalQuestions})` },
+                  { id: 'answered', label: `Ans (${answeredCount})` },
+                  { id: 'review', label: `Rev (${reviewCount})` },
+                  { id: 'unanswered', label: `Left (${unansweredCount})` },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setPaletteFilter(f.id as typeof paletteFilter)}
+                    style={{
+                      padding: '0.2rem 0.5rem',
+                      borderRadius: 6,
+                      fontSize: '0.72rem',
+                      fontWeight: 650,
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: paletteFilter === f.id ? T.primary : '#F1F5F9',
+                      color: paletteFilter === f.id ? '#ffffff' : '#64748B',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Grid of 1..N */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.45rem', marginBottom: '1rem' }}>
                 {quiz.questions.map((q, idx) => {
                   const isCurrent = idx === currentIdx
                   const isAnswered = answers[q.id] !== undefined
-                  const isReview = markedForReview[q.id]
+                  const isReview = !!markedForReview[q.id]
 
-                  let bg = '#F3F4F6'
-                  let color = T.txtPri
-                  let border = '1px solid transparent'
+                  // Apply filter
+                  if (paletteFilter === 'answered' && !isAnswered) return null
+                  if (paletteFilter === 'review' && !isReview) return null
+                  if (paletteFilter === 'unanswered' && isAnswered) return null
+
+                  let bg = '#F8FAFC'
+                  let color = '#475569'
+                  let border = '1px solid #E2E8F0'
 
                   if (isReview) {
                     bg = '#FEF3C7'
@@ -858,9 +1031,7 @@ export function QuizPlayer({
                     border = '1px solid #86EFAC'
                   }
 
-                  if (isCurrent) {
-                    border = `2px solid ${T.primary}`
-                  }
+                  const activeOutline = isCurrent ? `2px solid ${T.primary}` : 'none'
 
                   return (
                     <button
@@ -870,40 +1041,89 @@ export function QuizPlayer({
                         if (isMobile) setMobilePaletteOpen(false)
                       }}
                       style={{
-                        height: 36,
+                        height: 38,
                         borderRadius: 8,
                         background: bg,
                         color: color,
                         border: border,
+                        outline: activeOutline,
+                        outlineOffset: 1,
                         fontWeight: 700,
-                        fontSize: '0.82rem',
+                        fontSize: '0.84rem',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        position: 'relative',
+                        transition: 'transform 0.15s ease',
                       }}
+                      title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : ''}${isReview ? ' (Review)' : ''}`}
                     >
                       {idx + 1}
+                      {isReview && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: 2,
+                            right: 2,
+                            width: 5,
+                            height: 5,
+                            borderRadius: '50%',
+                            background: '#D97706',
+                          }}
+                        />
+                      )}
                     </button>
                   )
                 })}
               </div>
 
               {/* Legend */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.75rem', color: T.txtSec }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: '#DCFCE7', border: '1px solid #86EFAC' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.75rem', color: T.txtSec, paddingTop: '0.5rem', borderTop: '1px solid #F1F5F9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: '#DCFCE7', border: '1px solid #86EFAC' }} />
                   <span>Answered ({answeredCount})</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: '#FEF3C7', border: '1px solid #FCD34D' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: '#FEF3C7', border: '1px solid #FCD34D' }} />
                   <span>Marked for Review ({reviewCount})</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: '#F3F4F6', border: '1px solid #E5E7EB' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: '#F8FAFC', border: '1px solid #E2E8F0' }} />
                   <span>Unanswered ({unansweredCount})</span>
                 </div>
               </div>
+            </GlassCard>
+
+            {/* Ready to Finish Summary Card */}
+            <GlassCard style={{ padding: '1rem', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: T.txtPri, marginBottom: '0.25rem' }}>
+                Ready to Finish?
+              </div>
+              <p style={{ margin: '0 0 0.85rem', fontSize: '0.78rem', color: T.txtSec, lineHeight: 1.45 }}>
+                You have answered <strong>{answeredCount}</strong> of <strong>{totalQuestions}</strong> questions.
+              </p>
+              <button
+                onClick={() => setShowConfirmModal(true)}
+                style={{
+                  width: '100%',
+                  background: T.primary,
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '0.65rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  boxShadow: '0 2px 6px rgba(0, 30, 64, 0.2)',
+                }}
+              >
+                <Send size={14} /> Submit Assessment
+              </button>
             </GlassCard>
           </div>
         )}

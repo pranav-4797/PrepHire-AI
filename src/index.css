@@ -487,3 +487,76 @@ textarea.interview-textarea:focus-visible {
   border-color: rgba(0, 30, 64, 0.16) !important;
   box-shadow: 0 8px 28px -4px rgba(0, 30, 64, 0.12), 0 3px 8px rgba(0, 30, 64, 0.05) !important;
 }
+
+/* ── Guaranteed Contrast for Dark Hero Banners ──────────────── */
+.dark-theme-banner {
+  background: linear-gradient(135deg, #0A192F 0%, #0F2D59 50%, #1E3A8A 100%) !important;
+  color: #FFFFFF !important;
+}
+
+.dark-theme-banner h1,
+.dark-theme-banner h2,
+.dark-theme-banner h3,
+.dark-theme-banner h4 {
+  color: #FFFFFF !important;
+}
+
+.dark-theme-banner p,
+.dark-theme-banner .banner-subtext {
+  color: rgba(241, 245, 249, 0.92) !important;
+}
+
+.dark-theme-banner .banner-stat-label {
+  color: rgba(203, 213, 225, 0.85) !important;
+}
+
+.dark-theme-banner .banner-stat-value {
+  color: #FFFFFF !important;
+}
+
+/* ── Assessment Cockpit Focus Mode ──────────────────────────── */
+.portal-layout.assessment-focus-mode {
+  grid-template-columns: 1fr !important;
+}
+
+.portal-layout.assessment-focus-mode .portal-sidebar {
+  display: none !important;
+}
+
+.portal-layout.assessment-focus-mode .portal-main {
+  height: calc(100vh - 60px);
+}
+
+/* ── Interactive Quiz Options & Timer Animation ─────────────── */
+.quiz-option-card {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, border-color, box-shadow;
+}
+
+.quiz-option-card:hover {
+  border-color: #93C5FD !important;
+  background-color: #F8FAFC !important;
+  transform: translateY(-1px);
+}
+
+.quiz-option-card.selected {
+  border-color: #2563EB !important;
+  background-color: #EFF6FF !important;
+  box-shadow: 0 4px 14px -2px rgba(37, 99, 235, 0.16) !important;
+}
+
+@keyframes urgentTimerPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+  }
+}
+
+.timer-urgent {
+  animation: urgentTimerPulse 1.5s infinite ease-in-out;
+}
+

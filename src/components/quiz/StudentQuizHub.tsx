@@ -51,9 +51,10 @@ interface StudentQuizHubProps {
     department?: string
   }
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  onActiveQuizChange?: (isActive: boolean) => void
 }
 
-export function StudentQuizHub({ user, showToast }: StudentQuizHubProps) {
+export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQuizHubProps) {
   const [quizzes, setQuizzes] = useState<Quiz[]>([])
   const [attempts, setAttempts] = useState<QuizAttempt[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +65,10 @@ export function StudentQuizHub({ user, showToast }: StudentQuizHubProps) {
     quiz: Quiz
     attempt: QuizAttempt
   } | null>(null)
+
+  useEffect(() => {
+    onActiveQuizChange?.(!!activeQuiz)
+  }, [activeQuiz, onActiveQuizChange])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -163,6 +168,7 @@ export function StudentQuizHub({ user, showToast }: StudentQuizHubProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {/* Top Banner */}
       <div
+        className="dark-theme-banner"
         style={{
           background: 'linear-gradient(135deg, #0A192F 0%, #0F2D59 50%, #1E3A8A 100%)',
           color: '#ffffff',

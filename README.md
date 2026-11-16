@@ -26,6 +26,15 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🎯 **UI/UX Pro Max Assessment Cockpit & Contrast Immunity**:
+  - 🌟 **CSS Contrast Immunity (`.dark-theme-banner`)**: Enforced bulletproof CSS rules in `src/index.css` ensuring headers and descriptions inside dark gradients always render in crisp `#FFFFFF` and high-contrast slate-white (`rgba(241, 245, 249, 0.92)`), eliminating inheritance bugs from base element tag selectors.
+  - 🖥️ **Distraction-Free Focus Mode (`.portal-layout.assessment-focus-mode`)**: When a student launches a quiz, the student portal sidebar collapses automatically to eliminate distractions, prevent accidental tab switching, and provide 100% viewport width for question reading, options selection, and proctoring telemetry.
+  - ⌨️ **Lightning-Fast Keyboard Shortcuts**: Candidates can now navigate and answer tests using keyboard shortcuts: `A`/`B`/`C`/`D` or `1`/`2`/`3`/`4` to select options, `←` / `→` (Arrow keys) to move between questions, `M` to toggle review bookmark, and `Backspace` / `Delete` to clear choices.
+  - 📊 **Animated Real-Time Progress Bar**: A sleek dual-color gradient strip (`#2563EB` $\to$ `#10B981`) anchored to the sticky test header tracks live completion percentage.
+  - 🎨 **Elevated Option Cards & Radio Indicators**: Replaced flat buttons with `.quiz-option-card` items featuring soft hover lifts, custom radio confirmation dots, clear selection links, and accessible touch targets ($\ge 52\text{px}$).
+  - 🧭 **Filterable Palette Navigator & "Ready to Finish" Cockpit**: Added quick filter pills (`All`, `Ans`, `Rev`, `Left`) to the question palette, paired with a persistent summary card showing total answered counts and single-click final submission.
+  - ⏱️ **Pulsing Urgency Timer**: Timers with $< 2$ minutes remaining trigger a pulsing amber-red glow (`.timer-urgent`) to inform candidates without inducing layout jitter.
+
 - 🛠️ **System Architecture Hardening & API Resilience**:
   - 🔄 **AI Endpoint Normalization & Auth Fix**: Resolved unauthenticated 401 failures and schema mismatches in `AdminQuizEditor.tsx` by attaching verified Firebase Bearer tokens and normalizing `sys`/`systemPrompt` parameter shapes across `/api/ai/generate` and `/api/ai/stream`.
   - 🛡️ **Multi-Tier Gemini Fallback Routing**: Integrated automated model cascade routing (`gemini-2.5-flash` $\to$ `gemini-1.5-flash` $\to$ `gemini-3.1-flash-lite-preview` $\to$ `gemini-1.5-pro`) in `server/gemini.js`. If a model returns 404 or encounters temporary service interruption, requests immediately failover to available models without dropping client requests.
