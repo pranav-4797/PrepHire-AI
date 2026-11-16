@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
+  Award,
+  BookOpen,
+  CheckCircle2,
+  Clock,
   HelpCircle,
   Play,
   RotateCcw,
@@ -158,53 +162,180 @@ export function StudentQuizHub({ user, showToast }: StudentQuizHubProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {/* Top Banner */}
-      <GlassCard
+      <div
         style={{
-          background: 'linear-gradient(135deg, #001e40 0%, #1f477b 100%)',
+          background: 'linear-gradient(135deg, #0A192F 0%, #0F2D59 50%, #1E3A8A 100%)',
           color: '#ffffff',
-          border: 'none',
-          padding: '1.75rem',
+          borderRadius: 16,
+          padding: '1.85rem 2rem',
+          boxShadow: '0 10px 30px -5px rgba(10, 25, 47, 0.35)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-              <Sparkles size={18} color="#FDE047" />
-              <span style={{ fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.9 }}>
+        {/* Subtle background glow effect */}
+        <div
+          style={{
+            position: 'absolute',
+            top: -40,
+            right: -40,
+            width: 220,
+            height: 220,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(56, 189, 248, 0) 70%)',
+            pointerEvents: 'none',
+          }}
+        />
+
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1.5rem',
+          }}
+        >
+          <div style={{ flex: '1 1 360px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                background: 'rgba(250, 204, 21, 0.15)',
+                border: '1px solid rgba(250, 204, 21, 0.35)',
+                borderRadius: 9999,
+                padding: '0.25rem 0.75rem',
+                marginBottom: '0.65rem',
+              }}
+            >
+              <Sparkles size={14} color="#FDE047" />
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#FEF08A',
+                }}
+              >
                 Assessment Center
               </span>
             </div>
-            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>
+
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '1.65rem',
+                fontWeight: 800,
+                color: '#FFFFFF',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.25,
+              }}
+            >
               Campus Placement Quizzes & Practice Tests
             </h2>
-            <p style={{ margin: '0.35rem 0 0', fontSize: '0.9rem', opacity: 0.9, maxWidth: 620, lineHeight: 1.5 }}>
+
+            <p
+              style={{
+                margin: '0.45rem 0 0',
+                fontSize: '0.92rem',
+                color: 'rgba(241, 245, 249, 0.88)',
+                maxWidth: 640,
+                lineHeight: 1.55,
+              }}
+            >
               Benchmark your technical depth, domain knowledge, and aptitude with timed tests curated by department faculty and campus recruiters.
             </p>
           </div>
 
+          {/* Stats Cockpit */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '1.25rem',
-              background: 'rgba(255, 255, 255, 0.15)',
-              backdropFilter: 'blur(8px)',
-              padding: '0.85rem 1.25rem',
-              borderRadius: 12,
+              gap: '1.5rem',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              padding: '0.9rem 1.4rem',
+              borderRadius: 14,
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
             }}
           >
-            <div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{completedCount}</div>
-              <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>Completed</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#38BDF8',
+                }}
+              >
+                <CheckCircle2 size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1 }}>
+                  {completedCount}
+                </div>
+                <div
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    color: 'rgba(255, 255, 255, 0.75)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  Completed
+                </div>
+              </div>
             </div>
-            <div style={{ width: 1, height: 32, background: 'rgba(255, 255, 255, 0.25)' }} />
-            <div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{avgPercentage}%</div>
-              <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>Avg Score</div>
+
+            <div style={{ width: 1, height: 36, background: 'rgba(255, 255, 255, 0.18)' }} />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: 'rgba(74, 222, 128, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#4ADE80',
+                }}
+              >
+                <Award size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1 }}>
+                  {avgPercentage}%
+                </div>
+                <div
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    color: 'rgba(255, 255, 255, 0.75)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  Avg Score
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </GlassCard>
+      </div>
 
       {/* Filter & Search Bar */}
       <GlassCard style={{ padding: '0.85rem 1.25rem' }}>
@@ -392,8 +523,12 @@ export function StudentQuizHub({ user, showToast }: StudentQuizHubProps) {
                   )}
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.78rem', color: T.txtSec }}>
-                    <span>📝 {q.questions?.length || 0} Questions</span>
-                    <span>⏱️ {q.timeLimitMinutes} Mins</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <BookOpen size={13} /> {q.questions?.length || 0} Questions
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Clock size={13} /> {q.timeLimitMinutes} Mins
+                    </span>
                     <span>📊 {q.difficulty}</span>
                   </div>
                 </div>

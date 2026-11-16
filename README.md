@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🎨 **Student Assessment Hub UI/UX Overhaul & Contrast Restoration**: Completely redesigned the header cockpit in `StudentQuizHub.tsx`:
+  - 🌟 **High-Contrast Deep Navy Gradient**: Replaced dark inherited typography with crisp `#FFFFFF` headers, glowing amber badge (`ASSESSMENT CENTER`), and readable slate-white descriptions, eliminating color collisions with global CSS rules.
+  - 📊 **Frosted Glass KPI Cockpit**: Integrated a translucent stats bar featuring glowing cyan (`Completed`) and emerald (`Avg Score`) metrics with real-time completion tracking.
+  - 📚 **Modern Iconography & Card Polishing**: Replaced text badges with sleek Lucide icons (`BookOpen`, `Clock`, `Award`, `CheckCircle2`) and interactive action pills.
+
 - ⚡ **Zero-Latency Two-Tier OCR & Assessment Importer**: Re-architected `quizDocParser.ts` for maximum throughput and minimum latency:
   - 🚀 **Tier 1: Instant Client-Side AST Fast-Path (< 15ms)**: Documents with digital text (`.docx`, digital `.pdf`, `.txt`, `.json`, `.csv`) are evaluated instantly in-memory using an optimized deterministic AST/regex parser. Correctly parses diverse answer patterns (e.g. `Correct Option: B. Mars`, `Ans: C`, `Answer: D`) and prevents question number prefixes (`1.`, `2.`) from being misclassified as options. If structured MCQs are detected, questions load in **sub-15 milliseconds** with zero network roundtrips or server lag.
   - 🎨 **Client-Side Canvas Pre-Scaling (98% Payload Reduction)**: High-resolution phone camera photos and scanned sheets (8MB–15MB) are dynamically downscaled via HTML5 canvas to optimal OCR thresholds ($\le 1600px$) and compressed to crisp JPEG (0.82 quality) before transmission, slashing upload payloads down to **~150KB** and cutting Vision AI evaluation time by up to 4x.
