@@ -10,7 +10,8 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "test:cleanup": "node test_cleanup.js",
-    "test:judge": "node coding/test_judge_suite.mjs"
+    "test:judge": "node coding/test_judge_suite.mjs",
+    "test:sandbox": "node coding/test_sandbox_security.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

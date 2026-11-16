@@ -9,6 +9,19 @@ import type { UserProfile } from '../services/firestore.service'
 import { AuthContext } from './auth-context-state'
 import type { AuthContextValue } from './auth-context-state'
 
+// localStorage can throw (Safari private mode, storage disabled by policy).
+const safeStorage = {
+  get: (key: string): string | null => {
+    try { return localStorage.getItem(key) } catch { return null }
+  },
+  set: (key: string, value: string) => {
+    try { localStorage.setItem(key, value) } catch { /* ignore */ }
+  },
+  remove: (key: string) => {
+    try { localStorage.removeItem(key) } catch { /* ignore */ }
+  },
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -16,25 +29,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pendingRegistrationEmailRef = useRef<string | null>(null)
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (nextUser) => {
+    // Each auth event gets a sequence number so a slow profile fetch for a PREVIOUS
+    // user can never overwrite state after the user logged out / switched account
+    // (stale-role leak), and so an error can't leave the app stuck on the spinner.
+    let seq = 0
+    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
+      const mySeq = ++seq
       setLoading(true)
       setUser(nextUser)
       if (!nextUser?.email) {
         setProfile(null)
-        try { localStorage.removeItem('prephire_user_role') } catch { /* ignore */ }
+        safeStorage.remove('prephire_user_role')
         setLoading(false)
         return
       }
       if (pendingRegistrationEmailRef.current === nextUser.email.toLowerCase()) {
-        return
+        return // register() is creating the profile itself and will clear loading
       }
-      const nextProfile = await ensureUserProfile(nextUser.uid, nextUser.email, nextUser.displayName)
-      setProfile(nextProfile)
-      if (nextProfile?.role) {
-        try { localStorage.setItem('prephire_user_role', nextProfile.role) } catch { /* ignore */ }
+      try {
+        const nextProfile = await ensureUserProfile(nextUser.uid, nextUser.email, nextUser.displayName)
+        if (mySeq !== seq) return
+        setProfile(nextProfile)
+        if (nextProfile?.role) safeStorage.set('prephire_user_role', nextProfile.role)
+      } catch (error) {
+        console.error('[Auth] Failed to load user profile:', error)
+        if (mySeq !== seq) return
+        setProfile(null)
+      } finally {
+        if (mySeq === seq) setLoading(false)
       }
-      setLoading(false)
     })
+    return () => {
+      seq += 1
+      unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -42,54 +70,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
     const LAST_ACTIVE_KEY = 'prephire_last_active'
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart']
 
-    const checkSession = async () => {
-      const lastActive = localStorage.getItem(LAST_ACTIVE_KEY)
-      if (lastActive) {
-        const timeElapsed = Date.now() - parseInt(lastActive, 10)
-        if (timeElapsed >= TIMEOUT_MS) {
-          console.log('[Auth] User inactive for more than 30 minutes. Auto-logging out.')
-          localStorage.removeItem(LAST_ACTIVE_KEY)
-          await logoutUser()
-          return true
-        }
-      }
-      return false
+    // The cleanup used to be returned from inside a .then() callback, where React
+    // never sees it: listeners and timers leaked on every login/logout and the old
+    // timer could later sign out a DIFFERENT user. Cleanup is now registered
+    // synchronously.
+    let cancelled = false
+    let timeoutId: number | undefined
+
+    const expire = async () => {
+      if (cancelled) return
+      console.log('[Auth] User inactive for more than 30 minutes. Auto-logging out.')
+      safeStorage.remove(LAST_ACTIVE_KEY)
+      await logoutUser()
     }
 
-    checkSession().then((isLoggedOut) => {
-      if (isLoggedOut) return
+    const resetTimer = () => {
+      if (cancelled) return
+      if (timeoutId) window.clearTimeout(timeoutId)
+      const last = Number(safeStorage.get(LAST_ACTIVE_KEY))
+      const now = Date.now()
+      if (!last || now - last > 5000) safeStorage.set(LAST_ACTIVE_KEY, String(now))
+      timeoutId = window.setTimeout(expire, TIMEOUT_MS)
+    }
 
-      localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString())
-
-      let timeoutId: number
-
-      const resetTimer = () => {
-        if (timeoutId) window.clearTimeout(timeoutId)
-
-        const lastActive = localStorage.getItem(LAST_ACTIVE_KEY)
-        const now = Date.now()
-        if (!lastActive || now - parseInt(lastActive, 10) > 5000) {
-          localStorage.setItem(LAST_ACTIVE_KEY, now.toString())
-        }
-
-        timeoutId = window.setTimeout(async () => {
-          console.log('[Auth] User inactive for 30 minutes. Auto-logging out.')
-          localStorage.removeItem(LAST_ACTIVE_KEY)
-          await logoutUser()
-        }, TIMEOUT_MS)
-      }
-
-      const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart']
-      events.forEach((event) => window.addEventListener(event, resetTimer))
-
+    const lastActive = Number(safeStorage.get(LAST_ACTIVE_KEY))
+    if (lastActive && Date.now() - lastActive >= TIMEOUT_MS) {
+      void expire()
+    } else {
+      safeStorage.set(LAST_ACTIVE_KEY, String(Date.now()))
+      events.forEach((event) => window.addEventListener(event, resetTimer, { passive: true }))
       resetTimer()
+    }
 
-      return () => {
-        if (timeoutId) window.clearTimeout(timeoutId)
-        events.forEach((event) => window.removeEventListener(event, resetTimer))
-      }
-    })
+    return () => {
+      cancelled = true
+      if (timeoutId) window.clearTimeout(timeoutId)
+      events.forEach((event) => window.removeEventListener(event, resetTimer))
+    }
   }, [user])
 
   const value = useMemo<AuthContextValue>(
@@ -116,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       logout: async () => {
-        try { localStorage.removeItem('prephire_user_role') } catch { /* ignore */ }
+        safeStorage.remove('prephire_user_role')
         await logoutUser()
       },
     }),

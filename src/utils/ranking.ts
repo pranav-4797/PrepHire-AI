@@ -32,7 +32,11 @@ export function computeRankings(
   placementReadyMap: Record<string, boolean>,
 ): RankedStudent[] {
   const grouped = new Map<string, RankableSession[]>()
-  for (const s of sessions) {
+  for (const raw of sessions) {
+    // Legacy/partial records can lack email, domain or a numeric score; one bad row used
+    // to throw and blank the entire leaderboard (or turn a composite into NaN).
+    if (!raw?.studentEmail) continue
+    const s = { ...raw, score: Number.isFinite(Number(raw.score)) ? Number(raw.score) : 0, domain: raw.domain || 'unknown' }
     const email = s.studentEmail.toLowerCase()
     if (!grouped.has(email)) grouped.set(email, [])
     grouped.get(email)!.push(s)
@@ -54,7 +58,8 @@ export function computeRankings(
     const peakScore = Math.max(...studentSessions.map((s) => s.score))
 
     const uniqueDomains = new Set(studentSessions.map((s) => s.domain.toLowerCase()))
-    const domainDiversity = Math.round((uniqueDomains.size / 4) * 100)
+    // clamp: with more than 4 domains this exceeded 100 and inflated the composite score
+    const domainDiversity = Math.min(100, Math.round((uniqueDomains.size / 4) * 100))
 
     const totalWarnings = studentSessions.reduce((sum, s) => sum + s.warnings, 0)
     const warningsPerSession = totalWarnings / totalInterviews

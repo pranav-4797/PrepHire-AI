@@ -64,7 +64,10 @@ pilot:
 | `GOOGLE_SHARED_DRIVE_FOLDER_ID` | Shared Drive folder for interview video storage |
 | `GOOGLE_SERVICE_ACCOUNT` | Base64 or raw JSON service account credentials |
 | `GEMINI_API_KEY` | Server-side only. Get one at https://aistudio.google.com/apikey. Do **not** prefix it with `VITE_`. |
-| `JUDGE_PROVIDER` | Execution provider mode: `'auto'` (default), `'judge0'`, `'piston'`, or `'local'`. In `'auto'`, prefers Judge0, falls back to Piston, and provides native toolchains (`g++`, `gcc`, `python`, `node`) for offline resilience. |
+| `JUDGE_PROVIDER` | Execution provider mode: `'auto'` (default), `'judge0'`, `'piston'`, or `'local'`. In `'auto'`, uses Judge0 then Piston (both containerised). Host toolchains are **never** used unless `JUDGE_ALLOW_LOCAL=true`. |
+| `JUDGE_ALLOW_LOCAL` | `true` lets the server run student code with its own `g++`/`python`/`node` as a last resort. **Development only — not a security boundary.** Default `false`. |
+| `ALLOW_INSECURE_DEV_AUTH` | Local dev only: with no Firebase service account, trust the unverified token payload. Ignored when `NODE_ENV=production`. |
+| `TRUST_PROXY` | Reverse-proxy hops in front of the API (Render = `1`, default). Needed for correct per-client rate limiting. |
 | `JUDGE0_API_URL` | URL to Judge0 API. Defaults to public CE: `https://ce.judge0.com`. For self-hosted Docker, use `http://localhost:2358` or internal container DNS. |
 | `JUDGE0_API_KEY` | Optional API key if using RapidAPI (`judge0-ce.p.rapidapi.com`) or an authenticated Judge0 deployment. |
 | `JUDGE0_API_HOST` | RapidAPI host header (e.g. `judge0-ce.p.rapidapi.com`), required only when routing via RapidAPI. |

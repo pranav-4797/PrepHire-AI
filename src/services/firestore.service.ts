@@ -129,7 +129,8 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
 export async function deleteSessionsForStudent(email: string) {
   try {
     const snap = await getDocs(
-      query(collection(db, 'sessions'), where('studentEmail', '==', email))
+      // sessions store studentEmail lower-cased; an exact-case query missed mixed-case accounts
+      query(collection(db, 'sessions'), where('studentEmail', '==', (email || '').trim().toLowerCase()))
     )
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
   } catch (err) {
@@ -221,8 +222,22 @@ export function subscribeToUserProfiles(callback: (users: UserProfile[]) => void
   )
 }
 
-export function subscribeToSessions(callback: (sessions: SessionRecordData[]) => void): () => void {
-  const q = collection(db, 'sessions')
+/**
+ * Real-time sessions listener.
+ *
+ * Firestore security rules are NOT filters: Faculty may only read sessions in their own
+ * department, so an unfiltered collection query is rejected outright with
+ * permission-denied (the listener error was just console.warn'ed, leaving every Faculty
+ * dashboard empty). Pass `department` for Faculty so the query itself is provably within
+ * what the rules allow. Admins omit it and read everything.
+ */
+export function subscribeToSessions(
+  callback: (sessions: SessionRecordData[]) => void,
+  options: { department?: string } = {},
+): () => void {
+  const q = options.department
+    ? query(collection(db, 'sessions'), where('department', '==', options.department))
+    : collection(db, 'sessions')
   return onSnapshot(
     q,
     (snap) => {

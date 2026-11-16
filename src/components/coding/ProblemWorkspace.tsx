@@ -121,7 +121,7 @@ function JudgeProgressBar({ events, total }: { events: JudgeProgressEvent[]; tot
       {/* Progress bar */}
       <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
         {Array.from({ length: total }, (_, i) => {
-          const testEvent = testEvents[i]
+          const testEvent = testEvents.find((e) => e.index === i + 1) // events arrive out of order with parallel judging
           let bg = T.bgMid // pending
           let borderColor = T.border
           if (testEvent) {
@@ -792,7 +792,7 @@ export function ProblemWorkspace({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: tr.passed ? T.green : T.error }}>
                         {tr.passed ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                        {tr.hidden ? `Hidden Test ${i + 1}` : `Test ${i + 1}`} {tr.passed ? 'Passed' : 'Failed'}
+                        {tr.custom ? 'Custom Input' : tr.hidden ? `Hidden Test ${i + 1}` : `Test ${i + 1}`} {tr.custom ? (tr.passed ? 'Ran successfully' : 'Failed') : tr.passed ? 'Passed' : 'Failed'}
                         {tr.verdict && tr.verdict !== 'Accepted' && tr.verdict !== 'Wrong Answer' && (
                           <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, background: 'rgba(0,0,0,0.06)', color: T.txtSec, marginLeft: 4 }}>
                             {tr.verdict}
@@ -805,7 +805,7 @@ export function ProblemWorkspace({
                         {tr.memoryKb !== undefined && tr.memoryKb > 0 && <span>{(tr.memoryKb / 1024).toFixed(1)} MB</span>}
                       </div>
                     </div>
-                    {!tr.passed && (
+                    {(!tr.passed || tr.custom) && (
                       <div style={{ marginTop: 8, fontSize: 11, color: T.txtSec, display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {!tr.hidden && tr.input !== undefined && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -819,13 +819,16 @@ export function ProblemWorkspace({
                             <CopyBtn text={tr.expectedOutput} />
                           </div>
                         )}
+                        {tr.custom && tr.passed && (tr.actualOutput === undefined || tr.actualOutput.trim() === '') && (
+                          <div><em>(program produced no output)</em></div>
+                        )}
                         {tr.actualOutput !== undefined && tr.actualOutput.trim() !== '' && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <strong>Got:</strong> <code style={{ flex: 1 }}>{tr.actualOutput}</code>
+                            <strong>{tr.custom ? 'Output:' : 'Got:'}</strong> <code style={{ flex: 1 }}>{tr.actualOutput}</code>
                             <CopyBtn text={tr.actualOutput} />
                           </div>
                         )}
-                        {tr.stderr && (
+                        {!tr.hidden && tr.stderr && (
                           <div style={{ color: T.error, marginTop: 2 }}>
                             <strong>Error:</strong> <code style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{tr.stderr}</code>
                           </div>

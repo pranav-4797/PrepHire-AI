@@ -19,7 +19,7 @@ import { db, FieldValue } from './firebase.js'
 import { initCleanup } from './cleanupService.js'
 import { registerCodingRoutes } from './coding/routes.js'
 import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
-import { callGemini, streamGemini } from './gemini.js'
+import { callGemini, streamGemini, isRateLimited } from './gemini.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -46,11 +46,6 @@ const SA_PATH = process.env.GOOGLE_SERVICE_ACCOUNT_PATH || './service-account.js
 const SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT
 const FOLDER_ID = process.env.GOOGLE_SHARED_DRIVE_FOLDER_ID
 const serverDir = path.dirname(fileURLToPath(import.meta.url))
-
-if (!FOLDER_ID) {
-  console.error('❌ GOOGLE_SHARED_DRIVE_FOLDER_ID is required in .env')
-  process.exit(1)
-}
 
 function readServiceAccount() {
   if (SA_JSON) {
@@ -86,6 +81,12 @@ function readServiceAccount() {
 // ── Google Drive Auth ───────────────────────────────────────────────────────
 
 const serviceAccount = readServiceAccount()
+// Only required when Drive is actually configured — mock/dev mode (no service
+// account) used to exit(1) here, contradicting the documented mock-upload mode.
+if (serviceAccount && !FOLDER_ID) {
+  console.error('❌ GOOGLE_SHARED_DRIVE_FOLDER_ID is required when a Google service account is configured')
+  process.exit(1)
+}
 let auth = null
 let drive = null
 
@@ -111,6 +112,12 @@ initCleanup(drive)
 
 const app = express()
 
+// Behind Render/Cloud Run/nginx every request arrives from the proxy's IP.
+// Without this, all users share ONE rate-limit bucket (and express-rate-limit
+// logs ERR_ERL_UNEXPECTED_X_FORWARDED_FOR). Set TRUST_PROXY=0 if exposed directly.
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1))
+
+const IS_PROD = process.env.NODE_ENV === 'production'
 const allowedOrigins = [
   'https://prephire-ai.web.app',
   'https://prephire-ai.firebaseapp.com',
@@ -124,10 +131,14 @@ if (CORS_ORIGIN && !allowedOrigins.includes(CORS_ORIGIN)) {
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*') || origin.startsWith('http://localhost:')) {
+    // Arbitrary http://localhost:* origins are a dev convenience only.
+    const devLocalhost = !IS_PROD && /^http:\/\/localhost:\d+$/.test(origin || '')
+    if (!origin || allowedOrigins.includes(origin) || devLocalhost) {
       callback(null, true)
     } else {
-      callback(new Error(`CORS policy does not allow access from origin ${origin}`))
+      const err = new Error('Origin not allowed by CORS policy')
+      err.status = 403
+      callback(err)
     }
   },
   credentials: true
@@ -163,9 +174,10 @@ const uploadLimiter = rateLimit({
   message: { error: 'Too many video uploads from this network. Please wait a few minutes.' },
 })
 
+// IP-level flood guard only; per-user limits (userRateLimit) do the fine-grained work.
 const codingExecLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 30,
+  limit: 120,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many code runs from this network. Please wait a moment.' },
@@ -187,7 +199,9 @@ const upload = multer({
     if (file.mimetype.startsWith('video/')) {
       cb(null, true)
     } else {
-      cb(new Error(`Invalid file type: ${file.mimetype}. Only video files are accepted.`))
+      const err = new Error('Invalid file type. Only video files are accepted.')
+      err.status = 400
+      cb(err)
     }
   },
 })
@@ -198,6 +212,10 @@ function convertToMp4(inputPath) {
   return new Promise((resolve, reject) => {
     const outputPath = inputPath + '.mp4'
     const args = [
+      // Only ever read the local file: blocks http/tcp/etc. protocol tricks that a
+      // crafted "video" (e.g. an HLS playlist) can use to make ffmpeg read local
+      // files or call out to internal hosts.
+      '-protocol_whitelist', 'file',
       '-i', inputPath,
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
@@ -221,7 +239,27 @@ function convertToMp4(inputPath) {
   })
 }
 
-// ── Routes ──────────────────────────────────────────────────────────────────
+// The client-declared MIME type / filename are attacker-controlled. Sniff the real
+// container: Matroska/WebM start with EBML magic, MP4/MOV have 'ftyp' at byte 4.
+function sniffVideoContainer(filePath) {
+  let fd
+  try {
+    fd = fs.openSync(filePath, 'r')
+    const buf = Buffer.alloc(12)
+    fs.readSync(fd, buf, 0, 12, 0)
+    if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'webm'
+    if (buf.toString('ascii', 4, 8) === 'ftyp') return 'mp4'
+    return null
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd) } catch {}
+  }
+}
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{4,64}$/
+
+// Routes ──────────────────────────────────────────────────────────────────
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -236,25 +274,18 @@ app.get('/api/health', (_req, res) => {
 // which requires a verified, signed-in user (same as the coding platform) and
 // forwards the request server-side.
 
-// Very small per-user rate limit: Gemini calls cost real money per request,
-// and this endpoint is behind login but not otherwise throttled.
-const aiCallLog = new Map() // uid/email -> array of call timestamps (ms)
-const AI_RATE_LIMIT = 12       // max calls...
-const AI_RATE_WINDOW_MS = 60_000 // ...per rolling minute
-
-function isRateLimited(key) {
-  const now = Date.now()
-  const calls = (aiCallLog.get(key) || []).filter((t) => now - t < AI_RATE_WINDOW_MS)
-  calls.push(now)
-  aiCallLog.set(key, calls)
-  return calls.length > AI_RATE_LIMIT
-}
+// Per-user AI rate limiting lives in gemini.js (single shared budget).
+const MAX_PROMPT_CHARS = 60_000
+const MAX_SYS_CHARS = 20_000
+const validAiBody = (b) =>
+  b && typeof b.prompt === 'string' && b.prompt.length > 0 && b.prompt.length <= MAX_PROMPT_CHARS &&
+  (b.sys === undefined || (typeof b.sys === 'string' && b.sys.length <= MAX_SYS_CHARS))
 
 app.post('/api/ai/generate', requireAuth(), async (req, res) => {
-  const { prompt, sys } = req.body
-  if (!prompt || typeof prompt !== 'string') {
-    return res.status(400).json({ error: 'prompt is required' })
+  if (!validAiBody(req.body)) {
+    return res.status(400).json({ error: 'prompt is required (string, max 60k chars)' })
   }
+  const { prompt, sys } = req.body
 
   const limitKey = req.authUser.uid || req.authUser.email
   if (isRateLimited(limitKey)) {
@@ -276,15 +307,19 @@ app.post('/api/ai/generate', requireAuth(), async (req, res) => {
 
 // Real-Time SSE AI Streaming Endpoint (Low-Latency First-Token Pipeline)
 app.post('/api/ai/stream', requireAuth(), async (req, res) => {
-  const { prompt, sys } = req.body
-  if (!prompt || typeof prompt !== 'string') {
-    return res.status(400).json({ error: 'prompt is required' })
+  if (!validAiBody(req.body)) {
+    return res.status(400).json({ error: 'prompt is required (string, max 60k chars)' })
   }
+  const { prompt, sys } = req.body
 
   const limitKey = req.authUser.uid || req.authUser.email
   if (isRateLimited(limitKey)) {
     return res.status(429).json({ error: 'Too many AI requests — please wait a moment and try again.' })
   }
+
+  // Stop paying for tokens nobody is reading once the browser disconnects.
+  const abort = new AbortController()
+  res.on('close', () => abort.abort())
 
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
@@ -293,16 +328,45 @@ app.post('/api/ai/stream', requireAuth(), async (req, res) => {
 
   try {
     await streamGemini(prompt, sys, (chunk) => {
-      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
-    })
-    res.write('data: [DONE]\n\n')
-    res.end()
+      if (!res.writableEnded) res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`)
+    }, null, abort.signal)
+    if (!res.writableEnded) {
+      res.write('data: [DONE]\n\n')
+      res.end()
+    }
   } catch (err) {
     console.error('❌ Gemini streaming proxy failed:', err.message || err)
-    res.write(`data: ${JSON.stringify({ error: err.message || 'Streaming service error' })}\n\n`)
-    res.end()
+    if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ error: err.status === 500 ? err.message : 'Streaming service error' })}\n\n`)
+      res.end()
+    }
   }
 })
+
+// A client-chosen sessionId used to be written straight into sessions/{id}
+// with the Admin SDK (which bypasses Firestore rules), so any signed-in user
+// could overwrite another student's driveLink/driveFileId. Only write when the
+// session already exists AND belongs to the authenticated user.
+async function attachUploadToSession(req, sessionId, fields) {
+  if (!db || !rawSessionIdOk(sessionId)) return
+  try {
+    const ref = db.collection('sessions').doc(sessionId)
+    const snap = await ref.get()
+    if (!snap.exists) {
+      console.warn(`ℹ️ Session ${sessionId} not found; skipping upload metadata write.`)
+      return
+    }
+    const owner = String(snap.data().studentEmail || '').toLowerCase()
+    if (!owner || owner !== String(req.authUser.email || '').toLowerCase()) {
+      console.warn(`⚠️ Refused to attach upload to session ${sessionId}: not owned by caller.`)
+      return
+    }
+    await ref.set({ ...fields, driveUploadAt: FieldValue.serverTimestamp() }, { merge: true })
+  } catch (dbErr) {
+    console.error(`⚠️ Failed to save upload metadata for session ${sessionId}:`, dbErr.message)
+  }
+}
+const rawSessionIdOk = (id) => typeof id === 'string' && SESSION_ID_RE.test(id)
 
 // Upload interview video to Google Shared Drive (converts to MP4)
 app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), async (req, res) => {
@@ -317,10 +381,16 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
   const studentName = (req.body.studentName || userIdentifier).replace(/[^a-zA-Z0-9_-]/g, '-')
   const domain = (req.body.domain || 'General').replace(/[^a-zA-Z0-9_-]/g, '-')
   const level = (req.body.level || 'Intermediate').replace(/[^a-zA-Z0-9_-]/g, '-')
-  const sessionId = req.body.sessionId || Date.now().toString(36)
+  const rawSessionId = typeof req.body.sessionId === 'string' ? req.body.sessionId : ''
+  const sessionId = SESSION_ID_RE.test(rawSessionId) ? rawSessionId : Date.now().toString(36)
   const date = new Date().toISOString().split('T')[0]
 
-  const isMp4 = file.mimetype === 'video/mp4' || path.extname(file.originalname || '').toLowerCase() === '.mp4'
+  const container = sniffVideoContainer(file.path)
+  if (!container) {
+    try { fs.unlinkSync(file.path) } catch {}
+    return res.status(400).json({ error: 'Unsupported or corrupt video file. Only WebM and MP4 recordings are accepted.' })
+  }
+  const isMp4 = container === 'mp4'
   const fileName = `${studentName}_${domain}_${level}_${date}.mp4`
 
   let mp4Path = null
@@ -346,18 +416,7 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
         console.error('⚠️ Failed to save local copy of mock interview:', copyErr.message)
       }
 
-      if (db && sessionId) {
-        try {
-          await db.collection('sessions').doc(sessionId).set({
-            driveFileId: mockFileId,
-            driveUploadAt: FieldValue.serverTimestamp(),
-            driveLink: mockDriveLink,
-          }, { merge: true })
-          console.log(`💾 Saved Mock Drive File ID and upload timestamp to session ${sessionId}`)
-        } catch (dbErr) {
-          console.error(`⚠️ Failed to save mock upload metadata to DB for session ${sessionId}:`, dbErr.message)
-        }
-      }
+      await attachUploadToSession(req, sessionId, { driveFileId: mockFileId, driveLink: mockDriveLink })
 
       return res.json({
         success: true,
@@ -387,18 +446,7 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
 
     console.log(`✅ Uploaded: ${fileName} → ${fileId}`)
 
-    if (db && sessionId) {
-      try {
-        await db.collection('sessions').doc(sessionId).set({
-          driveFileId: fileId,
-          driveUploadAt: FieldValue.serverTimestamp(),
-          driveLink: driveLink,
-        }, { merge: true })
-        console.log(`💾 Saved Drive File ID and upload timestamp to session ${sessionId}`)
-      } catch (dbErr) {
-        console.error(`⚠️ Failed to save upload metadata to DB for session ${sessionId}:`, dbErr.message)
-      }
-    }
+    await attachUploadToSession(req, sessionId, { driveFileId: fileId, driveLink })
 
     return res.json({
       success: true,
@@ -421,10 +469,7 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
       })
     }
 
-    return res.status(500).json({
-      error: 'Failed to upload video to Google Drive.',
-      details: err.message || 'Unknown error',
-    })
+    return res.status(500).json({ error: 'Failed to upload video to Google Drive.' })
   } finally {
     // Always clean up temporary files
     try { fs.unlinkSync(file.path) } catch {}
@@ -502,13 +547,35 @@ app.get('/api/courses/:id', requireAuth(), async (req, res) => {
   res.json(course)
 })
 
+// Fields a client may write. The old handlers spread req.body straight into the
+// record, which let a caller overwrite `id`, `createdAt`, `createdByEmail` (take
+// over any course) and — worse — set `status: 'approved'` on their own course,
+// bypassing the Admin approval workflow entirely.
+function pickCourseFields(body) {
+  const out = {}
+  const b = body && typeof body === 'object' ? body : {}
+  if (typeof b.name === 'string') out.name = b.name.slice(0, 200)
+  if (typeof b.description === 'string') out.description = b.description.slice(0, 5000)
+  if (b.hours !== undefined && Number.isFinite(Number(b.hours))) out.hours = Math.min(Math.max(Number(b.hours), 0), 10000)
+  if (Array.isArray(b.chapters) && JSON.stringify(b.chapters).length < 500_000) out.chapters = b.chapters
+  if (typeof b.externalUrl === 'string' && (b.externalUrl === '' || /^https?:\/\//i.test(b.externalUrl))) out.externalUrl = b.externalUrl.slice(0, 2000)
+  return out
+}
+const sameEmail = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase()
+const isAdminUser = (u) => (u?.role || '').toLowerCase() === 'admin'
+const COURSE_STATUSES = ['approved', 'pending', 'rejected']
+
 app.post('/api/courses', requireFacultyOrAdmin(), async (req, res) => {
+  const fields = pickCourseFields(req.body)
+  if (!fields.name) return res.status(400).json({ error: 'Course name is required.' })
   const courses = await getCoursesList()
   const newCourse = {
-    ...req.body,
-    id: Date.now().toString(),
+    ...fields,
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
     createdAt: new Date().toISOString(),
-    createdByEmail: req.authUser.email || null
+    createdByEmail: req.authUser.email || null,
+    // Faculty submissions always start as pending; only an Admin can pre-approve.
+    status: isAdminUser(req.authUser) && COURSE_STATUSES.includes(req.body?.status) ? req.body.status : 'pending',
   }
   courses.push(newCourse)
   writeCoursesToFile(courses)
@@ -517,33 +584,27 @@ app.post('/api/courses', requireFacultyOrAdmin(), async (req, res) => {
 })
 
 app.put('/api/courses/:id', requireFacultyOrAdmin(), async (req, res) => {
-  const userEmail = req.authUser.email
-  const userRole = req.authUser.role
-
   const courses = await getCoursesList()
-  const index = courses.findIndex(c => c.id === req.params.id)
+  const index = courses.findIndex((c) => c.id === req.params.id)
   if (index === -1) return res.status(404).json({ error: 'Course not found' })
 
   const course = courses[index]
+  // Admin can edit anything. Faculty can edit if they are the creator or it has no creator.
+  const isAuthorized = isAdminUser(req.authUser) || !course.createdByEmail || sameEmail(course.createdByEmail, req.authUser.email)
+  if (!isAuthorized) return res.status(403).json({ error: 'Unauthorized to edit this course' })
 
-  // Enforce access control: Admin can edit anything. Faculty can edit if they are the creator or if it has no creator
-  const isAuthorized =
-    userRole?.toLowerCase() === 'admin' ||
-    !course.createdByEmail ||
-    course.createdByEmail === userEmail
-
-  if (!isAuthorized) {
-    return res.status(403).json({ error: 'Unauthorized to edit this course' })
+  const updatedCourse = { ...course, ...pickCourseFields(req.body) }
+  if (isAdminUser(req.authUser)) {
+    // Approval decisions are Admin-only.
+    if (COURSE_STATUSES.includes(req.body?.status)) updatedCourse.status = req.body.status
+  } else {
+    // A faculty edit puts the course back into review.
+    updatedCourse.status = 'pending'
   }
-
-  // Preserve creator on update if it exists
-  const updatedCourse = {
-    ...course,
-    ...req.body
-  }
-  if (course.createdByEmail) {
-    updatedCourse.createdByEmail = course.createdByEmail
-  }
+  // Never changeable from the client:
+  updatedCourse.id = course.id
+  updatedCourse.createdAt = course.createdAt
+  if (course.createdByEmail) updatedCourse.createdByEmail = course.createdByEmail
 
   courses[index] = updatedCourse
   writeCoursesToFile(courses)
@@ -552,34 +613,24 @@ app.put('/api/courses/:id', requireFacultyOrAdmin(), async (req, res) => {
 })
 
 app.delete('/api/courses/:id', requireFacultyOrAdmin(), async (req, res) => {
-  const userEmail = req.authUser.email
-  const userRole = req.authUser.role
-
   const courses = await getCoursesList()
-  const course = courses.find(c => c.id === req.params.id)
+  const course = courses.find((c) => c.id === req.params.id)
   if (!course) return res.status(404).json({ error: 'Course not found' })
 
-  const isAuthorized =
-    userRole?.toLowerCase() === 'admin' ||
-    !course.createdByEmail ||
-    course.createdByEmail === userEmail
+  const isAuthorized = isAdminUser(req.authUser) || !course.createdByEmail || sameEmail(course.createdByEmail, req.authUser.email)
+  if (!isAuthorized) return res.status(403).json({ error: 'Unauthorized to delete this course' })
 
-  if (!isAuthorized) {
-    return res.status(403).json({ error: 'Unauthorized to delete this course' })
-  }
-
-  const filteredCourses = courses.filter(c => c.id !== req.params.id)
-  writeCoursesToFile(filteredCourses)
+  writeCoursesToFile(courses.filter((c) => c.id !== req.params.id))
   await deleteCourseFromDb(req.params.id)
   res.json({ success: true })
 })
 
 // ── Online Coding Platform API (Problems, Run/Submit, Submissions, Dashboard) ─
-// Rate-limit specifically the two routes that trigger Piston execution —
-// these are the ones that can hammer the (rate-limited, possibly public)
-// Piston instance if left unthrottled.
+// IP-level guard for the routes that execute code. The old pattern ended in
+// (run|submit)$ and therefore NEVER matched /submit-stream — the endpoint that
+// runs the full hidden-test suite — leaving it completely unthrottled.
 app.use((req, res, next) => {
-  if (req.method === 'POST' && /^\/api\/coding\/problems\/[^/]+\/(run|submit)$/.test(req.path)) {
+  if (req.method === 'POST' && /^\/api\/coding\/(problems\/[^/]+\/(run|submit|submit-stream)|generate-problem)$/.test(req.path)) {
     return codingExecLimiter(req, res, next)
   }
   next()
@@ -588,23 +639,32 @@ registerCodingRoutes(app, { serverDir })
 
 // ── Error Handling ──────────────────────────────────────────────────────────
 
-// Multer error handler (file too large, invalid type, etc.)
-app.use((err, _req, res, _next) => {
+// Central error handler. Previously EVERY error (including genuine server bugs and
+// Firestore failures) was returned as HTTP 400 with the raw internal message, and a
+// handler that fired after headers were sent (SSE) threw a second exception.
+app.use((err, _req, res, next) => {
+  if (res.headersSent) return next(err)
   if (err instanceof multer.MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: 'File too large. Maximum size is 500 MB.' })
-    }
-    return res.status(400).json({ error: err.message })
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File too large. Maximum size is 500 MB.' })
+    return res.status(400).json({ error: 'Upload rejected.' })
   }
-  if (err) {
-    return res.status(400).json({ error: err.message })
-  }
+  if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'Request body too large.' })
+  if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Malformed JSON body.' })
+
+  const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 600 ? err.status : 500
+  if (status >= 500) console.error('❌ Unhandled error:', err)
+  // Client-facing errors (e.g. the upload file filter) keep their message; 5xx never leak internals.
+  res.status(status).json({ error: status >= 500 ? 'Internal server error.' : (err.expose || status === 403 || status === 400 ? err.message : 'Request failed.') })
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled promise rejection:', reason)
 })
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`🚀 PrepHire Upload Server running on http://localhost:${PORT}`)
-  console.log(`   Drive folder: ${FOLDER_ID}`)
+  console.log(`   Drive folder: ${FOLDER_ID || '(mock mode — Drive not configured)'}`)
   console.log(`   CORS origin:  ${CORS_ORIGIN}`)
 })

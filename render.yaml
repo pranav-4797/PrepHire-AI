@@ -25,3 +25,11 @@ services:
       # and set this to your own instance before going live with real users.
       - key: PISTON_API_URL
         sync: false
+      - key: JUDGE0_API_URL
+        sync: false
+      # Never enable host execution on a deployed server: student code would run
+      # inside the API process's container with access to its secrets.
+      - key: JUDGE_ALLOW_LOCAL
+        value: "false"
+      - key: NODE_ENV
+        value: production

@@ -16,7 +16,10 @@ export const PISTON_LANGUAGE_CONFIG = {
 
 let runtimeCache = null
 let runtimeCacheAt = 0
+let runtimeFailedAt = 0
 const RUNTIME_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+const RUNTIME_RETRY_BACKOFF_MS = 30 * 1000 // don't re-probe a dead Piston on every test case
+const MAX_OUTPUT_CHARS = 1024 * 1024
 
 function getPistonApiUrl() {
   return (process.env.PISTON_API_URL || DEFAULT_PISTON_URL).replace(/\/+$/, '')
@@ -25,7 +28,8 @@ function getPistonApiUrl() {
 export async function getPistonRuntimeVersion(pistonLang) {
   const apiUrl = getPistonApiUrl()
   const now = Date.now()
-  if (!runtimeCache || now - runtimeCacheAt > RUNTIME_CACHE_TTL_MS) {
+  const stale = !runtimeCache || now - runtimeCacheAt > RUNTIME_CACHE_TTL_MS
+  if (stale && now - runtimeFailedAt > RUNTIME_RETRY_BACKOFF_MS) {
     try {
       const res = await fetch(`${apiUrl}/runtimes`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
@@ -38,9 +42,11 @@ export async function getPistonRuntimeVersion(pistonLang) {
           }
         }
         runtimeCacheAt = now
+      } else {
+        runtimeFailedAt = now
       }
     } catch (e) {
-      // Non-fatal fallback
+      runtimeFailedAt = now // non-fatal fallback to version '*'
     }
   }
   return runtimeCache?.[pistonLang] || '*'
@@ -109,19 +115,24 @@ export async function executePiston({ code, language, stdin, timeLimitMs, memory
     }
   }
 
-  const timeMs = Date.now() - started
+  const roundTripMs = Date.now() - started
 
   if (!res.ok) {
     return {
       stdout: '',
       stderr: `Piston HTTP ${res.status}`,
       serviceError: true,
-      timeMs,
+      timeMs: 0,
       memoryKb: 0,
     }
   }
 
-  const data = await res.json()
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    return { stdout: '', stderr: 'Piston returned an invalid response.', serviceError: true, timeMs: 0, memoryKb: 0 }
+  }
 
   // Notice messages without run/compile (e.g. whitelist notice)
   if (data.message && !data.run && !data.compile) {
@@ -129,7 +140,7 @@ export async function executePiston({ code, language, stdin, timeLimitMs, memory
       stdout: '',
       stderr: data.message,
       serviceError: true,
-      timeMs,
+      timeMs: 0,
       memoryKb: 0,
     }
   }
@@ -145,12 +156,18 @@ export async function executePiston({ code, language, stdin, timeLimitMs, memory
       memoryExceeded: false,
       idlenessError: false,
       serviceError: false,
-      timeMs,
+      timeMs: 0,
       memoryKb: 0,
     }
   }
 
   const run = data.run || {}
+  // Use the sandbox's own measurement. The old code used the HTTP round-trip
+  // (network + queueing + compile), so a slow Java compile or a laggy network
+  // could turn any non-zero exit into a bogus "Time Limit Exceeded".
+  const measured = Number(run.wall_time ?? run.cpu_time)
+  const hasRealTiming = Number.isFinite(measured) && measured >= 0
+  const timeMs = hasRealTiming ? Math.round(measured) : roundTripMs
   const memoryBytes = run.memory || 0
   const memoryKb = memoryBytes > 0 ? Math.round(memoryBytes / 1024) : 0
 
@@ -165,7 +182,7 @@ export async function executePiston({ code, language, stdin, timeLimitMs, memory
   const timedOut = (
     run.signal === 'SIGKILL' && !memoryExceeded
   ) || (
-    timeMs >= runTimeout && run.code !== 0
+    hasRealTiming && timeMs >= runTimeout && run.code !== 0
   )
 
   // ── Idleness Limit Exceeded ───────────────────────────────────────────
@@ -173,15 +190,15 @@ export async function executePiston({ code, language, stdin, timeLimitMs, memory
     !timedOut && !memoryExceeded && run.code === 0 &&
     (run.stdout || '').trim() === '' &&
     (run.stderr || '').trim() === '' &&
-    timeMs > (runTimeout * 0.8)
+    hasRealTiming && timeMs > (runTimeout * 0.8)
   )
 
   // ── Runtime Error ─────────────────────────────────────────────────────
   const runtimeError = !timedOut && !memoryExceeded && !idlenessError && run.code !== 0
 
   return {
-    stdout: run.stdout || '',
-    stderr: run.stderr || '',
+    stdout: String(run.stdout || '').slice(0, MAX_OUTPUT_CHARS),
+    stderr: String(run.stderr || '').slice(0, 64 * 1024),
     timedOut: !!timedOut,
     memoryExceeded: !!memoryExceeded,
     idlenessError: !!idlenessError,

@@ -73,6 +73,7 @@ export interface TestResult {
   timeMs?: number
   memoryKb?: number
   hidden: boolean
+  custom?: boolean // a 'Custom Input' run: no expected output exists
 }
 
 export interface RunResult {
@@ -156,15 +157,10 @@ async function authHeaders(json = false): Promise<Record<string, string>> {
     } catch (e) {
       console.warn('Failed to get Firebase ID token:', e)
     }
-    if (user.email) headers['x-user-email'] = user.email
   }
-
-  try {
-    const savedRole = localStorage.getItem('prephire_user_role')
-    if (savedRole) headers['x-user-role'] = savedRole
-  } catch {
-    /* ignore */
-  }
+  // NOTE: no x-user-email / x-user-role headers. They were forgeable, the server
+  // ignores them (identity + role come from the verified ID token), and sending
+  // them only invited someone to trust them again.
 
   return headers
 }
@@ -189,7 +185,7 @@ export async function listLanguages(): Promise<LanguageOption[]> {
 }
 
 export async function getJudgeStatus(): Promise<JudgeInfo> {
-  const res = await fetch(`${API_URL}/api/coding/judge-status`)
+  const res = await fetch(`${API_URL}/api/coding/judge-status`, { headers: await authHeaders() })
   return handle(res, 'Failed to load judge status')
 }
 
@@ -345,8 +341,8 @@ export async function submitCodeStreaming(
   })
 
   if (!res.ok) {
-    const msg = await res.text().catch(() => 'Failed to submit code')
-    throw new Error(msg)
+    // The server answers with {"error": "..."}; showing the raw body put JSON in the UI.
+    throw new Error(await res.json().then((d) => d?.error, () => null).catch(() => null) || 'Failed to submit code')
   }
 
   const reader = res.body?.getReader()
@@ -355,6 +351,7 @@ export async function submitCodeStreaming(
   const decoder = new TextDecoder()
   let buffer = ''
   let finalSubmission: Submission | null = null
+  let serverError: string | null = null
 
   while (true) {
     const { done, value } = await reader.read()
@@ -365,12 +362,14 @@ export async function submitCodeStreaming(
     buffer = lines.pop() || ''
 
     for (const line of lines) {
-      if (line.startsWith('data: ')) {
+      if (line.startsWith('data:')) {
         try {
-          const event: JudgeProgressEvent = JSON.parse(line.slice(6))
+          const event: JudgeProgressEvent = JSON.parse(line.slice(5).trim())
           onProgress(event)
           if (event.type === 'submission' && event.submission) {
             finalSubmission = event.submission
+          } else if (event.type === 'error' && event.error) {
+            serverError = event.error
           }
         } catch {
           /* skip malformed SSE lines */
@@ -380,7 +379,8 @@ export async function submitCodeStreaming(
   }
 
   if (!finalSubmission) {
-    throw new Error('No final submission received from judge')
+    // Surface the real reason (e.g. sandbox unavailable) instead of a generic message.
+    throw new Error(serverError || 'No final submission received from judge')
   }
   return finalSubmission
 }

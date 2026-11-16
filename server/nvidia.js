@@ -25,10 +25,13 @@ function getApiKeyForModel(modelName) {
  */
 export async function callNvidia(prompt, sys, { model = DEFAULT_NVIDIA_MODEL, temperature = 0.2, clientApiKey = null } = {}) {
   const m = (model || '').toLowerCase()
-  if (m.includes('gemini') || !process.env.NVIDIA_API_KEY) {
+  if (m.includes('gemini')) {
     return callGemini(prompt, sys, clientApiKey)
   }
 
+  // Resolve the per-model key first: the old guard checked only NVIDIA_API_KEY,
+  // so a deployment configured with a per-model key (e.g. NVIDIA_KEY_QWEN) and
+  // no shared key never reached NVIDIA at all.
   const apiKey = getApiKeyForModel(model)
   if (!apiKey) {
     console.warn(`⚠️ No NVIDIA API key configured for model "${model}". Falling back to Gemini.`)
@@ -55,13 +58,14 @@ export async function callNvidia(prompt, sys, { model = DEFAULT_NVIDIA_MODEL, te
         max_tokens: 4096,
         response_format: { type: 'json_object' },
       }),
+      signal: AbortSignal.timeout(90_000),
     })
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
-      console.error(`NVIDIA API HTTP ${res.status}:`, errText)
+      console.error(`NVIDIA API HTTP ${res.status}:`, errText.slice(0, 300))
       console.warn('Falling back to Gemini due to NVIDIA API error.')
-      return callGemini(prompt, sys)
+      return callGemini(prompt, sys, clientApiKey)
     }
 
     const data = await res.json()
@@ -70,7 +74,7 @@ export async function callNvidia(prompt, sys, { model = DEFAULT_NVIDIA_MODEL, te
   } catch (err) {
     console.error('NVIDIA NIM request failed:', err.message)
     console.warn('Falling back to Gemini due to network/execution error.')
-    return callGemini(prompt, sys)
+    return callGemini(prompt, sys, clientApiKey)
   }
 }
 
@@ -98,9 +102,21 @@ function cleanAndParseJson(raw) {
  */
 function generateOfflineFallbackProblem({ topic, difficulty = 'Medium', languages = ['python', 'javascript', 'cpp', 'java'], facultyNotes = '' }) {
   const t = (topic || '').toLowerCase()
-  const isArithmetic = t.includes('arithmetic') || t.includes('subtraction') || t.includes('multiplication') || t.includes('multiply') || t.includes('subtract') || t.includes('2 number') || t.includes('two number') || (t.includes('sum') && !t.includes('triplet') && !t.includes('3sum'))
-  const isSelectionSort = t.includes('selection') || (t.includes('sort') && !t.includes('quick') && !t.includes('merge'))
-  const isBinarySearch = t.includes('binary') || t.includes('search')
+  // Keyword routing for the offline template. These used to be far too greedy:
+  // "Maximum Subarray Sum" produced the arithmetic problem, "Topological Sort" /
+  // "Heap Sort" produced selection sort, and "Graph Search"/"Binary Tree" produced
+  // binary search.
+  const NOT_ARITHMETIC = /triplet|3sum|subarray|prefix|range|path|digit|array|tree|list|matrix|graph|subsequence|window/
+  const isArithmetic =
+    t.includes('arithmetic') || t.includes('subtraction') || t.includes('multiplication') || t.includes('multiply') ||
+    t.includes('subtract') || t.includes('2 number') || t.includes('two number') ||
+    (/\bsum\b/.test(t) && !NOT_ARITHMETIC.test(t))
+  const isSelectionSort =
+    t.includes('selection') ||
+    (/\bsort(ing)?\b/.test(t) && !/quick|merge|heap|bubble|insertion|counting|radix|bucket|topolog|shell|custom|comparator/.test(t))
+  const isBinarySearch =
+    t.includes('binary search') ||
+    (/\bsearch(ing)?\b/.test(t) && !/graph|bfs|dfs|breadth|depth|tree|string|pattern|word|substring|trie|linear/.test(t))
 
   if (isArithmetic) {
     return {
@@ -371,17 +387,22 @@ Ensure:
       inputFormat: problem.inputFormat || '',
       outputFormat: problem.outputFormat || '',
       constraints: problem.constraints || '',
-      timeLimitMs: problem.timeLimitMs || 2000,
-      memoryLimitMb: problem.memoryLimitMb || 256,
-      languages: Array.isArray(problem.languages) && problem.languages.length ? problem.languages : languages,
+      // LLM output is untrusted: clamp numbers and restrict languages to ones the judge supports.
+      timeLimitMs: Math.min(Math.max(Number(problem.timeLimitMs) || 2000, 100), 15000),
+      memoryLimitMb: Math.min(Math.max(Number(problem.memoryLimitMb) || 256, 16), 512),
+      languages: (() => {
+        const ok = ['python', 'javascript', 'cpp', 'java', 'c']
+        const picked = Array.isArray(problem.languages) ? problem.languages.filter((l) => ok.includes(l)) : []
+        return picked.length ? picked : languages
+      })(),
       starterCode: sanitizeStarterCodeMap(problem.starterCode || {}),
       referenceSolution: problem.referenceSolution || null,
-      sampleTests: (Array.isArray(problem.sampleTests) ? problem.sampleTests : []).map((t) => ({
+      sampleTests: (Array.isArray(problem.sampleTests) ? problem.sampleTests : []).filter((t) => t && typeof t === 'object').slice(0, 20).map((t) => ({
         input: typeof t.input === 'string' ? t.input : JSON.stringify(t.input ?? ''),
         output: typeof t.output === 'string' ? t.output : JSON.stringify(t.output ?? ''),
         explanation: t.explanation ? String(t.explanation) : undefined,
       })),
-      hiddenTests: (Array.isArray(problem.hiddenTests) ? problem.hiddenTests : []).map((t) => ({
+      hiddenTests: (Array.isArray(problem.hiddenTests) ? problem.hiddenTests : []).filter((t) => t && typeof t === 'object').slice(0, 50).map((t) => ({
         input: typeof t.input === 'string' ? t.input : JSON.stringify(t.input ?? ''),
         output: typeof t.output === 'string' ? t.output : JSON.stringify(t.output ?? ''),
       })),

@@ -2,6 +2,38 @@
 // Generates styled print/PDF-ready evaluation sheets and batch CSV exports.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * HTML-escapes any value before it is interpolated into the report markup.
+ * SECURITY: the report is written into a popup opened with window.open('') which
+ * inherits THIS app's origin. Names, AI-generated text and faculty remarks were
+ * previously interpolated raw, so a student registering with a name like
+ * `<img src=x onerror=...>` got script execution in the origin of whichever
+ * Faculty/Admin printed their report (stored XSS -> privilege escalation).
+ */
+const esc = (value: unknown): string =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+/** Numeric fields are coerced so a string payload can never reach the markup. */
+const num = (value: unknown, fallback = 0): number => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+/**
+ * CSV cell: quotes the value and neutralises spreadsheet formula injection
+ * (cells starting with = + - @ TAB CR are executed by Excel/Sheets).
+ */
+const csvCell = (value: unknown): string => {
+  let text = String(value ?? '')
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
 export interface ExportableSession {
   studentName: string
   studentEmail: string
@@ -51,7 +83,7 @@ export function exportReportToPdf(session: ExportableSession): void {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>PrepHire AI Assessment Report - ${session.studentName}</title>
+  <title>PrepHire AI Assessment Report - ${esc(session.studentName)}</title>
   <style>
     @page { size: A4; margin: 16mm; }
     body {
@@ -193,15 +225,15 @@ export function exportReportToPdf(session: ExportableSession): void {
   <div class="meta-grid">
     <div class="meta-item">
       <strong>Candidate</strong>
-      ${session.studentName}
+      ${esc(session.studentName)}
     </div>
     <div class="meta-item">
       <strong>Department</strong>
-      ${session.department || 'Engineering'}
+      ${esc(session.department || 'Engineering')}
     </div>
     <div class="meta-item">
       <strong>Domain & Level</strong>
-      ${session.domain} (${session.level})
+      ${esc(session.domain)} (${esc(session.level)})
     </div>
     <div class="meta-item">
       <strong>Placement Status</strong>
@@ -211,26 +243,26 @@ export function exportReportToPdf(session: ExportableSession): void {
 
   <div class="score-banner">
     <div class="overall-card">
-      <div class="num">${r.overallScore || session.score}</div>
+      <div class="num">${num(r.overallScore || session.score)}</div>
       <div class="lbl">Overall Score</div>
     </div>
     <div class="subscores-grid">
-      <div class="subscore-box"><div class="label">Technical</div><div class="val">${r.technical}/100</div></div>
-      <div class="subscore-box"><div class="label">Communication</div><div class="val">${r.communication}/100</div></div>
-      <div class="subscore-box"><div class="label">Confidence</div><div class="val">${r.confidence}/100</div></div>
-      <div class="subscore-box"><div class="label">Clarity</div><div class="val">${r.clarity}/100</div></div>
-      <div class="subscore-box"><div class="label">Relevance</div><div class="val">${r.relevance}/100</div></div>
-      <div class="subscore-box"><div class="label">Proctoring Warnings</div><div class="val">${session.warnings}</div></div>
+      <div class="subscore-box"><div class="label">Technical</div><div class="val">${num(r.technical)}/100</div></div>
+      <div class="subscore-box"><div class="label">Communication</div><div class="val">${num(r.communication)}/100</div></div>
+      <div class="subscore-box"><div class="label">Confidence</div><div class="val">${num(r.confidence)}/100</div></div>
+      <div class="subscore-box"><div class="label">Clarity</div><div class="val">${num(r.clarity)}/100</div></div>
+      <div class="subscore-box"><div class="label">Relevance</div><div class="val">${num(r.relevance)}/100</div></div>
+      <div class="subscore-box"><div class="label">Proctoring Warnings</div><div class="val">${num(session.warnings)}</div></div>
     </div>
   </div>
 
   ${sm ? `
   <div class="section-title">Speech & Delivery Analytics</div>
   <div class="meta-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 16px;">
-    <div class="meta-item"><strong>Speaking Pace</strong>${sm.wpm} WPM</div>
-    <div class="meta-item"><strong>Cadence</strong>${sm.pacingFeedback}</div>
-    <div class="meta-item"><strong>Verbal Fillers</strong>${sm.fillerCount} detected</div>
-    <div class="meta-item"><strong>Delivery Score</strong>${sm.deliveryScore}/100</div>
+    <div class="meta-item"><strong>Speaking Pace</strong>${num(sm.wpm)} WPM</div>
+    <div class="meta-item"><strong>Cadence</strong>${esc(sm.pacingFeedback)}</div>
+    <div class="meta-item"><strong>Verbal Fillers</strong>${num(sm.fillerCount)} detected</div>
+    <div class="meta-item"><strong>Delivery Score</strong>${num(sm.deliveryScore)}/100</div>
   </div>
   ` : ''}
 
@@ -238,13 +270,13 @@ export function exportReportToPdf(session: ExportableSession): void {
     <div>
       <div class="section-title">Key Strengths</div>
       <ul class="list-box strengths">
-        ${(r.strengths || ['Good overall foundational response']).map((s) => `<li>${s}</li>`).join('')}
+        ${(r.strengths || ['Good overall foundational response']).map((s) => `<li>${esc(s)}</li>`).join('')}
       </ul>
     </div>
     <div>
       <div class="section-title">Areas for Improvement</div>
       <ul class="list-box improvements">
-        ${(r.improvements || ['Continue practicing consistent pacing']).map((s) => `<li>${s}</li>`).join('')}
+        ${(r.improvements || ['Continue practicing consistent pacing']).map((s) => `<li>${esc(s)}</li>`).join('')}
       </ul>
     </div>
   </div>
@@ -252,19 +284,19 @@ export function exportReportToPdf(session: ExportableSession): void {
   ${r.actionPlan && r.actionPlan.length ? `
   <div class="section-title">Recommended Action Plan</div>
   <ul class="list-box" style="margin-top: 6px;">
-    ${r.actionPlan.map((step) => `<li style="padding-left:16px;">👉 ${step}</li>`).join('')}
+    ${r.actionPlan.map((step) => `<li style="padding-left:16px;">👉 ${esc(step)}</li>`).join('')}
   </ul>
   ` : ''}
 
   ${r.tip ? `
   <div class="tip-box">
-    <strong>Strategic Recommendation:</strong> ${r.tip}
+    <strong>Strategic Recommendation:</strong> ${esc(r.tip)}
   </div>
   ` : ''}
 
   ${session.facultyRemarks ? `
   <div style="margin-top: 16px; padding: 12px; background: #FEF3C7; border-radius: 6px; font-size: 13px; color: #92400E;">
-    <strong>Faculty Endorsement & Remarks:</strong> ${session.facultyRemarks}
+    <strong>Faculty Endorsement & Remarks:</strong> ${esc(session.facultyRemarks)}
   </div>
   ` : ''}
 
@@ -313,11 +345,11 @@ export function exportSessionsToCsv(sessions: ExportableSession[], filename = 'p
   const rows = sessions.map((s) => {
     const r = s.report || ({} as ExportableSession['report'])
     return [
-      `"${(s.studentName || '').replace(/"/g, '""')}"`,
-      `"${(s.studentEmail || '').replace(/"/g, '""')}"`,
-      `"${(s.department || '').replace(/"/g, '""')}"`,
-      `"${(s.domain || '').replace(/"/g, '""')}"`,
-      `"${(s.level || '').replace(/"/g, '""')}"`,
+      csvCell(s.studentName),
+      csvCell(s.studentEmail),
+      csvCell(s.department),
+      csvCell(s.domain),
+      csvCell(s.level),
       s.score ?? r.overallScore ?? 0,
       r.technical ?? 0,
       r.communication ?? 0,
@@ -326,8 +358,8 @@ export function exportSessionsToCsv(sessions: ExportableSession[], filename = 'p
       r.relevance ?? 0,
       s.warnings ?? 0,
       s.placementReady ? 'YES' : 'NO',
-      `"${s.date || ''}"`,
-      `"${(s.facultyRemarks || '').replace(/"/g, '""')}"`,
+      csvCell(s.date),
+      csvCell(s.facultyRemarks),
     ].join(',')
   })
 

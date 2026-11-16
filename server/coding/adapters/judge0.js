@@ -87,33 +87,23 @@ export async function resolveJudge0LanguageId(language) {
   }
 
   if (Array.isArray(cachedLanguages) && cachedLanguages.length > 0) {
-    let match = null
-    if (language === 'cpp') {
-      const cppLangs = cachedLanguages
-        .filter((l) => /c\+\+.*gcc/i.test(l.name) || /c\+\+/i.test(l.name))
-        .sort((a, b) => b.id - a.id)
-      match = cppLangs[0]?.id
-    } else if (language === 'c') {
-      const cLangs = cachedLanguages
-        .filter((l) => /^c \(gcc/i.test(l.name) || /^c \(/i.test(l.name))
-        .sort((a, b) => b.id - a.id)
-      match = cLangs[0]?.id
-    } else if (language === 'python') {
-      const pyLangs = cachedLanguages
-        .filter((l) => /python.*3/i.test(l.name))
-        .sort((a, b) => b.id - a.id)
-      match = pyLangs[0]?.id
-    } else if (language === 'javascript') {
-      const jsLangs = cachedLanguages
-        .filter((l) => /javascript.*node/i.test(l.name))
-        .sort((a, b) => b.id - a.id)
-      match = jsLangs[0]?.id
-    } else if (language === 'java') {
-      const javaLangs = cachedLanguages
-        .filter((l) => /java.*(jdk|openjdk)/i.test(l.name) && !/javafx/i.test(l.name))
-        .sort((a, b) => b.id - a.id)
-      match = javaLangs[0]?.id
+    // Pick the newest GCC/OpenJDK/etc. Never pick Clang builds, "Python for ML",
+    // test-framework variants (Mockito/JUnit) or FPC-style oddities: the old
+    // "highest id wins" regex happily selected Clang 7 over GCC 9 on 1.13.x
+    // servers and "Python for ML" over plain Python.
+    const EXCLUDE = /clang|for ml|mockito|junit|test|javafx|assembly|bosque|pascal/i
+    const pick = (re) =>
+      cachedLanguages
+        .filter((l) => re.test(l.name) && !EXCLUDE.test(l.name))
+        .sort((a, b) => b.id - a.id)[0]?.id
+    const patterns = {
+      cpp: /^c\+\+ \(gcc/i,
+      c: /^c \(gcc/i,
+      python: /^python \(3/i,
+      javascript: /^javascript \(node/i,
+      java: /^java \((jdk|openjdk)/i,
     }
+    const match = patterns[language] ? pick(patterns[language]) : null
     if (match) return match
   }
 
@@ -160,14 +150,23 @@ export async function executeJudge0({ code, language, stdin, timeLimitMs, memory
   }
 
   const timeoutMs = (wallTimeLimit + 15) * 1000
-  let res
-  try {
-    res = await fetch(`${apiUrl}/submissions?base64_encoded=true&wait=true`, {
+  const submit = (wait) =>
+    fetch(`${apiUrl}/submissions?base64_encoded=true&wait=${wait}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
       signal: AbortSignal.timeout(timeoutMs),
     })
+
+  let res
+  try {
+    res = await submit(true)
+    // Many Judge0 deployments disable ?wait=true (ENABLE_WAIT_RESULT=false) and
+    // answer 400. Fall back to async submit + polling instead of failing every run.
+    if (res.status === 400) {
+      const body = await res.clone().text().catch(() => '')
+      if (/wait/i.test(body)) res = await submit(false)
+    }
   } catch (err) {
     return {
       stdout: '',
@@ -189,25 +188,35 @@ export async function executeJudge0({ code, language, stdin, timeLimitMs, memory
     }
   }
 
-  let data = await res.json()
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    return { stdout: '', stderr: 'Invalid response from Judge0', serviceError: true, timeMs: 0, memoryKb: 0 }
+  }
 
-  // If Judge0 is running in asynchronous queue mode (status 1 = In Queue, 2 = Processing),
-  // poll for result up to timeout.
-  if (data?.status && (data.status.id === 1 || data.status.id === 2) && data.token) {
+  // Async queue mode: status 1 = In Queue, 2 = Processing (or only {token} returned).
+  const pending = (d) => !d?.status || d.status.id === 1 || d.status.id === 2
+  if (pending(data) && data?.token) {
     const pollDeadline = Date.now() + timeoutMs
-    while (Date.now() < pollDeadline && (data.status.id === 1 || data.status.id === 2)) {
+    while (Date.now() < pollDeadline && pending(data)) {
       await new Promise((r) => setTimeout(r, 250))
       try {
-        const pollRes = await fetch(`${apiUrl}/submissions/${data.token}?base64_encoded=true`, {
+        const pollRes = await fetch(`${apiUrl}/submissions/${encodeURIComponent(data.token)}?base64_encoded=true`, {
           headers,
           signal: AbortSignal.timeout(5000),
         })
         if (pollRes.ok) {
-          data = await pollRes.json()
+          const next = await pollRes.json()
+          data = { ...next, token: next.token || data.token }
         }
       } catch {
         // Retry until deadline
       }
+    }
+    if (pending(data)) {
+      // Previously an unfinished job fell through and was reported as a Runtime Error.
+      return { stdout: '', stderr: 'Judge0 did not finish the submission in time.', serviceError: true, timeMs: 0, memoryKb: 0 }
     }
   }
 
@@ -252,9 +261,12 @@ export async function executeJudge0({ code, language, stdin, timeLimitMs, memory
   const memoryExceeded = (
     memoryKb >= memoryLimitKb * 0.95 ||
     /memory limit exceeded/i.test(message) ||
-    /memory limit exceeded/i.test(stderr) ||
-    /std::bad_alloc/i.test(stderr) ||
-    /java\.lang\.OutOfMemoryError/i.test(stderr)
+    // stderr is program-controlled: only trust it when Judge0 did not call the run a clean success
+    (statusId !== 3 && (
+      /memory limit exceeded/i.test(stderr) ||
+      /std::bad_alloc/i.test(stderr) ||
+      /java\.lang\.OutOfMemoryError/i.test(stderr)
+    ))
   )
 
   // ── Time Limit Exceeded (Status 5) ────────────────────────────────────────
@@ -289,8 +301,8 @@ export async function executeJudge0({ code, language, stdin, timeLimitMs, memory
     : (stderr || message || '')
 
   return {
-    stdout,
-    stderr: finalStderr,
+    stdout: stdout.slice(0, 1024 * 1024),
+    stderr: finalStderr.slice(0, 64 * 1024),
     compileError: false,
     runtimeError: !!runtimeError,
     timedOut: !!timedOut,

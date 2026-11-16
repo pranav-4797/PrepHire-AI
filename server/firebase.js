@@ -64,6 +64,12 @@ if (serviceAccount) {
     })
     
     db = getFirestore()
+    // Drop `undefined` fields instead of throwing; many writes (sessions, submissions) contain them.
+    try {
+      db.settings({ ignoreUndefinedProperties: true })
+    } catch {
+      /* settings() may only be called once per instance */
+    }
     auth = getAuth(app)
     console.log(`✅ Firebase Admin SDK initialized successfully for project: ${projectId}`)
   } catch (e) {

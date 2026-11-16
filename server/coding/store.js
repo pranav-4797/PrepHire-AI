@@ -54,6 +54,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { db } from '../firebase.js'
 
+const MAX_SUBMISSIONS = 20_000 // bound memory + the size of the JSON file rewritten on every submit
+
+// Firestore rejects `undefined` field values ("Cannot use undefined as a
+// Firestore value"). Submission test results contain several (hidden tests have
+// input/expectedOutput/actualOutput/stderr = undefined), so EVERY submission
+// sync used to fail silently. JSON round-tripping drops them.
+const clean = (obj) => JSON.parse(JSON.stringify(obj))
+
 export function createCodingStore(serverDir) {
   const dataDir = path.resolve(serverDir, 'uploads')
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
@@ -64,15 +72,20 @@ export function createCodingStore(serverDir) {
   function readJson(file) {
     if (!fs.existsSync(file)) return []
     try {
-      return JSON.parse(fs.readFileSync(file, 'utf8'))
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+      return Array.isArray(parsed) ? parsed : []
     } catch {
       return []
     }
   }
 
+  // Atomic write: a crash mid-write used to leave a truncated JSON file that
+  // readJson() then treated as "empty", silently wiping all problems.
   function writeJson(file, data) {
     try {
-      fs.writeFileSync(file, JSON.stringify(data, null, 2))
+      const tmp = `${file}.${process.pid}.tmp`
+      fs.writeFileSync(tmp, JSON.stringify(data))
+      fs.renameSync(tmp, file)
     } catch (e) {
       console.warn('⚠️ Failed to write local JSON backup:', e.message)
     }
@@ -80,6 +93,7 @@ export function createCodingStore(serverDir) {
 
   let memoryProblems = readJson(problemsFile)
   let memorySubmissions = readJson(submissionsFile)
+  const syncedProblemHash = new Map() // id -> JSON string last written to Firestore
 
   // Initialize Firestore synchronization if db is connected
   if (db) {
@@ -87,24 +101,23 @@ export function createCodingStore(serverDir) {
       try {
         const probSnap = await db.collection('codingProblems').get()
         if (!probSnap.empty) {
-          memoryProblems = probSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+          memoryProblems = probSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
+          for (const p of memoryProblems) syncedProblemHash.set(p.id, JSON.stringify(clean(p)))
           writeJson(problemsFile, memoryProblems)
           console.log(`✅ Loaded ${memoryProblems.length} coding problems from Firestore`)
         } else if (memoryProblems.length > 0) {
-          // Seed Firestore with initial JSON problems
           console.log(`ℹ️ Seeding ${memoryProblems.length} initial coding problems into Firestore...`)
           const batch = db.batch()
-          for (const p of memoryProblems) {
-            const ref = db.collection('codingProblems').doc(p.id)
-            batch.set(ref, p)
-          }
+          for (const p of memoryProblems) batch.set(db.collection('codingProblems').doc(p.id), clean(p))
           await batch.commit()
+          for (const p of memoryProblems) syncedProblemHash.set(p.id, JSON.stringify(clean(p)))
           console.log('✅ Successfully seeded coding problems to Firestore')
         }
 
-        const subSnap = await db.collection('codingSubmissions').limit(500).get()
+        // Newest N, not an arbitrary 500 (a bare limit() has no defined order).
+        const subSnap = await db.collection('codingSubmissions').orderBy('submittedAt', 'desc').limit(MAX_SUBMISSIONS).get()
         if (!subSnap.empty) {
-          memorySubmissions = subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+          memorySubmissions = subSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })).reverse() // oldest -> newest
           writeJson(submissionsFile, memorySubmissions)
           console.log(`✅ Loaded ${memorySubmissions.length} coding submissions from Firestore`)
         }
@@ -116,8 +129,14 @@ export function createCodingStore(serverDir) {
 
   async function syncProblemToFirestore(problem) {
     if (!db || !problem?.id) return
+    const data = clean(problem)
+    const hash = JSON.stringify(data)
+    if (syncedProblemHash.get(problem.id) === hash) return // unchanged: skip the write
     try {
-      await db.collection('codingProblems').doc(problem.id).set(problem, { merge: true })
+      // No { merge: true }: a merge never removes fields, so edits that drop a
+      // field (e.g. clearing targetBranch) were silently resurrected on restart.
+      await db.collection('codingProblems').doc(problem.id).set(data)
+      syncedProblemHash.set(problem.id, hash)
     } catch (e) {
       console.warn('⚠️ Failed to sync problem to Firestore:', e.message)
     }
@@ -126,33 +145,43 @@ export function createCodingStore(serverDir) {
   async function syncSubmissionToFirestore(submission) {
     if (!db || !submission?.id) return
     try {
-      await db.collection('codingSubmissions').doc(submission.id).set(submission, { merge: true })
+      await db.collection('codingSubmissions').doc(submission.id).set(clean(submission))
     } catch (e) {
       console.warn('⚠️ Failed to sync submission to Firestore:', e.message)
+    }
+  }
+
+  async function deleteProblemFromFirestore(id) {
+    if (!db || !id) return
+    try {
+      await db.collection('codingProblems').doc(id).delete()
+      syncedProblemHash.delete(id)
+    } catch (e) {
+      console.warn('⚠️ Failed to delete problem from Firestore:', e.message)
     }
   }
 
   return {
     listProblems: () => memoryProblems,
     saveProblems: (problems) => {
+      // Deleted problems were never removed from Firestore, so they came back
+      // from the dead on the next server restart. Diff and delete them.
+      const keep = new Set(problems.map((p) => p.id))
+      for (const old of memoryProblems) {
+        if (!keep.has(old.id)) deleteProblemFromFirestore(old.id)
+      }
       memoryProblems = problems
       writeJson(problemsFile, problems)
-      if (db) {
-        // Sync any new or modified problems in background
-        for (const p of problems) {
-          syncProblemToFirestore(p)
-        }
-      }
+      for (const p of problems) syncProblemToFirestore(p) // only changed docs are written
     },
     listSubmissions: () => memorySubmissions,
-    saveSubmissions: (submissions) => {
-      memorySubmissions = submissions
-      writeJson(submissionsFile, submissions)
-      if (db && submissions.length > 0) {
-        const latest = submissions[submissions.length - 1]
-        syncSubmissionToFirestore(latest)
+    addSubmission: (submission) => {
+      memorySubmissions.push(submission)
+      if (memorySubmissions.length > MAX_SUBMISSIONS) {
+        memorySubmissions = memorySubmissions.slice(memorySubmissions.length - MAX_SUBMISSIONS)
       }
+      writeJson(submissionsFile, memorySubmissions)
+      syncSubmissionToFirestore(submission)
     },
   }
 }
-

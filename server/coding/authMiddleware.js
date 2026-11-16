@@ -1,142 +1,156 @@
 // ── Verified Identity Middleware ────────────────────────────────────────────
-// SECURITY: This is the real authorization boundary for the coding platform.
-// Earlier iterations of this app (Courses feature) trusted client-supplied
-// `x-user-email` / `x-user-role` headers, which any user can forge from
-// devtools. For the coding platform — where an unauthenticated write means
-// "anyone can delete every problem" — we verify the Firebase ID token
-// server-side and look up the role from Firestore ourselves. The client
-// never gets to assert its own role.
+// SECURITY: This is the real authorization boundary for the API. The Firebase
+// ID token is verified server-side and the role is looked up from Firestore by
+// the server itself — the client never gets to assert its own role.
 //
-// DEV FALLBACK: if no Firebase service account is configured (e.g. someone
-// runs `npm run dev:server` without service-account.json), token
-// verification is unavailable. In that case only — and loudly logged — we
-// fall back to trusting the legacy headers so local development isn't
-// blocked. Any real deployment (Render, with GOOGLE_SERVICE_ACCOUNT set)
-// always goes through full verification.
+// Fixed in this revision (all were exploitable):
+//  1. Forged tokens: when verifyIdToken() REJECTED a token, the old code fell
+//     through to a "dev fallback" that base64-decoded the JWT payload WITHOUT
+//     checking its signature and then looked up that uid's role. Anyone could
+//     hand-craft a token for any uid (e.g. an admin's) and become that user.
+//     A rejected token is now simply a 401.
+//  2. Fail-open roles: if Firestore was unreachable or not configured the role
+//     defaulted to "Faculty" (a privileged role). It now fails closed to
+//     "Student".
+//  3. Disabled accounts: the `disabled` flag on the user profile was never
+//     checked server-side, so a disabled user with a still-valid token kept
+//     full API access.
+//
+// DEV-ONLY ESCAPE HATCH: with no Firebase service account configured, set
+// ALLOW_INSECURE_DEV_AUTH=true to trust the (unverified) token payload / legacy
+// headers on a developer machine. It is ignored when NODE_ENV=production.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { auth, db } from '../firebase.js'
 
-const roleCache = new Map() // uid -> { role, expiresAt }
+const roleCache = new Map() // uid -> { role, disabled, expiresAt }
 const ROLE_CACHE_TTL_MS = 60 * 1000
+const ROLE_CACHE_MAX = 5000
 
-async function resolveRole(uid, fallbackRole = null) {
-  if (uid) {
-    const cached = roleCache.get(uid)
-    if (cached && cached.expiresAt > Date.now()) return cached.role
-  }
+function insecureDevAuth() {
+  return process.env.ALLOW_INSECURE_DEV_AUTH === 'true' && process.env.NODE_ENV !== 'production'
+}
 
-  if (!db) return fallbackRole || 'Faculty'
+let warnedDev = false
+
+async function lookupProfile(uid) {
+  if (!uid) return { role: 'Student', disabled: false }
+  const cached = roleCache.get(uid)
+  if (cached && cached.expiresAt > Date.now()) return cached
+
+  if (!db) return { role: 'Student', disabled: false } // fail closed
+
   try {
-    if (!uid) return fallbackRole || 'Faculty'
     const snap = await db.collection('users').doc(uid).get()
-    const role = snap.exists ? (snap.data().role || fallbackRole || 'Student') : (fallbackRole || 'Student')
-    roleCache.set(uid, { role, expiresAt: Date.now() + ROLE_CACHE_TTL_MS })
-    return role
+    const data = snap.exists ? snap.data() : {}
+    const entry = {
+      role: data.role || 'Student',
+      disabled: data.disabled === true,
+      expiresAt: Date.now() + ROLE_CACHE_TTL_MS,
+    }
+    if (roleCache.size >= ROLE_CACHE_MAX) roleCache.clear()
+    roleCache.set(uid, entry)
+    return entry
   } catch (e) {
-    console.error('⚠️ Failed to resolve user role from Firestore:', e.message)
-    return fallbackRole || 'Faculty'
+    console.error('⚠️ Failed to resolve user role from Firestore (failing closed to Student):', e.message)
+    return { role: 'Student', disabled: false } // not cached
   }
 }
 
 /**
- * Attempts to resolve a verified identity for the request. Returns
- * { uid, email, role } or null if unauthenticated. Never throws.
+ * Attempts to resolve a verified identity for the request.
+ * Returns { uid, email, role, disabled, verified } or null if unauthenticated.
+ * Never throws.
  */
 export async function resolveAuthUser(req) {
   const header = req.headers['authorization'] || ''
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : null
-  const headerRole = req.headers['x-user-role'] || null
 
+  // ── Production path: cryptographically verified Firebase ID token ──────────
   if (auth) {
     if (!token) return null
     try {
       const decoded = await auth.verifyIdToken(token)
-      // Resolve role strictly from Firestore; never allow client header override
-      const role = await resolveRole(decoded.uid, null)
-      return { uid: decoded.uid, email: decoded.email || '', role, verified: true }
+      const profile = await lookupProfile(decoded.uid)
+      return {
+        uid: decoded.uid,
+        email: String(decoded.email || '').toLowerCase(),
+        name: decoded.name || '',
+        role: profile.role,
+        disabled: profile.disabled,
+        verified: true,
+      }
     } catch (e) {
-      console.warn('⚠️ Rejected invalid/expired ID token, evaluating dev fallback:', e.message)
+      console.warn('⚠️ Rejected invalid/expired ID token:', e.code || e.message)
+      return null // NEVER fall back to trusting an unverified token
     }
   }
 
-  // Fallback: If auth is unconfigured or token verification threw in local dev (e.g. project ID mismatch)
+  // ── Dev-only path (no service account) ─────────────────────────────────────
+  if (!insecureDevAuth()) return null
+
+  if (!warnedDev) {
+    warnedDev = true
+    console.warn('⚠️ ALLOW_INSECURE_DEV_AUTH=true: identities are NOT verified. Never enable this in production.')
+  }
+
   let email = null
   let uid = null
-
   if (token) {
     try {
       const parts = token.split('.')
-      if (parts.length >= 2) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'))
-        // Reject expired tokens immediately
-        if (payload.exp && payload.exp * 1000 < Date.now()) {
-          console.warn('⚠️ Token is expired')
-          return null
-        }
-        if (payload.email) email = payload.email
-        if (payload.user_id || payload.sub) uid = payload.user_id || payload.sub
-      }
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+      if (payload.exp && payload.exp * 1000 < Date.now()) return null
+      email = payload.email || null
+      uid = payload.user_id || payload.sub || null
     } catch {
-      /* ignore */
+      /* not a JWT */
     }
-  } else if (!auth) {
-    // Only allow header-based mock email when auth is completely unconfigured
+  } else {
     email = req.headers['x-user-email'] || null
   }
+  if (!uid && !email) return null
 
-  if (uid || email) {
-    const finalRole = await resolveRole(uid, null)
-    return {
-      uid,
-      email: email ? String(email) : '',
-      role: finalRole,
-      verified: false,
+  const requested = String(process.env.DEV_AUTH_ROLE || 'Faculty')
+  const role = ['Admin', 'Faculty', 'Student'].includes(requested) ? requested : 'Faculty'
+  return { uid, email: String(email || '').toLowerCase(), name: '', role, disabled: false, verified: false }
+}
+
+/**
+ * Builds a middleware that requires a signed-in, enabled user whose role is in
+ * `allowedRoles` (lower-case). `null` means "any signed-in user".
+ */
+function guard(allowedRoles, forbiddenMessage) {
+  return async (req, res, next) => {
+    const user = await resolveAuthUser(req)
+    if (!user) return res.status(401).json({ error: 'Sign in required.' })
+    if (user.disabled) return res.status(403).json({ error: 'This account has been disabled.' })
+    if (allowedRoles && !allowedRoles.includes((user.role || '').toLowerCase())) {
+      return res.status(403).json({ error: forbiddenMessage })
     }
+    req.authUser = user
+    next()
   }
-
-  return null
 }
 
 export function requireAuth() {
-  return async (req, res, next) => {
-    const user = await resolveAuthUser(req)
-    if (!user) return res.status(401).json({ error: 'Sign in required.' })
-    req.authUser = user
-    next()
-  }
+  return guard(null)
 }
 
 export function requireAdmin() {
-  return async (req, res, next) => {
-    const user = await resolveAuthUser(req)
-    if (!user) return res.status(401).json({ error: 'Sign in required.' })
-    if ((user.role || '').toLowerCase() !== 'admin') {
-      return res.status(403).json({ error: 'Only Admin users can manage coding problems.' })
-    }
-    req.authUser = user
-    next()
-  }
+  return guard(['admin'], 'Only Admin users can perform this action.')
 }
 
 /** Gate for Faculty-or-Admin-only writes (e.g. Courses CRUD, Coding Problems). */
 export function requireFacultyOrAdmin() {
-  return async (req, res, next) => {
-    const user = await resolveAuthUser(req)
-    if (!user) return res.status(401).json({ error: 'Sign in required.' })
-    const role = (user.role || '').toLowerCase()
-    if (role !== 'admin' && role !== 'faculty') {
-      return res.status(403).json({ error: 'Only Faculty or Admin users have permission for this action.' })
-    }
-    req.authUser = user
-    next()
-  }
+  return guard(['admin', 'faculty'], 'Only Faculty or Admin users have permission for this action.')
 }
 
-/** Non-blocking: attaches req.authUser if resolvable, otherwise leaves it undefined. */
+/** Non-blocking: attaches req.authUser if resolvable (and enabled), otherwise leaves it undefined. */
 export function attachUserOptional() {
   return async (req, _res, next) => {
-    req.authUser = await resolveAuthUser(req)
+    const user = await resolveAuthUser(req)
+    req.authUser = user && !user.disabled ? user : undefined
     next()
   }
 }

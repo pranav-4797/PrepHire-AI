@@ -134,54 +134,59 @@ export async function callClaudeStream(
   let pendingSentenceBuffer = ''
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('data: ')) {
-        const payload = trimmed.slice(6).trim()
-        if (payload === '[DONE]') continue
-
-        try {
-          const parsed = JSON.parse(payload)
-          if (parsed.error) {
-            throw new Error(parsed.error)
-          }
-          if (parsed.text) {
-            accumulatedText += parsed.text
-            pendingSentenceBuffer += parsed.text
-            callbacks.onChunk(accumulatedText, parsed.text)
-
-            // Check for sentence boundary: period, question mark, exclamation mark followed by space or newline
-            const boundaryMatch = pendingSentenceBuffer.match(/^(.*?([.?!]+))(\s+.*|$)/s)
-            if (boundaryMatch) {
-              const completedSentence = boundaryMatch[1].trim()
-              pendingSentenceBuffer = boundaryMatch[3] ? boundaryMatch[3].trimStart() : ''
-              if (completedSentence && callbacks.onSentenceReady) {
-                callbacks.onSentenceReady(completedSentence)
-              }
-            }
-          }
-        } catch (e) {
-          if ((e as Error).message.includes('streaming request failed') || (e as Error).message.includes('Too many')) {
-            throw e
-          }
-          // partial JSON line, continue
-        }
-      }
+  // Emits EVERY completed sentence in the buffer. A sentence ends at . ? ! followed by
+  // whitespace; requiring the whitespace (instead of also accepting end-of-buffer) stops
+  // "3.5" / "e.g." arriving split across chunks from being cut mid-token. The old regex
+  // also emitted only one sentence per network chunk, delaying the rest.
+  const drainSentences = (final: boolean) => {
+    for (;;) {
+      const m = pendingSentenceBuffer.match(/^([\s\S]*?[.?!]+["')\]]*)\s+/)
+      if (!m) break
+      const sentence = m[1].trim()
+      pendingSentenceBuffer = pendingSentenceBuffer.slice(m[0].length)
+      if (sentence) callbacks.onSentenceReady?.(sentence)
+    }
+    if (final && pendingSentenceBuffer.trim()) {
+      callbacks.onSentenceReady?.(pendingSentenceBuffer.trim())
+      pendingSentenceBuffer = ''
     }
   }
 
-  // Flush any remaining tail sentence
-  if (pendingSentenceBuffer.trim() && callbacks.onSentenceReady) {
-    callbacks.onSentenceReady(pendingSentenceBuffer.trim())
+  const handleLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) return
+    const payload = trimmed.slice(5).trim()
+    if (!payload || payload === '[DONE]') return
+
+    // Parse separately from handling: previously a server-sent {"error": ...} was thrown
+    // INSIDE the try block and then swallowed by the catch (only two hard-coded message
+    // fragments were re-thrown), so most AI failures produced an empty question silently.
+    let parsed: { text?: string; error?: string }
+    try {
+      parsed = JSON.parse(payload)
+    } catch {
+      return // partial / malformed line
+    }
+    if (parsed.error) throw new Error(parsed.error)
+    if (parsed.text) {
+      accumulatedText += parsed.text
+      pendingSentenceBuffer += parsed.text
+      callbacks.onChunk(accumulatedText, parsed.text)
+      drainSentences(false)
+    }
   }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    lines.forEach(handleLine)
+  }
+  handleLine(buffer)
+
+  drainSentences(true) // flush the tail
 
   return accumulatedText.trim()
 }

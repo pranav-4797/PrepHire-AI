@@ -4636,9 +4636,18 @@ export default function App() {
     const role = profile.role.toLowerCase()
 
     if (role === 'admin' || role === 'faculty') {
-      const unsubSessions = subscribeToSessions((nextSessions) => {
-        setAllSessions(nextSessions as SessionRecord[])
-      })
+      // Faculty may only read their own department's sessions (Firestore rules); the query
+      // must be scoped the same way or the whole listener is rejected. Admins read all.
+      const facultyDepartment = role === 'faculty' ? profile.department : undefined
+      const unsubSessions =
+        role === 'faculty' && !facultyDepartment
+          ? () => setAllSessions([])
+          : subscribeToSessions(
+              (nextSessions) => {
+                setAllSessions(nextSessions as SessionRecord[])
+              },
+              { department: facultyDepartment },
+            )
       const unsubUsers = subscribeToUserProfiles((nextUsers) => {
         setUsers(nextUsers)
       })
@@ -4852,7 +4861,7 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [domain, level, aiSpeak, user, profile, resumeProfile, resumeNotes, showToast])
+  }, [domain, level, aiSpeak, user, profile, resumeProfile, resumeNotes, showToast, sessionTimeLimit, selectedCompanyTrack, stopSpeaking])
 
   const generateReport = useCallback(async (data: QA[]) => {
     setScreen('loading')
@@ -4943,10 +4952,16 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
     }
 
     setAllSessions((prev) => [newSession, ...prev.filter(s => s.id !== sessionId)])
-    saveSession(newSession).catch((error) => {
-      console.error('Failed to save session:', error)
-      showToast('Failed to save interview session', 'error')
-    })
+    // The session document must exist BEFORE the video upload finishes: the server only
+    // attaches driveLink/driveFileId to an existing session owned by the caller.
+    const sessionSaved = saveSession(newSession).then(
+      () => true,
+      (error) => {
+        console.error('Failed to save session:', error)
+        showToast('Failed to save interview session', 'error')
+        return false
+      },
+    )
 
     setHistory((p) => [
       ...p,
@@ -4964,19 +4979,18 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
 
     // ── Upload video to Google Drive (skip if no questions answered) ──
     if (qAnswered > 0 && videoBlob && videoBlob.size > 0) {
-      uploadVideoToDrive(videoBlob, sessionId).then((driveLink) => {
+      sessionSaved.then(() => uploadVideoToDrive(videoBlob, sessionId)).then((driveLink) => {
         if (!driveLink) return
+        // The server writes driveLink onto the session itself (Admin SDK). The old client-side
+        // updateSession() here was always rejected by Firestore rules for Students (only
+        // Faculty/Admin may update sessions), producing a bogus error toast every interview.
         setAllSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, driveLink } : s)))
-        updateSession(sessionId, { driveLink }).catch((error) => {
-          console.error('Failed to save drive link:', error)
-          showToast('Failed to save drive link', 'error')
-        })
       }).catch((error) => {
         console.error('Video upload failed:', error)
         showToast('Video upload failed', 'error')
       })
     }
-  }, [domain, level, user, stopSpeaking, procWarnings, uploadVideoToDrive])
+  }, [domain, level, user, profile, showToast, stopSpeaking, procWarnings, uploadVideoToDrive])
 
   const handleTimeUp = useCallback(async () => {
     stopSpeaking()
@@ -5022,7 +5036,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
     } finally {
       setLoading(false)
     }
-  }, [stopSpeaking, messages, sessionData, qCount, domain, level, user, profile, resumeProfile, usedOfflineQuestionIds, aiSpeak, generateReport, showToast])
+  }, [stopSpeaking, messages, sessionData, qCount, domain, level, user, profile, resumeProfile, usedOfflineQuestionIds, aiSpeak, generateReport, showToast, sessionTimeLimit])
 
   const submitIntro = useCallback(async (text: string) => {
     setIntroTimerActive(false)
@@ -5138,7 +5152,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
       }
       return newWarnings
     })
-  }, [])
+  }, [showToast])
 
   async function handleLogout() {
     await firebaseLogout()

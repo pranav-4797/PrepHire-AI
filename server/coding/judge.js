@@ -1,16 +1,33 @@
 // ── Online Coding Platform — Unified Sandboxed Judge Engine ─────────────────
-// Modular code execution service inspired by CodeChef and Codeforces judging standards.
+// Backend order (JUDGE_PROVIDER=auto, the default):
+//   1. Judge0  (containerised, cgroup limits)           ← primary
+//   2. Piston  (containerised)                          ← secondary
+//   3. Host toolchain — ONLY if JUDGE_ALLOW_LOCAL=true  ← dev-only last resort
 //
-// Architecture:
-// - Primary: Judge0 (CE / RapidAPI / Self-Hosted Docker) with Base64 protocol,
-//   dynamic language detection, microsecond cgroup tracking, and sandboxing.
-// - Secondary: Piston (Self-Hosted / Demo) with version cache and resource limits.
-// - Fallback: Local toolchains (g++, gcc, python, node) for offline resilience.
+// SECURITY NOTE: earlier versions preferred the host toolchain whenever one was
+// installed ("native-first"). Because `node` always exists on the API host, every
+// JavaScript submission silently bypassed the sandbox and ran inside the API
+// server's own environment. The host runner is now strictly opt-in and is never
+// chosen ahead of a working remote sandbox.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { executeJudge0, isJudge0Available } from './adapters/judge0.js'
-import { executePiston, isPistonAvailable, PISTON_LANGUAGE_CONFIG } from './adapters/piston.js'
-import { executeLocally, isLocalCompilerAvailable, compileAndRunBatchLocally } from './adapters/local.js'
+import { executePiston, isPistonAvailable } from './adapters/piston.js'
+import {
+  executeLocally,
+  isLocalCompilerAvailable,
+  isLocalExecutionAllowed,
+  compileAndRunBatchLocally,
+} from './adapters/local.js'
+import {
+  buildTestResult,
+  determineVerdict,
+  normalizeOutput,
+  serviceErrorOutcome,
+  summarize,
+} from './verdict.js'
+
+export { determineVerdict, normalizeOutput }
 
 // Maps our internal language IDs to display labels and extensions
 export const LANGUAGE_CONFIG = {
@@ -23,49 +40,68 @@ export const LANGUAGE_CONFIG = {
 
 export const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_CONFIG)
 
+const CONCURRENCY = 4
+
+function configuredProvider() {
+  const p = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
+  return ['auto', 'judge0', 'piston', 'local'].includes(p) ? p : 'auto'
+}
+
+/** Ordered list of backends to try for a single execution. */
+function backendOrder() {
+  const p = configuredProvider()
+  const order = p === 'auto' ? ['judge0', 'piston'] : [p]
+  if (isLocalExecutionAllowed() && !order.includes('local')) order.push('local')
+  return order
+}
+
+function stripCredentials(url) {
+  try {
+    const u = new URL(url)
+    u.username = ''
+    u.password = ''
+    return u.toString().replace(/\/$/, '')
+  } catch {
+    return '(invalid url)'
+  }
+}
+
+let infoCache = null
 /**
- * Returns diagnostic metadata about the active judging infrastructure.
+ * Diagnostic metadata about the judging infrastructure (admin-only endpoint).
+ * Probing is cached for 15s so it cannot be used to hammer the sandboxes.
  */
 export async function getActiveJudgeInfo() {
-  const providerConfig = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
-  const judge0Url = process.env.JUDGE0_API_URL || 'https://ce.judge0.com'
-  const pistonUrl = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston'
+  if (infoCache && Date.now() - infoCache.at < 15_000) return infoCache.value
 
-  let activeProvider = providerConfig
-  let nativeCompiler = false
-  const hasLocalCpp = await isLocalCompilerAvailable('cpp')
+  const providerConfig = configuredProvider()
+  const judge0Url = stripCredentials(process.env.JUDGE0_API_URL || 'https://ce.judge0.com')
+  const pistonUrl = stripCredentials(process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston')
+  const localAllowed = isLocalExecutionAllowed()
 
-  if (providerConfig === 'auto') {
-    if (hasLocalCpp) {
-      activeProvider = 'native_compiler'
-      nativeCompiler = true
-    } else {
-      const j0Ok = await isJudge0Available()
-      if (j0Ok) {
-        activeProvider = 'judge0'
-      } else {
-        const pistonOk = await isPistonAvailable()
-        activeProvider = pistonOk ? 'piston' : 'local'
-      }
-    }
-  } else if (providerConfig === 'local') {
-    activeProvider = hasLocalCpp ? 'native_compiler' : 'local'
-    nativeCompiler = hasLocalCpp
+  let activeProvider = 'none'
+  for (const backend of backendOrder()) {
+    if (backend === 'judge0' && (await isJudge0Available())) { activeProvider = 'judge0'; break }
+    if (backend === 'piston' && (await isPistonAvailable())) { activeProvider = 'piston'; break }
+    if (backend === 'local' && localAllowed && (await isLocalCompilerAvailable('cpp'))) { activeProvider = 'local'; break }
   }
 
-  return {
+  const value = {
     provider: activeProvider,
     configuredProvider: providerConfig,
-    nativeCompiler,
+    hostExecutionAllowed: localAllowed,
     judge0Url,
     pistonUrl,
     supportedLanguages: SUPPORTED_LANGUAGES,
   }
+  infoCache = { at: Date.now(), value }
+  return value
 }
 
 /**
- * Executes `code` once against a single `stdin` through the configured adapter cascade.
- * Returns { stdout, stderr, timedOut, memoryExceeded, compileError, runtimeError, idlenessError, serviceError, timeMs, memoryKb }
+ * Executes `code` once against a single `stdin` through the backend cascade.
+ * Returns { stdout, stderr, timedOut, memoryExceeded, compileError, runtimeError,
+ *           idlenessError, serviceError, timeMs, memoryKb }
  */
 export async function executeOnce({ code, language, stdin, timeLimitMs, memoryLimitMb }) {
   if (!SUPPORTED_LANGUAGES.includes(language)) {
@@ -83,334 +119,137 @@ export async function executeOnce({ code, language, stdin, timeLimitMs, memoryLi
     }
   }
 
-  const provider = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
+  const args = { code, language, stdin, timeLimitMs, memoryLimitMb }
+  let last = serviceErrorOutcome('No execution backend is configured.')
 
-  // 1. Explicit Local mode
-  if (provider === 'local') {
-    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
-  }
-
-  // 2. Explicit Piston mode
-  if (provider === 'piston') {
-    const pistonRes = await executePiston({ code, language, stdin, timeLimitMs, memoryLimitMb })
-    if (!pistonRes.serviceError) return pistonRes
-    console.warn('⚠️ Piston service unavailable, falling back to host toolchain:', pistonRes.stderr)
-    return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
-  }
-
-  // 3. Judge0 / Auto mode (Default: CodeChef-grade Judge0 sandbox)
-  try {
-    const outcome = await executeJudge0({ code, language, stdin, timeLimitMs, memoryLimitMb })
-    if (!outcome.serviceError) {
-      return outcome
-    }
-    console.warn('ℹ️ Judge0 service unavailable, attempting fallback:', outcome.stderr)
-  } catch (err) {
-    console.warn('ℹ️ Judge0 execution error, attempting fallback:', err.message)
-  }
-
-  // Fallback A: Try Piston sandbox
-  if (process.env.PISTON_API_URL || true) {
+  for (const backend of backendOrder()) {
     try {
-      const pistonRes = await executePiston({ code, language, stdin, timeLimitMs, memoryLimitMb })
-      if (!pistonRes.serviceError) return pistonRes
-    } catch {}
+      let outcome
+      if (backend === 'judge0') outcome = await executeJudge0(args)
+      else if (backend === 'piston') outcome = await executePiston(args)
+      else outcome = await executeLocally(args)
+
+      if (!outcome.serviceError) return outcome
+      last = outcome
+      console.warn(`ℹ️ ${backend} unavailable, trying next backend:`, String(outcome.stderr).slice(0, 200))
+    } catch (err) {
+      last = serviceErrorOutcome(`${backend} error: ${err.message}`)
+      console.warn(`ℹ️ ${backend} execution error, trying next backend:`, err.message)
+    }
   }
-
-  // Fallback B: Host compiler/interpreter
-  return executeLocally({ code, language, stdin, timeLimitMs, memoryLimitMb })
-}
-
-export function normalizeOutput(s) {
-  return (s ?? '')
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line) => line.replace(/[ \t]+$/g, ''))
-    .join('\n')
-    .trim()
+  return last
 }
 
 /**
- * Determines the verdict string for a single test case execution outcome.
- * Priority adheres to competitive programming conventions:
- * Sandbox Unavailable > Compilation Error > Memory Limit Exceeded >
- * Time Limit Exceeded > Idleness Limit Exceeded > Runtime Error >
- * Wrong Answer > Accepted
- */
-export function determineVerdict(outcome, expectedOutput, timeLimitMs, language) {
-  const multiplier = (language === 'python' || language === 'java' || language === 'javascript') ? 2 : 1
-  const effectiveLimitMs = (timeLimitMs || 2000) * multiplier
-
-  if (outcome.serviceError) return 'Sandbox Unavailable'
-  if (outcome.compileError) return 'Compilation Error'
-  if (outcome.memoryExceeded) return 'Memory Limit Exceeded'
-  if (outcome.timedOut || (outcome.timeMs || 0) >= effectiveLimitMs) return 'Time Limit Exceeded'
-  if (outcome.idlenessError) return 'Idleness Limit Exceeded'
-  if (outcome.runtimeError) return 'Runtime Error'
-  if (normalizeOutput(outcome.stdout) !== normalizeOutput(expectedOutput)) return 'Wrong Answer'
-  return 'Accepted'
-}
-
-/**
- * Helper to process an array with bounded concurrency (e.g. 4 workers in parallel).
- * Guarantees order preservation of the results array.
+ * Bounded-concurrency map that preserves order and CONTAINS failures: one
+ * rejected worker used to reject the whole submission mid-stream.
  */
 async function mapConcurrent(items, concurrency, fn) {
   const results = new Array(items.length)
   let nextIdx = 0
-
   async function worker() {
     while (nextIdx < items.length) {
       const idx = nextIdx++
-      results[idx] = await fn(items[idx], idx)
+      try {
+        results[idx] = await fn(items[idx], idx)
+      } catch (err) {
+        results[idx] = { error: err }
+      }
     }
   }
-
-  const workerCount = Math.min(concurrency, items.length)
-  const workers = Array.from({ length: workerCount }, () => worker())
-  await Promise.all(workers)
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()))
   return results
 }
 
-/**
- * Runs `code` against a list of test cases in parallel (up to 4 concurrent sandboxes)
- * and returns per-case verdicts plus an aggregate summary with peak runtime and peak memory.
- */
-export async function runTestCases({ code, language, testCases, timeLimitMs, memoryLimitMb }) {
-  if (!testCases || testCases.length === 0) {
-    return { verdict: 'Accepted', passedCount: 0, totalCount: 0, runtimeMs: 0, memoryKb: 0, testResults: [] }
-  }
-
-  const provider = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
-  if (provider === 'auto' || provider === 'local') {
-    try {
-      const hasLocal = await isLocalCompilerAvailable(language)
-      if (hasLocal) {
-        return await compileAndRunBatchLocally({ code, language, testCases, timeLimitMs, memoryLimitMb })
-      }
-    } catch (err) {
-      console.warn('⚠️ High-speed native compiler failed, falling back to sandbox cascade:', err.message)
-    }
-  }
-
-  // Fast check: evaluate test case 0 first to verify compilation and avoid running all tests on syntax errors
-  const firstOutcome = await executeOnce({
-    code,
-    language,
-    stdin: testCases[0].input,
-    timeLimitMs,
-    memoryLimitMb,
-  })
-
-  const firstVerdict = determineVerdict(firstOutcome, testCases[0].output, timeLimitMs, language)
-  const firstResult = {
-    passed: firstVerdict === 'Accepted',
-    verdict: firstVerdict,
-    input: testCases[0].hidden ? undefined : testCases[0].input,
-    expectedOutput: testCases[0].hidden ? undefined : testCases[0].output,
-    actualOutput: testCases[0].hidden ? undefined : firstOutcome.stdout,
-    stderr: firstOutcome.stderr ? firstOutcome.stderr.slice(0, 2000) : undefined,
-    timeMs: firstOutcome.timeMs,
-    memoryKb: firstOutcome.memoryKb,
-    hidden: !!testCases[0].hidden,
-  }
-
-  // Fast abort: If compilation failed or only 1 test, return immediately (zero wasted time!)
-  if (firstVerdict === 'Compilation Error' || firstVerdict === 'Sandbox Unavailable' || testCases.length === 1) {
-    return {
-      verdict: firstVerdict,
-      passedCount: firstResult.passed ? 1 : 0,
-      totalCount: testCases.length,
-      runtimeMs: firstOutcome.timeMs || 0,
-      memoryKb: firstOutcome.memoryKb || 0,
-      testResults: [firstResult],
-    }
-  }
-
-  // Run remaining test cases concurrently (4 parallel workers)
-  const remainingCases = testCases.slice(1)
-  const remainingOutcomes = await mapConcurrent(remainingCases, 4, async (tc) => {
-    const outcome = await executeOnce({
-      code,
-      language,
-      stdin: tc.input,
-      timeLimitMs,
-      memoryLimitMb,
-    })
-    const verdict = determineVerdict(outcome, tc.output, timeLimitMs, language)
-    return {
-      passed: verdict === 'Accepted',
-      verdict,
-      input: tc.hidden ? undefined : tc.input,
-      expectedOutput: tc.hidden ? undefined : tc.output,
-      actualOutput: tc.hidden ? undefined : outcome.stdout,
-      stderr: outcome.stderr ? outcome.stderr.slice(0, 2000) : undefined,
-      timeMs: outcome.timeMs,
-      memoryKb: outcome.memoryKb,
-      hidden: !!tc.hidden,
-    }
-  })
-
-  const allResults = [firstResult, ...remainingOutcomes]
-  let maxTimeMs = firstOutcome.timeMs || 0
-  let peakMemoryKb = firstOutcome.memoryKb || 0
-  let overallVerdict = firstResult.passed ? 'Accepted' : firstVerdict
-
-  for (const r of remainingOutcomes) {
-    maxTimeMs = Math.max(maxTimeMs, r.timeMs || 0)
-    peakMemoryKb = Math.max(peakMemoryKb, r.memoryKb || 0)
-    if (!r.passed && overallVerdict === 'Accepted') {
-      overallVerdict = r.verdict
-    }
-  }
-
-  const passedCount = allResults.filter((r) => r.passed).length
-  return {
-    verdict: allResults.length === 0 ? 'Runtime Error' : overallVerdict,
-    passedCount,
-    totalCount: testCases.length,
-    runtimeMs: maxTimeMs,
-    memoryKb: peakMemoryKb,
-    testResults: allResults,
-  }
+function judgeOne(tc, outcome, timeLimitMs, language) {
+  const verdict = determineVerdict(outcome, tc.output, timeLimitMs, language, { compare: !tc.custom })
+  return { verdict, result: buildTestResult(tc, outcome, verdict) }
 }
 
 /**
- * Streaming variant of runTestCases — evaluates test cases concurrently while
- * streaming real-time per-test progress events to Server-Sent Events (SSE).
+ * Judges `code` against all test cases, emitting live progress via `onProgress`.
+ * Case 1 runs first so a compile error / dead sandbox aborts immediately, then
+ * the rest run with bounded concurrency.
  */
 export async function runTestCasesStreaming({ code, language, testCases, timeLimitMs, memoryLimitMb, onProgress }) {
+  const emit = typeof onProgress === 'function' ? onProgress : () => {}
+
   if (!testCases || testCases.length === 0) {
     const empty = { verdict: 'Accepted', passedCount: 0, totalCount: 0, runtimeMs: 0, memoryKb: 0, testResults: [] }
-    onProgress({ type: 'complete', ...empty })
+    emit({ type: 'complete', ...empty })
     return empty
   }
 
-  const provider = (process.env.JUDGE_PROVIDER || 'auto').toLowerCase()
-  if (provider === 'auto' || provider === 'local') {
-    try {
-      const hasLocal = await isLocalCompilerAvailable(language)
-      if (hasLocal) {
-        return await compileAndRunBatchLocally({ code, language, testCases, timeLimitMs, memoryLimitMb, onProgress })
-      }
-    } catch (err) {
-      console.warn('⚠️ High-speed native compiler streaming failed, falling back to sandbox cascade:', err.message)
+  // Explicit host mode: compile once, run everything locally.
+  if (configuredProvider() === 'local') {
+    if (!isLocalExecutionAllowed()) {
+      const outcome = serviceErrorOutcome('Host execution is disabled (set JUDGE_ALLOW_LOCAL=true for local development).')
+      const summary = summarize([buildTestResult(testCases[0], outcome, 'Sandbox Unavailable')], testCases.length)
+      emit({ type: 'complete', ...summary })
+      return summary
     }
+    return compileAndRunBatchLocally({ code, language, testCases, timeLimitMs, memoryLimitMb, onProgress: emit })
   }
 
-  // Emit compiling phase
-  onProgress({ type: 'compiling' })
+  emit({ type: 'compiling' })
 
-  // Fast check: Evaluate case 0 first
-  const firstOutcome = await executeOnce({
-    code,
-    language,
-    stdin: testCases[0].input,
-    timeLimitMs,
-    memoryLimitMb,
-  })
+  const first = await executeOnce({ code, language, stdin: testCases[0].input, timeLimitMs, memoryLimitMb })
 
-  const firstVerdict = determineVerdict(firstOutcome, testCases[0].output, timeLimitMs, language)
-  const firstResult = {
-    passed: firstVerdict === 'Accepted',
-    verdict: firstVerdict,
-    input: testCases[0].hidden ? undefined : testCases[0].input,
-    expectedOutput: testCases[0].hidden ? undefined : testCases[0].output,
-    actualOutput: testCases[0].hidden ? undefined : firstOutcome.stdout,
-    stderr: firstOutcome.stderr ? firstOutcome.stderr.slice(0, 2000) : undefined,
-    timeMs: firstOutcome.timeMs,
-    memoryKb: firstOutcome.memoryKb,
-    hidden: !!testCases[0].hidden,
+  // Remote sandboxes all down but host fallback is explicitly allowed: use the
+  // faster compile-once batch path instead of recompiling per test.
+  if (first.serviceError && isLocalExecutionAllowed() && (await isLocalCompilerAvailable(language))) {
+    return compileAndRunBatchLocally({ code, language, testCases, timeLimitMs, memoryLimitMb, onProgress: emit })
   }
 
-  onProgress({
+  const { verdict: firstVerdict, result: firstResult } = judgeOne(testCases[0], first, timeLimitMs, language)
+  emit({
     type: 'test',
     index: 1,
     total: testCases.length,
     verdict: firstVerdict,
     passed: firstResult.passed,
-    timeMs: firstOutcome.timeMs,
-    memoryKb: firstOutcome.memoryKb,
+    timeMs: first.timeMs,
+    memoryKb: first.memoryKb,
   })
 
-  // Fast abort on Compilation Error
   if (firstVerdict === 'Compilation Error' || firstVerdict === 'Sandbox Unavailable' || testCases.length === 1) {
-    const finalResult = {
-      verdict: firstVerdict,
-      passedCount: firstResult.passed ? 1 : 0,
-      totalCount: testCases.length,
-      runtimeMs: firstOutcome.timeMs || 0,
-      memoryKb: firstOutcome.memoryKb || 0,
-      testResults: [firstResult],
-    }
-    onProgress({ type: 'complete', ...finalResult })
-    return finalResult
+    const summary = summarize([firstResult], testCases.length)
+    emit({ type: 'complete', ...summary })
+    return summary
   }
 
-  // Run remaining tests concurrently with 4-way parallelism and stream as each completes
-  const remainingCases = testCases.slice(1)
   const allResults = new Array(testCases.length)
   allResults[0] = firstResult
 
-  await mapConcurrent(remainingCases, 4, async (tc, relativeIdx) => {
-    const actualIdx = relativeIdx + 1
-    const outcome = await executeOnce({
-      code,
-      language,
-      stdin: tc.input,
-      timeLimitMs,
-      memoryLimitMb,
-    })
-    const verdict = determineVerdict(outcome, tc.output, timeLimitMs, language)
-    const testResult = {
-      passed: verdict === 'Accepted',
-      verdict,
-      input: tc.hidden ? undefined : tc.input,
-      expectedOutput: tc.hidden ? undefined : tc.output,
-      actualOutput: tc.hidden ? undefined : outcome.stdout,
-      stderr: outcome.stderr ? outcome.stderr.slice(0, 2000) : undefined,
-      timeMs: outcome.timeMs,
-      memoryKb: outcome.memoryKb,
-      hidden: !!tc.hidden,
-    }
-    allResults[actualIdx] = testResult
-
-    // Emit live test progress event immediately when each test finishes
-    onProgress({
+  await mapConcurrent(testCases.slice(1), CONCURRENCY, async (tc, rel) => {
+    const idx = rel + 1
+    const outcome = await executeOnce({ code, language, stdin: tc.input, timeLimitMs, memoryLimitMb })
+    const { verdict, result } = judgeOne(tc, outcome, timeLimitMs, language)
+    allResults[idx] = result
+    emit({
       type: 'test',
-      index: actualIdx + 1,
+      index: idx + 1,
       total: testCases.length,
       verdict,
-      passed: testResult.passed,
+      passed: result.passed,
       timeMs: outcome.timeMs,
       memoryKb: outcome.memoryKb,
     })
   })
 
-  let maxTimeMs = firstOutcome.timeMs || 0
-  let peakMemoryKb = firstOutcome.memoryKb || 0
-  let overallVerdict = firstResult.passed ? 'Accepted' : firstVerdict
-
-  for (const r of allResults) {
-    if (!r) continue
-    maxTimeMs = Math.max(maxTimeMs, r.timeMs || 0)
-    peakMemoryKb = Math.max(peakMemoryKb, r.memoryKb || 0)
-    if (!r.passed && overallVerdict === 'Accepted') {
-      overallVerdict = r.verdict
+  // A worker that threw leaves a hole; surface it as a sandbox failure, not a crash.
+  for (let i = 0; i < allResults.length; i++) {
+    if (!allResults[i]) {
+      allResults[i] = buildTestResult(testCases[i], serviceErrorOutcome('Internal judge error.'), 'Sandbox Unavailable')
     }
   }
 
-  const passedCount = allResults.filter((r) => r?.passed).length
-  const finalResult = {
-    verdict: allResults.length === 0 ? 'Runtime Error' : overallVerdict,
-    passedCount,
-    totalCount: testCases.length,
-    runtimeMs: maxTimeMs,
-    memoryKb: peakMemoryKb,
-    testResults: allResults,
-  }
+  const summary = summarize(allResults, testCases.length)
+  emit({ type: 'complete', ...summary })
+  return summary
+}
 
-  // Emit final complete event
-  onProgress({ type: 'complete', ...finalResult })
-  return finalResult
+/** Non-streaming variant. */
+export function runTestCases(opts) {
+  return runTestCasesStreaming({ ...opts, onProgress: undefined })
 }
