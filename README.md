@@ -27,7 +27,7 @@ By combining conversational AI, resume intelligence, interactive code execution,
 ## 🆕 What's New in the Latest Release
 
 - ⚡ **Zero-Latency Two-Tier OCR & Assessment Importer**: Re-architected `quizDocParser.ts` for maximum throughput and minimum latency:
-  - 🚀 **Tier 1: Instant Client-Side AST Fast-Path (< 15ms)**: Documents with digital text (`.docx`, digital `.pdf`, `.txt`, `.json`, `.csv`) are evaluated instantly in-memory using an optimized deterministic AST/regex parser. If structured MCQs are detected, questions load in **sub-15 milliseconds** with zero network roundtrips or server lag.
+  - 🚀 **Tier 1: Instant Client-Side AST Fast-Path (< 15ms)**: Documents with digital text (`.docx`, digital `.pdf`, `.txt`, `.json`, `.csv`) are evaluated instantly in-memory using an optimized deterministic AST/regex parser. Correctly parses diverse answer patterns (e.g. `Correct Option: B. Mars`, `Ans: C`, `Answer: D`) and prevents question number prefixes (`1.`, `2.`) from being misclassified as options. If structured MCQs are detected, questions load in **sub-15 milliseconds** with zero network roundtrips or server lag.
   - 🎨 **Client-Side Canvas Pre-Scaling (98% Payload Reduction)**: High-resolution phone camera photos and scanned sheets (8MB–15MB) are dynamically downscaled via HTML5 canvas to optimal OCR thresholds ($\le 1600px$) and compressed to crisp JPEG (0.82 quality) before transmission, slashing upload payloads down to **~150KB** and cutting Vision AI evaluation time by up to 4x.
   - 👁️ **Tier 2: Multimodal Vision OCR**: Automatically engages for scanned photocopies, smartphone photos, and Word docs with embedded image clippings, reading printed text, code snippets, and answer keys.
 

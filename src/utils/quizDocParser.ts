@@ -222,45 +222,75 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
     const block = rawBlocks[i].trim()
     if (!block) continue
 
-    // Extract Answer Key: e.g. "Ans: B", "Answer: (C)", "Correct: A", "Key: 2"
+    // 1. Extract Answer Key Line:
+    // e.g. "Correct Option: B. Mars", "Correct Answer: (C)", "Ans: A", "Answer: D", "Key: B"
     let correctIndex = 0
     let hasExplicitAnswer = false
-    const ansMatch = block.match(/(?:(?:correct\s+)?ans(?:wer)?|key)\s*[:=-]?\s*\(?([A-D1-4])\)?/i)
-    if (ansMatch) {
-      hasExplicitAnswer = true
-      const char = ansMatch[1].toUpperCase()
-      if (char === 'A' || char === '1') correctIndex = 0
-      else if (char === 'B' || char === '2') correctIndex = 1
-      else if (char === 'C' || char === '3') correctIndex = 2
-      else if (char === 'D' || char === '4') correctIndex = 3
+    let answerText = ''
+
+    const ansLineMatch = block.match(
+      /(?:(?:correct|right)\s*(?:option|choice|answer)?|ans(?:wer)?|key)\s*[:=-]?\s*([^\n\r]+)/i
+    )
+    if (ansLineMatch) {
+      answerText = ansLineMatch[1].trim()
+      const letterMatch = answerText.match(/^(?:option\s*)?\(?([A-D])\)?(?:[.:\s]|$)/i)
+      if (letterMatch) {
+        const char = letterMatch[1].toUpperCase()
+        correctIndex = char.charCodeAt(0) - 65 // A=0, B=1, C=2, D=3
+        hasExplicitAnswer = true
+      }
     }
 
-    // Extract Explanation
+    // 2. Extract Explanation: e.g. "Explanation: ..." or "Solution: ..."
     let explanation = ''
     const expMatch = block.match(/(?:explanation|solution|rationale)\s*[:=-]?\s*([^\n\r]+(?:\n[^\n\r]+)*)/i)
     if (expMatch) {
       explanation = expMatch[1].trim()
     }
 
-    // Extract Code Snippet if present (e.g. fenced code ```...``` or indented block)
+    // 3. Extract Code Snippet if present (e.g. fenced code ```...```)
     let codeSnippet: string | undefined
     const codeMatch = block.match(/```(?:[a-z]+)?\s*([\s\S]*?)```/i)
     if (codeMatch) {
       codeSnippet = codeMatch[1].trim()
     }
 
-    // Extract Options: (A), A), A., [A]
-    const optRegex = /(?:^|\n)\s*(?:\(?([A-D1-4])\)|\b([A-D1-4])[.:)])\s+([^\n]+)/g
+    // 4. Extract Options: ONLY A, B, C, D (Exclude digits 1-4 so question numbers 1-4 are never confused with options!)
+    const optRegex = /(?:^|\n)\s*(?:\(?([A-D])\)|\b([A-D])[.:)])\s+([^\n]+)/g
     const matches = Array.from(block.matchAll(optRegex))
 
+    // Filter out matches that belong to the Answer line itself (e.g. "Correct Option: B. Mars")
+    const validMatches = matches.filter((m) => {
+      const matchIdx = m.index ?? 0
+      if (ansLineMatch && ansLineMatch.index !== undefined) {
+        if (matchIdx >= ansLineMatch.index) return false
+      }
+      return true
+    })
+
     const options: [string, string, string, string] = ['', '', '', '']
-    if (matches.length >= 2) {
-      matches.slice(0, 4).forEach((m, idx) => {
+    if (validMatches.length >= 2) {
+      validMatches.slice(0, 4).forEach((m, idx) => {
         const optText = (m[3] || '')
-          .replace(/(?:(?:correct\s+)?ans(?:wer)?|explanation|solution|key).*/i, '')
+          .replace(/(?:(?:correct|right)\s*(?:option|choice|answer)?|ans(?:wer)?|explanation|solution|key).*/i, '')
           .trim()
         options[idx] = optText
       })
+    }
+
+    // If answer line did not have A/B/C/D letter prefix, match by option content
+    if (!hasExplicitAnswer && answerText) {
+      for (let o = 0; o < 4; o++) {
+        if (
+          options[o] &&
+          (options[o].toLowerCase() === answerText.toLowerCase() ||
+            answerText.toLowerCase().includes(options[o].toLowerCase()))
+        ) {
+          correctIndex = o
+          hasExplicitAnswer = true
+          break
+        }
+      }
     }
 
     // Fill missing options if document had fewer than 4
@@ -270,10 +300,10 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
       }
     }
 
-    // Extract Question Statement: Content preceding the first option marker
+    // 5. Extract Question Statement: Content preceding the first valid option match
     let qText = block
-    if (matches.length > 0 && matches[0].index !== undefined) {
-      qText = block.substring(0, matches[0].index)
+    if (validMatches.length > 0 && validMatches[0].index !== undefined) {
+      qText = block.substring(0, validMatches[0].index)
     }
 
     // Strip code block from question text if extracted separately
@@ -283,11 +313,11 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
 
     qText = qText
       .replace(/^(?:Q(?:uestion)?\s*\.?\s*\d+[.:)]|\b\d+[.:)]\s*)/i, '')
-      .replace(/(?:(?:correct\s+)?ans(?:wer)?|key)\s*[:=-]?\s*\(?[A-D1-4]\)?/i, '')
+      .replace(/(?:(?:correct|right)\s*(?:option|choice|answer)?|ans(?:wer)?|key)\s*[:=-]?.*/i, '')
       .trim()
 
-    // Keep if question statement exists and at least 2 distinct options were found
-    if (qText.length > 0 && (matches.length >= 2 || hasExplicitAnswer)) {
+    // Accept if question statement exists and at least 2 options were extracted
+    if (qText.length > 0 && (validMatches.length >= 2 || hasExplicitAnswer)) {
       questions.push({
         id: `q-doc-${Date.now()}-${i}`,
         question: qText,
@@ -360,8 +390,8 @@ export async function parseQuizDocument(file: File): Promise<{
   // in the browser without network latency or server round-trip delays.
   if (rawText && rawText.length >= 60) {
     const fastQuestions = parseQuizTextHeuristically(rawText)
-    // If heuristic parser extracted at least 2 structured questions with high confidence:
-    if (fastQuestions.length >= 2 && images.length === 0) {
+    // If heuristic parser extracted at least 2 structured questions:
+    if (fastQuestions.length >= 2) {
       return {
         questions: fastQuestions,
         titleSuggestion,
@@ -397,6 +427,13 @@ Each question MUST have:
 3. "options": Array of exactly 4 strings for options A, B, C, D (exclude option letter prefixes like "A)", "B." from the option text).
 4. "correctIndex": Integer (0 for A, 1 for B, 2 for C, 3 for D) based on the specified answer key or marked answer in the document/image.
 5. "explanation": Technical explanation if provided, or empty string.
+
+CRITICAL INSTRUCTION FOR CORRECT ANSWERS:
+Look for answer indicators following each question, such as:
+- "Correct Option: B. Mars" -> correctIndex is 1 (for B)
+- "Correct Option: D. Pacific Ocean" -> correctIndex is 3 (for D)
+- "Correct Option: A", "Ans: C", "Answer: B", "Key: D"
+Map option letters to indices: A = 0, B = 1, C = 2, D = 3.
 
 ${rawText ? `Extracted Document Text:\n"""\n${rawText.slice(0, 15000)}\n"""\n` : ''}
 
