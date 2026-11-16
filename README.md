@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📄 **Multi-Format Quiz Document Importer (`.docx`, `.pdf`, `.txt`, `.json`)**: One-click assessment import allowing administrators and faculty to upload raw question papers or quiz documents directly into the Quiz Studio:
+  - 📂 **Multi-Extension Support**: Ingests `.docx` (via client-side `mammoth`), `.pdf` (via in-browser `pdfjs-dist`), `.txt`, `.json`, and `.csv` files without requiring manual question re-typing.
+  - 🧠 **Dual-Engine Parser (`quizDocParser.ts`)**: Combines intelligent Gemini AI structuring with deterministic regex heuristic fallbacks to reliably extract question statements, code snippets, 4 options (A, B, C, D), correct answer indicators (`Ans: B`, `Correct: C`), and technical explanations.
+  - ⚡ **Direct Studio Population**: Available in both `AdminQuizManager` and `AdminQuizEditor`, instantly populating question inventories with visual confirmation.
+
 - 📝 **Admin-Managed Assessment Studio & Timed Student Quizzes**: Integrated an institutional MCQ testing and assessment engine with deep browser history synchronization (`/dashboard/quizzes`, `/admin/quizzes`):
   - 🛠️ **Admin Quiz Studio (`AdminQuizManager` & `AdminQuizEditor`)**: Empowers administrators to author timed multi-question assessments with code snippets, 4 interactive options, passing percentages, and branch targeting (All Branches vs 9 MIT AoE engineering programs). Includes a 1-click **AI Question Generator** that automatically drafts rigorous MCQs and explanations on any topic.
   - 🎓 **Student Assessment Hub (`StudentQuizHub`)**: Provides students with a dedicated catalog featuring branch/category filters, attempt history, and instant performance metrics.

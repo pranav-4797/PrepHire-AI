@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   ArrowLeft,
@@ -9,12 +9,15 @@ import {
   CheckCircle2,
   HelpCircle,
   Code,
+  UploadCloud,
+  FileText,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
 import type { Quiz, QuizQuestion, QuizCategory, QuizDifficulty } from '../../types/quiz'
 import { createQuiz, updateQuiz } from '../../services/quiz.service'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
+import { parseQuizDocument } from '../../utils/quizDocParser'
 
 function GlassCard({
   children,
@@ -50,6 +53,8 @@ const DIFFICULTIES: QuizDifficulty[] = ['Beginner', 'Intermediate', 'Advanced']
 
 interface AdminQuizEditorProps {
   initialQuiz?: Quiz | null
+  initialQuestions?: QuizQuestion[]
+  initialTitle?: string
   userEmail?: string
   onBack: () => void
   onSaved: () => void
@@ -58,12 +63,14 @@ interface AdminQuizEditorProps {
 
 export function AdminQuizEditor({
   initialQuiz,
+  initialQuestions,
+  initialTitle,
   userEmail,
   onBack,
   onSaved,
   showToast,
 }: AdminQuizEditorProps) {
-  const [title, setTitle] = useState(initialQuiz?.title || '')
+  const [title, setTitle] = useState(initialQuiz?.title || initialTitle || '')
   const [description, setDescription] = useState(initialQuiz?.description || '')
   const [targetBranch, setTargetBranch] = useState(initialQuiz?.targetBranch || 'all')
   const [category, setCategory] = useState<QuizCategory>(
@@ -81,6 +88,8 @@ export function AdminQuizEditor({
   const [questions, setQuestions] = useState<QuizQuestion[]>(
     initialQuiz?.questions && initialQuiz.questions.length > 0
       ? initialQuiz.questions
+      : initialQuestions && initialQuestions.length > 0
+      ? initialQuestions
       : [
           {
             id: 'q-1',
@@ -98,6 +107,42 @@ export function AdminQuizEditor({
   const [aiTopic, setAiTopic] = useState('')
   const [aiCount, setAiCount] = useState(5)
   const [generatingAi, setGeneratingAi] = useState(false)
+  const [parsingDoc, setParsingDoc] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Document Upload & Parsing Handler ──────────────────────────────────────
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setParsingDoc(true)
+    try {
+      showToast(`Extracting questions, options, and answer keys from ${file.name}...`, 'info')
+      const result = await parseQuizDocument(file)
+      if (result.questions.length > 0) {
+        setQuestions(result.questions)
+        if (!title.trim() && result.titleSuggestion) {
+          setTitle(result.titleSuggestion)
+        }
+        showToast(
+          `Successfully loaded ${result.questions.length} questions from ${file.name}!`,
+          'success'
+        )
+      }
+    } catch (err) {
+      showToast(
+        sanitizeErrorMessage(
+          err,
+          'Failed to parse quiz document. Ensure questions have 4 options and an answer key.'
+        ),
+        'error'
+      )
+    } finally {
+      setParsingDoc(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
 
   // ── Question Manipulations ────────────────────────────────────────────────
   function handleAddQuestion() {
@@ -369,6 +414,39 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          {/* Document Upload Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept=".docx,.doc,.pdf,.txt,.json,.csv"
+            style={{ display: 'none' }}
+          />
+
+          <button
+            type="button"
+            disabled={parsingDoc}
+            onClick={() => fileInputRef.current?.click()}
+            title="Upload Word Document (.docx), PDF, or Text file with questions and answer keys"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: '#F0FDF4',
+              color: '#15803D',
+              border: '1px solid #BBF7D0',
+              borderRadius: 8,
+              padding: '0.55rem 1rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: parsingDoc ? 'not-allowed' : 'pointer',
+              boxShadow: '0 1px 3px rgba(22, 101, 52, 0.1)',
+            }}
+          >
+            <UploadCloud size={15} />
+            {parsingDoc ? 'Extracting Questions...' : 'Upload Quiz Doc (.docx / .pdf)'}
+          </button>
+
           <button
             type="button"
             onClick={() => setShowAiModal(true)}
@@ -601,6 +679,67 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
             }}
           />
         </div>
+      </GlassCard>
+
+      {/* Upload Helper Banner */}
+      <GlassCard
+        style={{
+          background: '#F8FAFC',
+          border: '1px dashed #CBD5E1',
+          padding: '1rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 8,
+              background: '#DCFCE7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#15803D',
+            }}
+          >
+            <FileText size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: T.txtPri }}>
+              Have questions prepared in a Word Document (.docx), PDF, or Text file?
+            </div>
+            <div style={{ fontSize: '0.8rem', color: T.txtSec }}>
+              Auto-extract question statements, 4 options (A-D), and correct answer keys directly into this assessment.
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          disabled={parsingDoc}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.35rem',
+            background: '#ffffff',
+            color: '#15803D',
+            border: '1px solid #86EFAC',
+            borderRadius: 8,
+            padding: '0.5rem 1rem',
+            fontSize: '0.82rem',
+            fontWeight: 600,
+            cursor: parsingDoc ? 'not-allowed' : 'pointer',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+          }}
+        >
+          <UploadCloud size={14} /> {parsingDoc ? 'Processing...' : 'Upload Quiz Document'}
+        </button>
       </GlassCard>
 
       {/* Questions Section */}

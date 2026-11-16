@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   Plus,
@@ -10,10 +10,11 @@ import {
   Filter,
   Users,
   Archive,
+  UploadCloud,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
-import type { Quiz, QuizAttempt } from '../../types/quiz'
+import type { Quiz, QuizAttempt, QuizQuestion } from '../../types/quiz'
 import {
   listQuizzes,
   deleteQuiz,
@@ -22,6 +23,7 @@ import {
 } from '../../services/quiz.service'
 import { AdminQuizEditor } from './AdminQuizEditor'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
+import { parseQuizDocument } from '../../utils/quizDocParser'
 
 function GlassCard({
   children,
@@ -55,6 +57,10 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list')
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null)
+  const [importedQuestions, setImportedQuestions] = useState<QuizQuestion[] | undefined>(undefined)
+  const [importedTitle, setImportedTitle] = useState<string | undefined>(undefined)
+  const [importingDoc, setImportingDoc] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Filters
   const [search, setSearch] = useState('')
@@ -65,6 +71,39 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
   const [viewingAttemptsQuiz, setViewingAttemptsQuiz] = useState<Quiz | null>(null)
   const [attempts, setAttempts] = useState<QuizAttempt[]>([])
   const [loadingAttempts, setLoadingAttempts] = useState(false)
+
+  async function handleDocUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportingDoc(true)
+    try {
+      showToast(`Extracting questions from ${file.name}...`, 'info')
+      const result = await parseQuizDocument(file)
+      if (result.questions.length > 0) {
+        setEditingQuiz(null)
+        setImportedQuestions(result.questions)
+        setImportedTitle(result.titleSuggestion)
+        setMode('create')
+        showToast(
+          `Extracted ${result.questions.length} questions from ${file.name}!`,
+          'success'
+        )
+      }
+    } catch (err) {
+      showToast(
+        sanitizeErrorMessage(
+          err,
+          'Failed to parse document. Please check the question format.'
+        ),
+        'error'
+      )
+    } finally {
+      setImportingDoc(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -148,14 +187,20 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
     return (
       <AdminQuizEditor
         initialQuiz={editingQuiz}
+        initialQuestions={importedQuestions}
+        initialTitle={importedTitle}
         userEmail={userEmail}
         onBack={() => {
           setMode('list')
           setEditingQuiz(null)
+          setImportedQuestions(undefined)
+          setImportedTitle(undefined)
         }}
         onSaved={() => {
           setMode('list')
           setEditingQuiz(null)
+          setImportedQuestions(undefined)
+          setImportedTitle(undefined)
           loadData()
         }}
         showToast={showToast}
@@ -165,6 +210,15 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleDocUpload}
+        accept=".docx,.doc,.pdf,.txt,.json,.csv"
+        style={{ display: 'none' }}
+      />
+
       {/* Top Banner & Action */}
       <div
         style={{
@@ -184,28 +238,55 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingQuiz(null)
-            setMode('create')
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            background: T.primary,
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 8,
-            padding: '0.6rem 1.15rem',
-            fontSize: '0.85rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
-          }}
-        >
-          <Plus size={16} /> Create Assessment
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <button
+            type="button"
+            disabled={importingDoc}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: '#F0FDF4',
+              color: '#15803D',
+              border: '1px solid #BBF7D0',
+              borderRadius: 8,
+              padding: '0.6rem 1.05rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: importingDoc ? 'not-allowed' : 'pointer',
+              boxShadow: '0 1px 3px rgba(22, 101, 52, 0.1)',
+            }}
+          >
+            <UploadCloud size={16} />
+            {importingDoc ? 'Extracting...' : 'Upload Quiz Doc (.docx / .pdf)'}
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingQuiz(null)
+              setImportedQuestions(undefined)
+              setImportedTitle(undefined)
+              setMode('create')
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: T.primary,
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '0.6rem 1.15rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
+            }}
+          >
+            <Plus size={16} /> Create Assessment
+          </button>
+        </div>
       </div>
 
       {/* KPI Metrics */}

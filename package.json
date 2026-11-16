@@ -20,6 +20,7 @@
     "@tensorflow/tfjs": "^4.22.0",
     "firebase": "^12.15.0",
     "lucide-react": "^1.17.0",
+    "mammoth": "^1.13.0",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
