@@ -11,6 +11,11 @@ import {
   Users,
   Archive,
   UploadCloud,
+  Share2,
+  ShieldCheck,
+  ShieldAlert,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -71,6 +76,17 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
   const [viewingAttemptsQuiz, setViewingAttemptsQuiz] = useState<Quiz | null>(null)
   const [attempts, setAttempts] = useState<QuizAttempt[]>([])
   const [loadingAttempts, setLoadingAttempts] = useState(false)
+  const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null)
+
+  function handleShareLink(quiz: Quiz) {
+    const url = `${window.location.origin}/quiz/${quiz.id}`
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+      showToast('Assessment link copied! Anyone can open this link to register and take the test.', 'success')
+    } else {
+      prompt('Copy this link to share the assessment:', url)
+    }
+  }
 
   async function handleDocUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -556,7 +572,27 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => handleShareLink(q)}
+                    title="Share Assessment Link"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      background: '#EFF6FF',
+                      color: '#2563EB',
+                      border: '1px solid #BFDBFE',
+                      borderRadius: 8,
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Share2 size={14} /> Share Link
+                  </button>
+
                   <button
                     onClick={() => handleViewAttempts(q)}
                     title="View Submissions"
@@ -652,7 +688,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
               background: '#ffffff',
               borderRadius: 14,
               padding: '1.5rem',
-              maxWidth: 720,
+              maxWidth: 760,
               width: '100%',
               maxHeight: '85vh',
               overflowY: 'auto',
@@ -670,7 +706,10 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
               </div>
 
               <button
-                onClick={() => setViewingAttemptsQuiz(null)}
+                onClick={() => {
+                  setViewingAttemptsQuiz(null)
+                  setExpandedAttemptId(null)
+                }}
                 style={{
                   background: '#F3F4F6',
                   border: 'none',
@@ -694,49 +733,205 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                 No students have submitted this assessment yet.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {attempts.map((att) => (
-                  <div
-                    key={att.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '0.75rem 1rem',
-                      borderRadius: 8,
-                      border: '1px solid #E5E7EB',
-                      background: '#FAFAFA',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem', color: T.txtPri }}>
-                        {att.studentName || att.studentEmail}
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: T.txtSec }}>
-                        {att.studentEmail} • {att.department || 'Unknown Branch'} •{' '}
-                        {new Date(att.completedAt).toLocaleDateString()}
-                      </div>
-                    </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {attempts.map((att) => {
+                  const isExpanded = expandedAttemptId === att.id
+                  const violationCount = att.suspiciousFlags?.length || 0
+                  const hasViolations = violationCount > 0
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                      <span
+                  return (
+                    <div
+                      key={att.id}
+                      style={{
+                        borderRadius: 10,
+                        border: '1px solid #E5E7EB',
+                        background: '#FAFAFA',
+                        overflow: 'hidden',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div
+                        onClick={() => setExpandedAttemptId(isExpanded ? null : att.id)}
                         style={{
-                          padding: '0.25rem 0.6rem',
-                          borderRadius: 6,
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          background: att.passed ? '#ECFDF5' : '#FEE2E2',
-                          color: att.passed ? '#059669' : '#DC2626',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.85rem 1rem',
+                          cursor: 'pointer',
+                          gap: '0.75rem',
+                          flexWrap: 'wrap',
                         }}
                       >
-                        {att.passed ? 'Passed' : 'Needs Retake'} ({att.percentage}%)
-                      </span>
-                      <span style={{ fontSize: '0.82rem', color: T.txtSec }}>
-                        {att.score} / {att.maxScore} pts
-                      </span>
+                        <div style={{ flex: 1, minWidth: 200 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.92rem', color: T.txtPri }}>
+                              {att.studentName || att.studentEmail}
+                            </span>
+                            {att.isPublicCandidate && (
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: 4,
+                                  background: '#EFF6FF',
+                                  color: '#2563EB',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                🌐 Public Link
+                              </span>
+                            )}
+                            {att.rollNumber && (
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: 4,
+                                  background: '#F3F4F6',
+                                  color: T.txtPri,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Roll: {att.rollNumber}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: T.txtSec, marginTop: '0.2rem' }}>
+                            {att.studentEmail} • {att.department || 'General'} •{' '}
+                            {new Date(att.completedAt).toLocaleDateString()} at{' '}
+                            {new Date(att.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          {/* Proctoring Integrity Pill */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              padding: '0.25rem 0.55rem',
+                              borderRadius: 6,
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: hasViolations ? '#FEF2F2' : '#ECFDF5',
+                              color: hasViolations ? '#DC2626' : '#059669',
+                              border: `1px solid ${hasViolations ? '#FCA5A5' : '#A7F3D0'}`,
+                            }}
+                          >
+                            {hasViolations ? <ShieldAlert size={12} /> : <ShieldCheck size={12} />}
+                            <span>{hasViolations ? `${violationCount} Flag${violationCount > 1 ? 's' : ''}` : 'Clean'}</span>
+                          </div>
+
+                          <span
+                            style={{
+                              padding: '0.25rem 0.6rem',
+                              borderRadius: 6,
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              background: att.passed ? '#ECFDF5' : '#FEE2E2',
+                              color: att.passed ? '#059669' : '#DC2626',
+                            }}
+                          >
+                            {att.passed ? 'Passed' : 'Needs Retake'} ({att.percentage}%)
+                          </span>
+
+                          <span style={{ fontSize: '0.82rem', color: T.txtSec, fontWeight: 600, minWidth: 65, textAlign: 'right' }}>
+                            {att.score}/{att.maxScore} pts
+                          </span>
+
+                          {isExpanded ? <ChevronUp size={16} color={T.txtSec} /> : <ChevronDown size={16} color={T.txtSec} />}
+                        </div>
+                      </div>
+
+                      {/* Expanded Integrity Breakdown */}
+                      {isExpanded && (
+                        <div
+                          style={{
+                            padding: '0.85rem 1rem',
+                            borderTop: '1px solid #E5E7EB',
+                            background: '#ffffff',
+                            fontSize: '0.82rem',
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, color: T.txtPri, marginBottom: '0.4rem' }}>
+                            🛡️ Proctoring & Integrity Telemetry:
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                              gap: '0.5rem',
+                              marginBottom: '0.75rem',
+                            }}
+                          >
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Tab Switches / Blur:</span>
+                              <div style={{ fontWeight: 700, color: (att.tabSwitchesCount || 0) > 0 ? '#DC2626' : '#059669' }}>
+                                {att.tabSwitchesCount || 0}
+                              </div>
+                            </div>
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Fullscreen Exits:</span>
+                              <div style={{ fontWeight: 700, color: (att.fullscreenViolationsCount || 0) > 0 ? '#DC2626' : '#059669' }}>
+                                {att.fullscreenViolationsCount || 0}
+                              </div>
+                            </div>
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Face Missing Alerts:</span>
+                              <div style={{ fontWeight: 700, color: (att.faceMissingCount || 0) > 0 ? '#DC2626' : '#059669' }}>
+                                {att.faceMissingCount || 0}
+                              </div>
+                            </div>
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Multiple Faces Alerts:</span>
+                              <div style={{ fontWeight: 700, color: (att.multipleFacesCount || 0) > 0 ? '#DC2626' : '#059669' }}>
+                                {att.multipleFacesCount || 0}
+                              </div>
+                            </div>
+                          </div>
+
+                          {att.suspiciousFlags && att.suspiciousFlags.length > 0 ? (
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#DC2626', marginBottom: '0.3rem', fontSize: '0.78rem' }}>
+                                Incident Timeline:
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: 140, overflowY: 'auto' }}>
+                                {att.suspiciousFlags.map((flag, fIdx) => {
+                                  const isObj = typeof flag === 'object' && flag !== null
+                                  const time = isObj ? (flag as any).timestamp : ''
+                                  const detail = isObj ? (flag as any).detail : String(flag)
+
+                                  return (
+                                    <div
+                                      key={fIdx}
+                                      style={{
+                                        fontSize: '0.75rem',
+                                        color: T.txtPri,
+                                        padding: '0.25rem 0.5rem',
+                                        background: '#FEF2F2',
+                                        borderRadius: 4,
+                                        borderLeft: '3px solid #DC2626',
+                                      }}
+                                    >
+                                      {time && <strong>[{time}] </strong>}
+                                      {detail}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ color: '#059669', fontSize: '0.78rem' }}>
+                              ✓ No suspicious incidents detected during candidate session. Full academic integrity verified.
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

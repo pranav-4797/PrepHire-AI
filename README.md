@@ -26,6 +26,14 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🔗 **Shareable Public Assessment Links & AI Facial Scan Proctoring (`/quiz/:quizId`)**:
+  - 🌐 **Dedicated Candidate Portal (`PublicQuizTake.tsx`)**: Admins can copy and share direct quiz links (`/quiz/:quizId`) with a single click. Any candidate can access the portal on mobile or desktop without pre-registration, input their details (Name, Email, Engineering Branch, Roll Number / PRN), test their camera stream, agree to academic integrity rules, and launch the proctored assessment.
+  - 📱 **Cross-Platform Responsive Mobile & PC UI/UX**: Fluid layout supporting both mobile phones and desktop workstations. Includes collapsible question palette drawer, thumb-friendly 48px interactive option cards, sticky responsive timer cockpit, and pinned bottom navigation controls.
+  - 🔒 **Fullscreen Lockdown & Tab-Switch Prevention**: Mandatory full-screen enforcement with automated modal lockdown upon exit. Monitors page visibility loss (`visibilitychange`) and window focus blur (`window.onblur`), recording timestamped infractions and auto-submitting the exam upon excessive violations ($\ge 4$). Disables clipboard copy/cut/paste and right-click context menu.
+  - 👁️ **TensorFlow.js & COCO-SSD Facial Scan Proctor (`QuizProctorCamera.tsx`)**: Real-time in-browser computer vision surveillance detecting face absence from frame ($>4.5\text{s}$), multiple persons in camera view, and mobile phone usage. Automatically logs timestamped incident telemetry into Firestore submissions.
+  - 🛡️ **Admin Submissions & Integrity Audit Dossier**: Enhanced Submissions modal in `AdminQuizManager.tsx` showing candidate PRN/roll numbers, public candidate badges, and an expandable Proctoring Integrity breakdown displaying tab switch counts, fullscreen exits, face alerts, and violation timelines.
+  - 🔐 **Granular Firestore Security Rules**: Deployed updated `firestore.rules` allowing public candidates to submit proctored attempts to published assessments while protecting user and administrative data.
+
 - 🎨 **Student Assessment Hub UI/UX Overhaul & Contrast Restoration**: Completely redesigned the header cockpit in `StudentQuizHub.tsx`:
   - 🌟 **High-Contrast Deep Navy Gradient**: Replaced dark inherited typography with crisp `#FFFFFF` headers, glowing amber badge (`ASSESSMENT CENTER`), and readable slate-white descriptions, eliminating color collisions with global CSS rules.
   - 📊 **Frosted Glass KPI Cockpit**: Integrated a translucent stats bar featuring glowing cyan (`Completed`) and emerald (`Avg Score`) metrics with real-time completion tracking.

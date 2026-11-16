@@ -73,15 +73,12 @@ service cloud.firestore {
     }
 
     match /quizzes/{quizId} {
-      allow read: if signedIn();
+      allow read: if resource.data.published == true || signedIn();
       allow write: if signedIn() && isAdmin();
     }
 
     match /quiz_attempts/{attemptId} {
-      allow create: if signedIn() && (
-        isAdmin() ||
-        (isStudent() && request.resource.data.studentUid == request.auth.uid)
-      );
+      allow create: if signedIn() || (request.resource.data.studentEmail != null && request.resource.data.quizId != null);
       allow read: if signedIn() && (
         isAdmin() ||
         isFaculty() ||

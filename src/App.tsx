@@ -32,6 +32,7 @@ import { CodingHub } from './components/coding/CodingHub'
 import { AdminProblemsManager } from './components/coding/AdminProblemsManager'
 import { AdminQuizManager } from './components/quiz/AdminQuizManager'
 import { StudentQuizHub } from './components/quiz/StudentQuizHub'
+import { PublicQuizTake } from './components/quiz/PublicQuizTake'
 import { AudioVisualizer } from './components/interview/AudioVisualizer'
 import { AiQuestionCard, CandidateAnswerBubble } from './components/interview/AiQuestionCard'
 import { CookieBanner } from './components/cookies/CookieBanner'
@@ -4393,15 +4394,23 @@ function AdminDashboard({
 
 // ── ROUTING & URL SYNC HELPERS ──────────────────────────────────────────────
 function parsePathname(pathname: string): {
-  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound'
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound' | 'publicQuiz'
   studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' | 'quizzes'
   facultyTab?: 'overview' | 'ranking' | 'courses' | 'coding'
   adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes'
+  publicQuizId?: string
 } {
   const p = pathname.toLowerCase()
   if (p === '' || p === '/') {
     return { screen: 'landing' }
   }
+
+  // Public Shareable Quiz Route: /quiz/:quizId or /test/:quizId or /quizzes/:quizId
+  const quizMatch = pathname.match(/^\/(?:quiz|test|quizzes)\/([a-zA-Z0-9_-]+)$/i)
+  if (quizMatch && quizMatch[1] && quizMatch[1].toLowerCase() !== 'all') {
+    return { screen: 'publicQuiz', publicQuizId: quizMatch[1] }
+  }
+
   if (p === '/auth' || p === '/login') {
     return { screen: 'auth' }
   }
@@ -4441,7 +4450,7 @@ function parsePathname(pathname: string): {
     if (p.includes('quizzes') || p.includes('tests')) tab = 'quizzes'
     else if (p.includes('courses')) tab = 'courses'
     else if (p.includes('coding')) tab = 'coding'
-    else if (p.includes('ranking') || p.includes('leaderboard')) tab = 'ranking'
+    else if (p.includes('ranking')) tab = 'ranking'
     else if (p.includes('profile')) tab = 'profile'
     else if (p.includes('history') || p.includes('assessments') || p.includes('submissions')) tab = 'history'
     return { screen: 'home', studentTab: tab }
@@ -4450,12 +4459,14 @@ function parsePathname(pathname: string): {
 }
 
 function getUrlPath(
-  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound',
+  screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound' | 'publicQuiz',
   role: string | null | undefined,
   studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' | 'quizzes',
   facultyTab: 'overview' | 'ranking' | 'courses' | 'coding',
-  adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes'
+  adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes',
+  publicQuizId?: string | null
 ): string {
+  if (screen === 'publicQuiz' && publicQuizId) return `/quiz/${publicQuizId}`
   if (screen === 'landing') return '/'
   if (screen === 'auth') return '/login'
   if (screen === 'intro') return '/interview/intro'
@@ -4478,8 +4489,9 @@ export default function App() {
   const initialRoute = parsePathname(window.location.pathname)
 
   const [screen, setScreen] = useState<
-    'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound'
+    'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound' | 'publicQuiz'
   >(initialRoute.screen)
+  const [publicQuizId, setPublicQuizId] = useState<string | null>(initialRoute.publicQuizId || null)
 
   const [user, setUser] = useState<User | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -4519,6 +4531,7 @@ export default function App() {
       } else {
         setScreen(route.screen)
       }
+      if (route.publicQuizId) setPublicQuizId(route.publicQuizId)
       if (route.studentTab) setStudentTab(route.studentTab)
       if (route.facultyTab) setFacultyTab(route.facultyTab)
       if (route.adminTab) setAdminTab(route.adminTab)
@@ -4534,11 +4547,11 @@ export default function App() {
       isPopStateRef.current = false
       return
     }
-    const targetPath = getUrlPath(screen, user?.role, studentTab, facultyTab, adminTab)
+    const targetPath = getUrlPath(screen, user?.role, studentTab, facultyTab, adminTab, publicQuizId)
     if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
-      window.history.pushState({ screen, studentTab, facultyTab, adminTab }, '', targetPath)
+      window.history.pushState({ screen, studentTab, facultyTab, adminTab, publicQuizId }, '', targetPath)
     }
-  }, [screen, user?.role, studentTab, facultyTab, adminTab])
+  }, [screen, user?.role, studentTab, facultyTab, adminTab, publicQuizId])
 
   const [studentCourses, setStudentCourses] = useState<Course[]>([])
   const [loadingStudentCourses, setLoadingStudentCourses] = useState(false)
@@ -5279,6 +5292,21 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           setStudentTab('interview')
         }}
       />
+    )
+  }
+
+  // ── PUBLIC PROCTORED QUIZ ───────────────────────────────────────────────
+  if (screen === 'publicQuiz' && publicQuizId) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#F8FAFC', paddingBottom: '3rem' }}>
+        <PublicQuizTake
+          quizId={publicQuizId}
+          showToast={showToast}
+          onExit={() => {
+            setScreen(user ? 'home' : 'landing')
+          }}
+        />
+      </div>
     )
   }
 

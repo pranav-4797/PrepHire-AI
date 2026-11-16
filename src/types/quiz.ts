@@ -36,6 +36,12 @@ export interface Quiz {
   published: boolean
 }
 
+export interface SuspiciousFlag {
+  timestamp: string
+  type: 'tab_switch' | 'fullscreen_exit' | 'face_missing' | 'multiple_faces' | 'cell_phone' | 'focus_loss' | 'other'
+  detail: string
+}
+
 export interface QuizAttempt {
   id: string
   quizId: string
@@ -44,6 +50,8 @@ export interface QuizAttempt {
   studentEmail: string
   studentName: string
   department: string
+  rollNumber?: string
+  isPublicCandidate?: boolean
   score: number
   maxScore: number
   percentage: number
@@ -51,4 +59,9 @@ export interface QuizAttempt {
   answers: Record<string, number> // questionId -> selected option index (0..3)
   timeSpentSeconds: number
   completedAt: string // ISO string
+  suspiciousFlags?: (SuspiciousFlag | string)[]
+  tabSwitchesCount?: number
+  fullscreenViolationsCount?: number
+  faceMissingCount?: number
+  multipleFacesCount?: number
 }
