@@ -414,12 +414,12 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          {/* Document Upload Input */}
+          {/* Document / OCR Upload Input */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileUpload}
-            accept=".docx,.doc,.pdf,.txt,.json,.csv"
+            accept=".docx,.doc,.pdf,.png,.jpg,.jpeg,.webp,.txt,.json,.csv"
             style={{ display: 'none' }}
           />
 
@@ -427,7 +427,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
             type="button"
             disabled={parsingDoc}
             onClick={() => fileInputRef.current?.click()}
-            title="Upload Word Document (.docx), PDF, or Text file with questions and answer keys"
+            title="Upload Word Document (.docx), PDF (scanned or digital), or Question Paper Photo (.png, .jpg) with AI Vision OCR"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -444,7 +444,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
             }}
           >
             <UploadCloud size={15} />
-            {parsingDoc ? 'Extracting Questions...' : 'Upload Quiz Doc (.docx / .pdf)'}
+            {parsingDoc ? 'Extracting via OCR...' : 'Upload Doc / OCR (.docx / .pdf / .png)'}
           </button>
 
           <button
@@ -711,10 +711,10 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
           </div>
           <div>
             <div style={{ fontSize: '0.9rem', fontWeight: 700, color: T.txtPri }}>
-              Have questions prepared in a Word Document (.docx), PDF, or Text file?
+              Have questions in a Word Doc (.docx), PDF (digital or scanned), or Question Sheet Photo (.jpg, .png)?
             </div>
             <div style={{ fontSize: '0.8rem', color: T.txtSec }}>
-              Auto-extract question statements, 4 options (A-D), and correct answer keys directly into this assessment.
+              Auto-extract question statements, code snippets, 4 options (A-D), and correct answer keys using AI Vision OCR.
             </div>
           </div>
         </div>
@@ -738,7 +738,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
             boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
           }}
         >
-          <UploadCloud size={14} /> {parsingDoc ? 'Processing...' : 'Upload Quiz Document'}
+          <UploadCloud size={14} /> {parsingDoc ? 'Processing OCR...' : 'Upload Doc / OCR'}
         </button>
       </GlassCard>
 

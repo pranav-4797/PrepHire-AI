@@ -1,42 +1,143 @@
-// ── Quiz Document Parser (DOCX, PDF, TXT, JSON) ──────────────────────────────
-// Extracts questions, 4 options (A-D), and correct answer keys from uploaded files.
+// ── Quiz Document & Scanned OCR Parser (DOCX, PDF, Images, TXT, JSON) ─────────
+// Extracts questions, code snippets, 4 options (A-D), and correct answer keys from
+// digital documents, scanned PDFs, and question paper photos using Vision OCR & AI.
 
 import mammoth from 'mammoth'
-import { extractResumeText } from './resume'
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { auth } from '../firebase/firebase'
 import type { QuizQuestion } from '../types/quiz'
 
+GlobalWorkerOptions.workerSrc = workerUrl
+
+export interface ExtractedPayload {
+  text: string
+  images: Array<{ mimeType: string; data: string }>
+}
+
 /**
- * Extracts raw textual content from an uploaded document file (.docx, .pdf, .txt, .json).
+ * Converts a browser File object to a clean base64 string (stripping data URL prefix).
  */
-export async function extractDocumentText(file: File): Promise<string> {
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      const base64 = result.replace(/^data:[^;]+;base64,/, '')
+      resolve(base64)
+    }
+    reader.onerror = (err) => reject(err)
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Extracts text and any embedded images from a Word document (.docx).
+ */
+async function extractDocxPayload(file: File): Promise<ExtractedPayload> {
+  const arrayBuffer = await file.arrayBuffer()
+  const rawTextResult = await mammoth.extractRawText({ arrayBuffer })
+  const text = rawTextResult.value.trim()
+  const images: Array<{ mimeType: string; data: string }> = []
+
+  // Check for embedded images (e.g. photos/screenshots of questions pasted into Word)
+  try {
+    await mammoth.convertToHtml(
+      { arrayBuffer },
+      {
+        convertImage: mammoth.images.imgElement((element) => {
+          return element.read('base64').then((imgBase64) => {
+            if (images.length < 8) {
+              images.push({
+                mimeType: element.contentType || 'image/jpeg',
+                data: imgBase64,
+              })
+            }
+            return { src: `data:${element.contentType || 'image/jpeg'};base64,${imgBase64}` }
+          })
+        }),
+      }
+    )
+  } catch (imgErr) {
+    console.warn('Docx image extraction skipped:', imgErr)
+  }
+
+  return { text, images }
+}
+
+/**
+ * Extracts text and native PDF data for OCR from a PDF file (.pdf).
+ */
+async function extractPdfPayload(file: File): Promise<ExtractedPayload> {
+  const base64 = await fileToBase64(file)
+  let text = ''
+
+  try {
+    const buffer = new Uint8Array(await file.arrayBuffer())
+    const doc = await getDocument({ data: buffer }).promise
+    for (let i = 1; i <= Math.min(doc.numPages, 10); i++) {
+      const page = await doc.getPage(i)
+      const content = await page.getTextContent()
+      text += content.items.map((it) => ('str' in it ? it.str : '')).join(' ') + '\n'
+    }
+  } catch (err) {
+    console.warn('Digital text extraction from PDF failed:', err)
+  }
+
+  const images: Array<{ mimeType: string; data: string }> = []
+  // Attach PDF as application/pdf payload for native Gemini multimodal OCR
+  if (file.size <= 18 * 1024 * 1024) {
+    images.push({
+      mimeType: 'application/pdf',
+      data: base64,
+    })
+  }
+
+  return { text: text.trim(), images }
+}
+
+/**
+ * Extracts base64 payload from an image file (.png, .jpg, .jpeg, .webp).
+ */
+async function extractImagePayload(file: File): Promise<ExtractedPayload> {
+  const base64 = await fileToBase64(file)
+  const mimeType = file.type || (file.name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg')
+  return {
+    text: '',
+    images: [{ mimeType, data: base64 }],
+  }
+}
+
+/**
+ * Extracts payload (text and/or image/PDF) from any supported file format.
+ */
+export async function extractDocumentPayload(file: File): Promise<ExtractedPayload> {
   const fileName = file.name.toLowerCase()
 
-  // 1. Word Document (.docx)
+  // 1. Word Document (.docx, .doc)
   if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
-    const arrayBuffer = await file.arrayBuffer()
-    const result = await mammoth.extractRawText({ arrayBuffer })
-    return result.value.trim()
+    return extractDocxPayload(file)
   }
 
   // 2. PDF Document (.pdf)
   if (fileName.endsWith('.pdf')) {
-    const text = await extractResumeText(file)
-    return text.trim()
+    return extractPdfPayload(file)
   }
 
-  // 3. Plain Text / Markdown / CSV (.txt, .md, .csv)
+  // 3. Standalone Image / Question Sheet Photo (.png, .jpg, .jpeg, .webp)
   if (
-    fileName.endsWith('.txt') ||
-    fileName.endsWith('.md') ||
-    fileName.endsWith('.csv') ||
-    fileName.endsWith('.tsv') ||
-    fileName.endsWith('.json')
+    fileName.endsWith('.png') ||
+    fileName.endsWith('.jpg') ||
+    fileName.endsWith('.jpeg') ||
+    fileName.endsWith('.webp') ||
+    file.type.startsWith('image/')
   ) {
-    return (await file.text()).trim()
+    return extractImagePayload(file)
   }
 
-  // Fallback: Attempt plain text read
-  return (await file.text()).trim()
+  // 4. Plaintext / Markdown / CSV / JSON (.txt, .md, .csv, .tsv)
+  const text = (await file.text()).trim()
+  return { text, images: [] }
 }
 
 /**
@@ -46,8 +147,6 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
   const questions: QuizQuestion[] = []
   if (!text || text.length < 10) return []
 
-  // Split into chunks based on question numbering patterns:
-  // e.g. "1.", "Q1.", "Question 1:", "1)", "Q.1"
   const rawBlocks = text.split(/(?:\r?\n)+(?=(?:Q(?:uestion)?\s*\.?\s*\d+[.:)]|\b\d+[.:)]\s+))/i)
 
   for (let i = 0; i < rawBlocks.length; i++) {
@@ -65,14 +164,14 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
       else if (char === 'D' || char === '4') correctIndex = 3
     }
 
-    // Extract Explanation: e.g. "Explanation: ..." or "Solution: ..."
+    // Extract Explanation
     let explanation = ''
     const expMatch = block.match(/(?:explanation|solution|rationale)\s*[:=-]?\s*([^\n\r]+(?:\n[^\n\r]+)*)/i)
     if (expMatch) {
       explanation = expMatch[1].trim()
     }
 
-    // Extract Options: Look for A), B), C), D) or (A), (B), (C), (D) or A., B., C., D.
+    // Extract Options: A), B), C), D)
     const optRegex = /(?:^|\n)\s*(?:\(?([A-D1-4])\)|\b([A-D1-4])[.:)])\s+([^\n]+)/g
     const matches = Array.from(block.matchAll(optRegex))
 
@@ -91,13 +190,12 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
       }
     }
 
-    // Extract Question Statement: Text before the first option
+    // Extract Question Statement
     let qText = block
     if (matches.length > 0 && matches[0].index !== undefined) {
       qText = block.substring(0, matches[0].index)
     }
 
-    // Clean leading "1.", "Q1:", etc. from question text
     qText = qText
       .replace(/^(?:Q(?:uestion)?\s*\.?\s*\d+[.:)]|\b\d+[.:)]\s*)/i, '')
       .replace(/(?:(?:correct\s+)?ans(?:wer)?|key)\s*[:=-]?\s*\(?[A-D1-4]\)?/i, '')
@@ -119,14 +217,15 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
 }
 
 /**
- * Intelligent Quiz Document Parser.
- * Uses AI if available for 100% formatting fidelity, falling back to heuristic parsing.
+ * Intelligent Quiz Document & OCR Parser.
+ * Uses Multimodal Gemini AI (reading text, scanned PDF pages, and docx images via OCR).
+ * Falls back to heuristic text parsing when text is available.
  */
 export async function parseQuizDocument(file: File): Promise<{
   questions: QuizQuestion[]
   titleSuggestion: string
 }> {
-  // Check if JSON file directly uploaded
+  // 1. Direct JSON file import check
   if (file.name.toLowerCase().endsWith('.json')) {
     try {
       const parsed = JSON.parse(await file.text())
@@ -158,31 +257,42 @@ export async function parseQuizDocument(file: File): Promise<{
         }
       }
     } catch {
-      // Fall through to text extraction
+      // Fall through to standard extraction
     }
   }
 
-  const rawText = await extractDocumentText(file)
-  if (!rawText || rawText.trim().length < 15) {
-    throw new Error('The uploaded document appears to be empty or unreadable.')
+  // 2. Extract Document Payload (text and/or image/PDF attachments)
+  const { text: rawText, images } = await extractDocumentPayload(file)
+
+  if ((!rawText || rawText.length < 10) && images.length === 0) {
+    throw new Error('The uploaded document or image appears to be empty or unreadable.')
   }
 
   let questions: QuizQuestion[] = []
 
-  // Attempt AI parsing first
+  // 3. Attempt Gemini Multimodal Vision / OCR Parsing
   try {
-    const prompt = `You are a quiz document parser. Extract all multiple-choice questions from the following text document.
-Each question MUST have:
-1. "question": The exact question statement.
-2. "codeSnippet": Code snippet string if present, or empty string.
-3. "options": Array of exactly 4 strings for options A, B, C, D.
-4. "correctIndex": Integer (0 for A, 1 for B, 2 for C, 3 for D) based on the specified answer key or correct answer in the document.
-5. "explanation": Explanation text if provided, or empty string.
+    const token = await auth.currentUser?.getIdToken()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
 
-Document Content:
-"""
-${rawText.slice(0, 12000)}
-"""
+    const ocrInstruction = images.length > 0
+      ? 'Perform Optical Character Recognition (OCR) on the attached document/images. Read all printed text, mathematical expressions, code blocks, question numbers, options, and answer keys carefully.'
+      : 'Extract all multiple-choice questions from the provided text.'
+
+    const prompt = `You are an expert assessment parser and OCR engine.
+${ocrInstruction}
+
+Each question MUST have:
+1. "question": The exact question statement without option letters.
+2. "codeSnippet": Code snippet string if present, or empty string.
+3. "options": Array of exactly 4 strings for options A, B, C, D (exclude the option letter prefixes like "A)", "B." from the option text).
+4. "correctIndex": Integer (0 for A, 1 for B, 2 for C, 3 for D) based on the specified answer key or correct answer marked in the document/image. If not specified, choose the technically correct answer.
+5. "explanation": Technical explanation if provided, or empty string.
+
+${rawText ? `Extracted Document Text:\n"""\n${rawText.slice(0, 15000)}\n"""\n` : ''}
 
 Return ONLY a valid JSON array of question objects matching this schema:
 [
@@ -196,19 +306,21 @@ Return ONLY a valid JSON array of question objects matching this schema:
 ]
 No markdown wrapping, no explanations, no text other than the JSON array.`
 
-    const res = await fetch('/api/ai/generate', {
+    const AI_API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
+    const res = await fetch(`${AI_API_URL}/api/ai/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         prompt,
-        systemPrompt: 'You are an accurate assessment document parser that extracts structured MCQs.',
+        sys: 'You are an accurate assessment document parser and OCR engine that extracts structured MCQs into JSON.',
+        images: images.length > 0 ? images : undefined,
       }),
     })
 
     if (res.ok) {
       const data = await res.json()
-      const text = data.text || ''
-      const match = text.match(/\[[\s\S]*\]/)
+      const responseText = data.text || ''
+      const match = responseText.match(/\[[\s\S]*\]/)
       if (match) {
         const rawArr = JSON.parse(match[0])
         if (Array.isArray(rawArr) && rawArr.length > 0) {
@@ -235,17 +347,17 @@ No markdown wrapping, no explanations, no text other than the JSON array.`
       }
     }
   } catch (err) {
-    console.warn('AI document parsing bypassed, using heuristic parser:', err)
+    console.warn('AI OCR document parsing bypassed, attempting heuristic fallback:', err)
   }
 
-  // Fallback to deterministic regex heuristic parsing if AI didn't return questions
-  if (questions.length === 0) {
+  // 4. Fallback to deterministic regex heuristic parsing if AI didn't return questions but text exists
+  if (questions.length === 0 && rawText && rawText.length >= 15) {
     questions = parseQuizTextHeuristically(rawText)
   }
 
   if (questions.length === 0) {
     throw new Error(
-      'Could not detect any multiple-choice questions in the document. Please ensure questions have statements and options (e.g. A, B, C, D) and an answer key.'
+      'Could not detect any multiple-choice questions in the document or image. Please ensure the file contains legible questions, 4 options (A, B, C, D), and an answer key.'
     )
   }
 

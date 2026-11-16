@@ -51,23 +51,39 @@ function resolveKey(clientApiKey) {
   return key
 }
 
-const requestBody = (prompt, sys) =>
-  JSON.stringify({
+const requestBody = (prompt, sys, images = null) => {
+  const parts = []
+  if (Array.isArray(images) && images.length > 0) {
+    for (const img of images) {
+      if (img && typeof img.data === 'string' && typeof img.mimeType === 'string') {
+        const cleanBase64 = img.data.replace(/^data:[^;]+;base64,/, '')
+        parts.push({
+          inline_data: {
+            mime_type: img.mimeType,
+            data: cleanBase64,
+          },
+        })
+      }
+    }
+  }
+  parts.push({ text: prompt })
+  return JSON.stringify({
     system_instruction: { parts: [{ text: sys || '' }] },
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    contents: [{ role: 'user', parts }],
   })
+}
 
 const joinParts = (parsed) =>
   (parsed?.candidates?.[0]?.content?.parts || []).map((p) => p?.text || '').join('')
 
-export async function callGemini(prompt, sys, clientApiKey = null) {
+export async function callGemini(prompt, sys, clientApiKey = null, images = null) {
   const key = resolveKey(clientApiKey)
   let geminiRes
   try {
     geminiRes = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(prompt, sys),
+      body: requestBody(prompt, sys, images),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
   } catch (e) {

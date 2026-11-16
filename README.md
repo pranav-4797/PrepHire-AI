@@ -26,9 +26,15 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 👁️ **Multimodal Vision OCR for Scanned PDFs, Word Docs & Exam Photos**: Integrated optical character recognition (OCR) and multimodal vision into the Quiz Studio importer:
+  - 📸 **Scanned PDF & Photocopy OCR**: Ingests image-only and photocopy PDFs without selectable text layers, sending native PDF document streams directly to Gemini Vision to transcribe printed text, math notation, and code into structured MCQs.
+  - 🖼️ **Word Document Embedded Image OCR (`.docx`)**: Automatically extracts screenshots and photo clippings embedded inside Word files, routing both the text paragraphs and embedded images to the vision model.
+  - 📱 **Camera Photos & Screenshots (`.png`, `.jpg`, `.jpeg`, `.webp`)**: Allows faculty and admins to upload smartphone photos or screenshots of question papers, automatically reading question statements, options A-D, and answer keys.
+  - 🛡️ **25MB High-Capacity Multimodal Buffer**: Expanded Express JSON body parser to 25MB and reinforced authentication middleware with token-level rate limiting.
+
 - 📄 **Multi-Format Quiz Document Importer (`.docx`, `.pdf`, `.txt`, `.json`)**: One-click assessment import allowing administrators and faculty to upload raw question papers or quiz documents directly into the Quiz Studio:
-  - 📂 **Multi-Extension Support**: Ingests `.docx` (via client-side `mammoth`), `.pdf` (via in-browser `pdfjs-dist`), `.txt`, `.json`, and `.csv` files without requiring manual question re-typing.
-  - 🧠 **Dual-Engine Parser (`quizDocParser.ts`)**: Combines intelligent Gemini AI structuring with deterministic regex heuristic fallbacks to reliably extract question statements, code snippets, 4 options (A, B, C, D), correct answer indicators (`Ans: B`, `Correct: C`), and technical explanations.
+  - 📂 **Multi-Extension Support**: Ingests `.docx`, `.pdf`, `.png`, `.jpg`, `.txt`, `.json`, and `.csv` files without requiring manual question re-typing.
+  - 🧠 **Dual-Engine Parser (`quizDocParser.ts`)**: Combines intelligent Gemini Multimodal AI structuring with deterministic regex heuristic fallbacks to reliably extract question statements, code snippets, 4 options (A, B, C, D), correct answer indicators (`Ans: B`, `Correct: C`), and technical explanations.
   - ⚡ **Direct Studio Population**: Available in both `AdminQuizManager` and `AdminQuizEditor`, instantly populating question inventories with visual confirmation.
 
 - 📝 **Admin-Managed Assessment Studio & Timed Student Quizzes**: Integrated an institutional MCQ testing and assessment engine with deep browser history synchronization (`/dashboard/quizzes`, `/admin/quizzes`):

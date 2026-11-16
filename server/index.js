@@ -153,7 +153,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }))
 
-app.use(express.json({ limit: '1mb' }))
+app.use(express.json({ limit: '25mb' }))
 
 // Baseline abuse/DoS guard on every route. Generous enough for a classroom
 // of ~20 concurrent students; tighter, endpoint-specific limiters are added
@@ -277,15 +277,26 @@ app.get('/api/health', (_req, res) => {
 // Per-user AI rate limiting lives in gemini.js (single shared budget).
 const MAX_PROMPT_CHARS = 60_000
 const MAX_SYS_CHARS = 20_000
-const validAiBody = (b) =>
-  b && typeof b.prompt === 'string' && b.prompt.length > 0 && b.prompt.length <= MAX_PROMPT_CHARS &&
-  (b.sys === undefined || (typeof b.sys === 'string' && b.sys.length <= MAX_SYS_CHARS))
+const validAiBody = (b) => {
+  if (!b || typeof b.prompt !== 'string' || b.prompt.length === 0 || b.prompt.length > MAX_PROMPT_CHARS) return false
+  if (b.sys !== undefined && (typeof b.sys !== 'string' || b.sys.length > MAX_SYS_CHARS)) return false
+  if (b.images !== undefined) {
+    if (!Array.isArray(b.images) || b.images.length > 10) return false
+    for (const img of b.images) {
+      if (!img || typeof img.mimeType !== 'string' || typeof img.data !== 'string') return false
+      if (!/^(image\/(jpeg|png|webp|gif)|application\/pdf)$/.test(img.mimeType)) return false
+      // Cap individual inline base64 payloads to ~15MB
+      if (img.data.length > 20_000_000) return false
+    }
+  }
+  return true
+}
 
 app.post('/api/ai/generate', requireAuth(), async (req, res) => {
   if (!validAiBody(req.body)) {
-    return res.status(400).json({ error: 'prompt is required (string, max 60k chars)' })
+    return res.status(400).json({ error: 'prompt is required (string, max 60k chars), optional sys, or valid images' })
   }
-  const { prompt, sys } = req.body
+  const { prompt, sys, images } = req.body
 
   const limitKey = req.authUser.uid || req.authUser.email
   if (isRateLimited(limitKey)) {
@@ -293,7 +304,7 @@ app.post('/api/ai/generate', requireAuth(), async (req, res) => {
   }
 
   try {
-    const text = await callGemini(prompt, sys)
+    const text = await callGemini(prompt, sys, null, images)
     res.json({ text })
   } catch (err) {
     const status = err.status || 502

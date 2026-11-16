@@ -101,6 +101,7 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Deep Routing & Browser History**: Synchronized `/dashboard/quizzes` and `/admin/quizzes` with React state and browser History API (`pushState` / `popstate`).
 - **Firestore Governance**: Secured collections `quizzes` and `quiz_attempts` with zero-trust Firestore rules restricting creation/management to Admins and scoring attempts to authenticated Students.
 - **Quiz Document Importer**: Added multi-format question sheet parser (`quizDocParser.ts`) supporting `.docx` (mammoth), `.pdf` (pdfjs-dist), `.txt`, `.json`, and `.csv` with AI structuring and regex pattern fallbacks. Directly integrated into `AdminQuizManager.tsx` and `AdminQuizEditor.tsx`.
+- **Multimodal Vision OCR for Scanned PDFs, DOCX & Exam Photos**: Enabled full optical character recognition via Gemini Vision on `/api/ai/generate` and `server/gemini.js`. Supports scanned/photocopy PDFs (`application/pdf`), Word docs with embedded images (`mammoth.images`), and smartphone exam photos (`.png`, `.jpg`, `.jpeg`, `.webp`), with a 25MB body limit.
 
 ## Gotchas
 

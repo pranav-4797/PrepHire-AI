@@ -215,7 +215,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
         type="file"
         ref={fileInputRef}
         onChange={handleDocUpload}
-        accept=".docx,.doc,.pdf,.txt,.json,.csv"
+        accept=".docx,.doc,.pdf,.png,.jpg,.jpeg,.webp,.txt,.json,.csv"
         style={{ display: 'none' }}
       />
 
@@ -243,6 +243,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
             type="button"
             disabled={importingDoc}
             onClick={() => fileInputRef.current?.click()}
+            title="Upload Word Document (.docx), PDF (scanned or digital), or Question Paper Photo (.png, .jpg) with AI Vision OCR"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -259,7 +260,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
             }}
           >
             <UploadCloud size={16} />
-            {importingDoc ? 'Extracting...' : 'Upload Quiz Doc (.docx / .pdf)'}
+            {importingDoc ? 'Extracting via OCR...' : 'Upload Doc / OCR (.docx / .pdf / .png)'}
           </button>
 
           <button
