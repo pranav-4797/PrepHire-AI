@@ -5,12 +5,12 @@
 // 3. Cell phone in frame (mobile device usage)
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Camera, AlertTriangle, ShieldCheck, UserX, Users } from 'lucide-react'
+import { Camera, AlertTriangle, ShieldCheck, UserX, Users, Smartphone } from 'lucide-react'
 
 interface QuizProctorCameraProps {
   active: boolean
   onFlag: (reason: string) => void
-  onFaceStatusChange?: (status: 'verified' | 'missing' | 'multiple' | 'detecting') => void
+  onFaceStatusChange?: (status: 'verified' | 'missing' | 'multiple' | 'phone' | 'detecting') => void
   compact?: boolean
 }
 
@@ -25,9 +25,10 @@ export function QuizProctorCamera({
   const modelRef = useRef<any>(null)
   const ivRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastFaceSeenRef = useRef<number>(0)
+  const lastWarnTimesRef = useRef<Record<string, number>>({})
 
   const [camStatus, setCamStatus] = useState<'idle' | 'requesting' | 'active' | 'error'>('idle')
-  const [faceStatus, setFaceStatus] = useState<'verified' | 'missing' | 'multiple' | 'detecting'>('detecting')
+  const [faceStatus, setFaceStatus] = useState<'verified' | 'missing' | 'multiple' | 'phone' | 'detecting'>('detecting')
   const [violationCount, setViolationCount] = useState(0)
   const [lastWarning, setLastWarning] = useState<string | null>(null)
 
@@ -110,48 +111,71 @@ export function QuizProctorCamera({
       if (!modelRef.current) {
         try {
           await tf.ready()
-          modelRef.current = await cocoSsd.load()
-        } catch (e) {
-          console.error('Failed to load COCO-SSD model:', e)
-          return
+          if (tf.getBackend() !== 'webgl' && tf.findBackend('webgl')) {
+            await tf.setBackend('webgl')
+          }
+          modelRef.current = await cocoSsd.load({ base: 'mobilenet_v2' })
+        } catch {
+          try {
+            modelRef.current = await cocoSsd.load()
+          } catch (e) {
+            console.error('Failed to load COCO-SSD model:', e)
+            return
+          }
         }
       }
 
       isBusy = true
       try {
-        const predictions = await modelRef.current.detect(videoRef.current)
+        // High-sensitivity inference: pass minScore 0.18 so phones and off-angle faces aren't pre-filtered
+        const predictions = await modelRef.current.detect(videoRef.current, 20, 0.18)
         let personCount = 0
         let phoneDetected = false
 
         predictions.forEach((p: { class: string; score: number }) => {
-          if (p.class === 'person' && p.score > 0.5) personCount++
-          if (p.class === 'cell phone' && p.score > 0.45) phoneDetected = true
+          if (p.class === 'person' && p.score >= 0.25) personCount++
+          // Phones can be classified as 'cell phone', 'remote' (dark slab), or handheld electronic
+          if (
+            (p.class === 'cell phone' || p.class === 'remote') &&
+            p.score >= 0.18
+          ) {
+            phoneDetected = true
+          }
         })
 
         const now = Date.now()
         const timestamp = new Date().toLocaleTimeString()
 
-        if (personCount === 0) {
-          setFaceStatus('missing')
-          onFaceStatusChange?.('missing')
-          // Trigger violation if missing for > 4.5 seconds
-          if (now - lastFaceSeenRef.current > 4500) {
-            triggerViolation(`No face detected in camera at ${timestamp}`)
-            lastFaceSeenRef.current = now
+        if (phoneDetected) {
+          setFaceStatus('phone')
+          onFaceStatusChange?.('phone')
+          if (now - (lastWarnTimesRef.current['phone'] || 0) > 3500) {
+            lastWarnTimesRef.current['phone'] = now
+            triggerViolation(`Mobile phone detected in camera at ${timestamp}`)
+          }
+        } else if (personCount > 1) {
+          setFaceStatus('multiple')
+          onFaceStatusChange?.('multiple')
+          lastFaceSeenRef.current = now
+          if (now - (lastWarnTimesRef.current['multiple'] || 0) > 3500) {
+            lastWarnTimesRef.current['multiple'] = now
+            triggerViolation(`Multiple people (${personCount}) detected in camera at ${timestamp}`)
           }
         } else if (personCount === 1) {
           setFaceStatus('verified')
           onFaceStatusChange?.('verified')
           lastFaceSeenRef.current = now
-        } else if (personCount > 1) {
-          setFaceStatus('multiple')
-          onFaceStatusChange?.('multiple')
-          triggerViolation(`Multiple people (${personCount}) detected in camera at ${timestamp}`)
-          lastFaceSeenRef.current = now
-        }
-
-        if (phoneDetected) {
-          triggerViolation(`Mobile phone detected in frame at ${timestamp}`)
+        } else if (personCount === 0) {
+          setFaceStatus('missing')
+          onFaceStatusChange?.('missing')
+          // Trigger violation if missing for > 4 seconds
+          if (now - lastFaceSeenRef.current > 4000) {
+            if (now - (lastWarnTimesRef.current['missing'] || 0) > 4000) {
+              lastWarnTimesRef.current['missing'] = now
+              triggerViolation(`No face detected in camera at ${timestamp}`)
+            }
+            lastFaceSeenRef.current = now
+          }
         }
       } catch (err) {
         console.warn('Proctoring detection cycle skipped:', err)
@@ -161,7 +185,7 @@ export function QuizProctorCamera({
     }
 
     lastFaceSeenRef.current = Date.now()
-    ivRef.current = setInterval(detect, 3500)
+    ivRef.current = setInterval(detect, 1200)
 
     return () => {
       if (ivRef.current) clearInterval(ivRef.current)
@@ -185,10 +209,17 @@ export function QuizProctorCamera({
     },
     multiple: {
       label: 'Multiple Faces',
-      color: '#D97706',
-      bg: '#FFFBEB',
-      border: '#FCD34D',
-      icon: <Users size={12} color="#D97706" />,
+      color: '#DC2626',
+      bg: '#FEF2F2',
+      border: '#FCA5A5',
+      icon: <Users size={12} color="#DC2626" />,
+    },
+    phone: {
+      label: 'Phone Detected!',
+      color: '#DC2626',
+      bg: '#FEF2F2',
+      border: '#FCA5A5',
+      icon: <Smartphone size={12} color="#DC2626" />,
     },
     detecting: {
       label: 'Monitoring…',
@@ -290,7 +321,7 @@ export function QuizProctorCamera({
           <div
             style={{
               position: 'absolute',
-              bottom: 6,
+              top: 6,
               right: 6,
               background: 'rgba(220, 38, 38, 0.85)',
               color: '#FFFFFF',
@@ -301,6 +332,37 @@ export function QuizProctorCamera({
             }}
           >
             {violationCount} Flag{violationCount > 1 ? 's' : ''}
+          </div>
+        )}
+
+        {/* Real-time Video Alert Strip */}
+        {(faceStatus === 'phone' || faceStatus === 'multiple' || faceStatus === 'missing') && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              background: 'rgba(220, 38, 38, 0.92)',
+              color: '#FFFFFF',
+              padding: '0.25rem 0.5rem',
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.3rem',
+              textAlign: 'center',
+            }}
+          >
+            <AlertTriangle size={11} />
+            <span>
+              {faceStatus === 'phone'
+                ? 'Mobile Phone Detected'
+                : faceStatus === 'multiple'
+                ? 'Multiple People Detected'
+                : 'Face Missing from Frame'}
+            </span>
           </div>
         )}
       </div>

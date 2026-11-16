@@ -192,6 +192,14 @@ export async function getStudentQuizAttempts(studentUid: string): Promise<QuizAt
 }
 
 /**
+ * Delete a specific attempt (to grant a retake or reset submission).
+ */
+export async function deleteQuizAttempt(attemptId: string): Promise<void> {
+  const docRef = doc(db, ATTEMPTS_COLL, attemptId)
+  await deleteDoc(docRef)
+}
+
+/**
  * Get all attempts for a specific quiz (for admin review).
  */
 export async function getQuizAttempts(quizId: string): Promise<QuizAttempt[]> {

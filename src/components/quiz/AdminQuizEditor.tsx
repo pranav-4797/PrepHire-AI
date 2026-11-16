@@ -11,6 +11,7 @@ import {
   Code,
   UploadCloud,
   FileText,
+  RotateCcw,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -85,6 +86,9 @@ export function AdminQuizEditor({
   )
   const [passingPercentage, setPassingPercentage] = useState(
     initialQuiz?.passingPercentage || 60
+  )
+  const [allowRetake, setAllowRetake] = useState(
+    initialQuiz?.allowRetake !== undefined ? initialQuiz.allowRetake : true
   )
   const [questions, setQuestions] = useState<QuizQuestion[]>(
     initialQuiz?.questions && initialQuiz.questions.length > 0
@@ -366,6 +370,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
         difficulty,
         timeLimitMinutes: Math.max(1, timeLimitMinutes),
         passingPercentage: Math.max(1, Math.min(100, passingPercentage)),
+        allowRetake,
         questions,
         createdBy: userEmail || 'admin',
         createdAt: initialQuiz?.createdAt || now,
@@ -667,6 +672,35 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
                 boxSizing: 'border-box',
               }}
             />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: T.txtSec, marginBottom: '0.35rem' }}>
+              Student Retakes
+            </label>
+            <button
+              type="button"
+              onClick={() => setAllowRetake(!allowRetake)}
+              style={{
+                width: '100%',
+                padding: '0.62rem 0.85rem',
+                borderRadius: 8,
+                border: `1px solid ${allowRetake ? '#A7F3D0' : '#FCA5A5'}`,
+                background: allowRetake ? '#ECFDF5' : '#FEF2F2',
+                color: allowRetake ? '#059669' : '#DC2626',
+                fontSize: '0.88rem',
+                fontWeight: 650,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                boxSizing: 'border-box',
+              }}
+            >
+              <RotateCcw size={14} />
+              <span>{allowRetake ? 'Retakes Allowed' : 'Retakes Disabled'}</span>
+            </button>
           </div>
         </div>
 

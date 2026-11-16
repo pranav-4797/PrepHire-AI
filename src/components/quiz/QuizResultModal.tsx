@@ -26,8 +26,9 @@ export function QuizResultModal({
   const totalQuestions = quiz.questions.length
   let correctCount = 0
 
-  quiz.questions.forEach((q) => {
-    if (attempt.answers[q.id] === q.correctIndex) {
+  quiz.questions.forEach((q, idx) => {
+    const ans = attempt.answers?.[q.id] ?? attempt.answers?.[String(idx)] ?? attempt.answers?.[idx]
+    if (ans === q.correctIndex) {
       correctCount++
     }
   })
@@ -37,6 +38,8 @@ export function QuizResultModal({
     const remSecs = secs % 60
     return `${mins}m ${remSecs < 10 ? '0' : ''}${remSecs}s`
   }
+
+  const retakeAllowed = quiz.allowRetake !== false
 
   return (
     <div
@@ -160,9 +163,9 @@ export function QuizResultModal({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {quiz.questions.map((q, idx) => {
-                const selectedOpt = attempt.answers[q.id]
-                const isCorrect = selectedOpt === q.correctIndex
-                const hasAnswered = selectedOpt !== undefined
+                const selectedOpt = attempt.answers?.[q.id] ?? attempt.answers?.[String(idx)] ?? attempt.answers?.[idx]
+                const hasAnswered = selectedOpt !== undefined && selectedOpt !== null
+                const isCorrect = hasAnswered && selectedOpt === q.correctIndex
 
                 return (
                   <div
@@ -225,51 +228,128 @@ export function QuizResultModal({
                       {q.options.map((opt, optIdx) => {
                         const letter = String.fromCharCode(65 + optIdx)
                         const isThisCorrect = optIdx === q.correctIndex
-                        const isThisSelected = optIdx === selectedOpt
+                        const isThisSelected = hasAnswered && optIdx === selectedOpt
 
                         let optBg = '#ffffff'
-                        let optBorder = '#E5E7EB'
+                        let optBorder = '1px solid #E5E7EB'
                         let optColor = T.txtPri
 
-                        if (isThisCorrect) {
+                        if (isThisCorrect && isThisSelected) {
+                          // Correct & Chosen by candidate
                           optBg = '#DCFCE7'
-                          optBorder = '#86EFAC'
-                          optColor = '#166534'
+                          optBorder = '2px solid #059669'
+                          optColor = '#065F46'
                         } else if (isThisSelected && !isThisCorrect) {
+                          // Incorrect choice by candidate -> Bold Red
                           optBg = '#FEE2E2'
-                          optBorder = '#FCA5A5'
+                          optBorder = '2px solid #DC2626'
                           optColor = '#991B1B'
+                        } else if (isThisCorrect) {
+                          // Correct Answer that candidate missed
+                          optBg = '#F0FDF4'
+                          optBorder = '1.5px dashed #059669'
+                          optColor = '#047857'
                         }
 
                         return (
                           <div
                             key={optIdx}
                             style={{
-                              padding: '0.4rem 0.65rem',
-                              borderRadius: 6,
-                              border: `1px solid ${optBorder}`,
+                              padding: '0.45rem 0.75rem',
+                              borderRadius: 8,
+                              border: optBorder,
                               background: optBg,
-                              fontSize: '0.82rem',
+                              fontSize: '0.83rem',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '0.35rem',
+                              gap: '0.4rem',
                               color: optColor,
+                              fontWeight: isThisSelected || isThisCorrect ? 600 : 400,
+                              boxShadow: isThisSelected ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
                             }}
                           >
                             <span style={{ fontWeight: 700 }}>{letter}.</span>
-                            <span>{opt}</span>
-                            {isThisCorrect && <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 700 }}>✓ Correct</span>}
-                            {isThisSelected && !isThisCorrect && <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 700 }}>✗ Your Choice</span>}
+                            <span style={{ flex: 1 }}>{opt}</span>
+
+                            {isThisCorrect && isThisSelected && (
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  background: '#059669',
+                                  color: '#ffffff',
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                ✓ Correct
+                              </span>
+                            )}
+
+                            {isThisSelected && !isThisCorrect && (
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  background: '#DC2626',
+                                  color: '#ffffff',
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                ✗ Your Choice
+                              </span>
+                            )}
+
+                            {isThisCorrect && !isThisSelected && (
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  background: '#D1FAE5',
+                                  color: '#065F46',
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                ✓ Correct Answer
+                              </span>
+                            )}
                           </div>
                         )
                       })}
                     </div>
 
-                    {!hasAnswered && (
-                      <div style={{ fontSize: '0.78rem', color: '#D97706', fontWeight: 600, marginBottom: '0.45rem' }}>
-                        ⚠️ Not answered
-                      </div>
-                    )}
+                    {/* Candidate Choice & Correct Answer Summary Pill */}
+                    <div
+                      style={{
+                        padding: '0.45rem 0.75rem',
+                        borderRadius: 6,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        marginBottom: '0.45rem',
+                        background: isCorrect ? '#ECFDF5' : hasAnswered ? '#FEF2F2' : '#FFFBEB',
+                        color: isCorrect ? '#065F46' : hasAnswered ? '#991B1B' : '#B45309',
+                        border: `1px solid ${isCorrect ? '#A7F3D0' : hasAnswered ? '#FCA5A5' : '#FDE68A'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      {isCorrect ? (
+                        <>
+                          <CheckCircle2 size={14} /> You answered correctly: Option {String.fromCharCode(65 + (selectedOpt as number))} ({q.options[selectedOpt as number]})
+                        </>
+                      ) : hasAnswered ? (
+                        <>
+                          <XCircle size={14} /> You chose: Option {String.fromCharCode(65 + (selectedOpt as number))} ({q.options[selectedOpt as number]}) — Correct was: Option {String.fromCharCode(65 + q.correctIndex)} ({q.options[q.correctIndex]})
+                        </>
+                      ) : (
+                        <>
+                          <span>⚠️ Not answered — Correct was: Option {String.fromCharCode(65 + q.correctIndex)} ({q.options[q.correctIndex]})</span>
+                        </>
+                      )}
+                    </div>
 
                     {/* Explanation */}
                     {q.explanation && (
@@ -302,47 +382,68 @@ export function QuizResultModal({
             background: '#F9FAFB',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
             gap: '0.75rem',
           }}
         >
-          {onRetake && (
+          <div>
+            {!retakeAllowed && (
+              <span
+                style={{
+                  fontSize: '0.78rem',
+                  color: '#64748B',
+                  background: '#F1F5F9',
+                  border: '1px solid #E2E8F0',
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: 6,
+                  fontWeight: 600,
+                }}
+              >
+                🔒 Retakes disabled by institutional setting
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            {onRetake && retakeAllowed && (
+              <button
+                onClick={onRetake}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: '#ffffff',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: 8,
+                  padding: '0.55rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: T.txtPri,
+                  cursor: 'pointer',
+                }}
+              >
+                <RotateCcw size={15} /> Retake Assessment
+              </button>
+            )}
+
             <button
-              onClick={onRetake}
+              onClick={onClose}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                background: '#ffffff',
-                border: '1px solid #D1D5DB',
+                background: T.primary,
+                color: '#ffffff',
+                border: 'none',
                 borderRadius: 8,
-                padding: '0.55rem 1rem',
+                padding: '0.55rem 1.25rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                color: T.txtPri,
                 cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
               }}
             >
-              <RotateCcw size={15} /> Retake Assessment
+              Done & Return to Hub
             </button>
-          )}
-
-          <button
-            onClick={onClose}
-            style={{
-              background: T.primary,
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '0.55rem 1.25rem',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
-            }}
-          >
-            Done & Return to Hub
-          </button>
+          </div>
         </div>
       </div>
     </div>

@@ -262,19 +262,47 @@ export function QuizPlayer({
   // ── Option Selection ──────────────────────────────────────────────────────
   const handleSelectOption = useCallback((optIdx: number) => {
     if (!currentQ || completedAttempt) return
+    const qKey = currentQ.id || `q-${currentIdx}`
     setAnswers((prev) => ({
       ...prev,
-      [currentQ.id]: optIdx,
+      [qKey]: optIdx,
+      [String(currentIdx)]: optIdx,
     }))
-  }, [currentQ, completedAttempt])
+  }, [currentQ, currentIdx, completedAttempt])
 
   const handleToggleReview = useCallback(() => {
     if (!currentQ) return
+    const qKey = currentQ.id || `q-${currentIdx}`
     setMarkedForReview((prev) => ({
       ...prev,
-      [currentQ.id]: !prev[currentQ.id],
+      [qKey]: !prev[qKey],
     }))
-  }, [currentQ])
+  }, [currentQ, currentIdx])
+
+  // ── AI Proctor Flag Handler ───────────────────────────────────────────────
+  const handleProctorFlag = useCallback((reason: string) => {
+    const type = reason.includes('No face')
+      ? 'face_missing'
+      : reason.includes('Multiple people')
+      ? 'multiple_faces'
+      : (reason.includes('Mobile phone') || reason.includes('phone'))
+      ? 'cell_phone'
+      : 'other'
+
+    if (type === 'face_missing') setFaceMissingCount((c) => c + 1)
+    if (type === 'multiple_faces') setMultipleFacesCount((c) => c + 1)
+
+    const timestamp = new Date().toLocaleTimeString()
+    setSuspiciousFlags((prev) => [
+      ...prev,
+      {
+        timestamp,
+        type: type as any,
+        detail: reason,
+      },
+    ])
+    showToast(`⚠️ Proctor Flag: ${reason}`, 'error')
+  }, [showToast])
 
   // ── Keyboard Shortcuts (A/B/C/D, 1/2/3/4, Arrows, M, C) ────────────────────
   useEffect(() => {
@@ -352,10 +380,11 @@ export function QuizPlayer({
       let score = 0
       let maxScore = 0
 
-      quiz.questions.forEach((q) => {
+      quiz.questions.forEach((q, idx) => {
         const qPoints = q.points || 1
         maxScore += qPoints
-        if (answers[q.id] === q.correctIndex) {
+        const ans = answers[q.id] ?? answers[String(idx)] ?? answers[idx]
+        if (ans === q.correctIndex) {
           score += qPoints
         }
       })
@@ -414,7 +443,10 @@ export function QuizPlayer({
   const isUrgent = secondsLeft < 120 // < 2 mins
 
   // Palette metrics
-  const answeredCount = Object.keys(answers).length
+  const answeredCount = quiz.questions.filter((q, idx) => {
+    const ans = answers[q.id] ?? answers[String(idx)] ?? answers[idx]
+    return ans !== undefined && ans !== null
+  }).length
   const reviewCount = Object.values(markedForReview).filter(Boolean).length
   const unansweredCount = totalQuestions - answeredCount
   const totalViolations = suspiciousFlags.length
@@ -644,6 +676,25 @@ export function QuizPlayer({
         </div>
       </GlassCard>
 
+      {/* Mobile Persistent AI Proctor Camera (Never unmounted) */}
+      {isMobile && (
+        <GlassCard style={{ padding: '0.65rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 750, color: T.txtPri }}>
+              <Shield size={14} color="#059669" /> AI Surveillance Active
+            </div>
+            <div style={{ fontSize: '0.7rem', color: T.txtSec, marginTop: 2 }}>
+              Keep face centered · No mobile devices allowed
+            </div>
+          </div>
+          <QuizProctorCamera
+            active={!completedAttempt}
+            compact={true}
+            onFlag={handleProctorFlag}
+          />
+        </GlassCard>
+      )}
+
       {/* Main Grid: Question Card on Left, Palette & Proctoring on Right */}
       <div
         style={{
@@ -766,7 +817,12 @@ export function QuizPlayer({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
             {currentQ?.options.map((opt, optIdx) => {
               const letter = String.fromCharCode(65 + optIdx)
-              const isSelected = answers[currentQ.id] === optIdx
+              const selectedVal =
+                (currentQ.id ? answers[currentQ.id] : undefined) ??
+                answers[`q-${currentIdx}`] ??
+                answers[String(currentIdx)] ??
+                answers[currentIdx]
+              const isSelected = selectedVal === optIdx
 
               return (
                 <div
@@ -919,33 +975,13 @@ export function QuizPlayer({
         {/* Right Sidebar: Facial Scan Proctor Camera & Palette */}
         {(!isMobile || mobilePaletteOpen) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {/* Embedded AI Proctor Camera */}
-            <QuizProctorCamera
-              active={!completedAttempt}
-              onFlag={(reason) => {
-                const type = reason.includes('No face')
-                  ? 'face_missing'
-                  : reason.includes('Multiple people')
-                  ? 'multiple_faces'
-                  : reason.includes('Mobile phone')
-                  ? 'cell_phone'
-                  : 'other'
-
-                if (type === 'face_missing') setFaceMissingCount((c) => c + 1)
-                if (type === 'multiple_faces') setMultipleFacesCount((c) => c + 1)
-
-                const timestamp = new Date().toLocaleTimeString()
-                setSuspiciousFlags((prev) => [
-                  ...prev,
-                  {
-                    timestamp,
-                    type: type as any,
-                    detail: reason,
-                  },
-                ])
-                showToast(`⚠️ Proctor Flag: ${reason}`, 'error')
-              }}
-            />
+            {/* Embedded AI Proctor Camera (Desktop view) */}
+            {!isMobile && (
+              <QuizProctorCamera
+                active={!completedAttempt}
+                onFlag={handleProctorFlag}
+              />
+            )}
 
             {/* Question Palette */}
             <GlassCard style={{ padding: '1.15rem' }}>
@@ -1009,8 +1045,8 @@ export function QuizPlayer({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.45rem', marginBottom: '1rem' }}>
                 {quiz.questions.map((q, idx) => {
                   const isCurrent = idx === currentIdx
-                  const isAnswered = answers[q.id] !== undefined
-                  const isReview = !!markedForReview[q.id]
+                  const isAnswered = answers[q.id] !== undefined || answers[String(idx)] !== undefined
+                  const isReview = !!markedForReview[q.id] || !!markedForReview[String(idx)]
 
                   // Apply filter
                   if (paletteFilter === 'answered' && !isAnswered) return null

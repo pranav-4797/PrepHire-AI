@@ -26,6 +26,21 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🔍 **High-Fidelity Question Review & Visual Option Diagnostics**:
+  - **Explicit Candidate Choice Tracking**: In the post-test review modal, every candidate selection is accurately preserved and cross-referenced with correct keys.
+  - **Red Incorrect Highlights & Green Verified Badges**: Correct answers are highlighted in emerald green (`#059669` / `#DCFCE7`), while candidate mistakes are distinctly styled in bold red (`#DC2626` / `#FEE2E2`) with unmistakable status badges (`✗ Your Choice` vs `✓ Correct Answer`).
+  - **Human-Readable Selection Summaries**: Per-question feedback strips clearly explain both what was selected and what the intended answer was.
+
+- 🛡️ **Enhanced AI Proctoring Sensitivity (Multi-Face & Cell Phone Detection)**:
+  - **High-Sensitivity Object & Person Inference**: Tuned in-browser TensorFlow COCO-SSD thresholds (`0.18`-`0.25`) to catch off-angle faces, secondary individuals entering the frame, and handheld electronic devices (`cell phone`, `remote`).
+  - **Continuous 1200ms Detection & Warning Banners**: Real-time on-video warning banners alert candidates immediately when infractions occur while debouncing proctor flags to prevent false positives.
+  - **Persistent Mobile Camera Stream**: Guaranteed continuous surveillance on smartphones by preventing proctor camera unmounting during drawer toggles.
+
+- 🔄 **Admin Assessment Governance & Flexible Retake Controls**:
+  - **1-Click Retake Toggle (`Retake: ON / OFF`)**: Instant studio card toggle allowing administrators to lock or unlock assessment retakes institution-wide.
+  - **Single-Candidate Attempt Reset**: Targeted administrative control to reset specific student attempts (`Allow Candidate Retake`) without affecting cohort data.
+  - **Student Portal Enforcement**: Enforces institutional retake lockdowns, transforming buttons into `View Result` and labeling completed assessments accordingly.
+
 - 📝 **Assessment Studio & Proctored Quiz Center**:
   - **Instant Multi-Format Importer**: Ingests `.docx`, `.pdf`, `.txt`, `.json`, and smartphone photos/scans via a two-tier pipeline (<15ms client AST fast-path for digital docs + Gemini Multimodal Vision OCR for scans and photos).
   - **Public Shareable Test Links (`/quiz/:quizId`)**: Admins can generate single-click assessment URLs allowing candidates to complete timed tests on PC or mobile without pre-registration.

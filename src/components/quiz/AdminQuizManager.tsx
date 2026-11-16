@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -25,6 +26,7 @@ import {
   deleteQuiz,
   updateQuiz,
   getQuizAttempts,
+  deleteQuizAttempt,
 } from '../../services/quiz.service'
 import { AdminQuizEditor } from './AdminQuizEditor'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
@@ -152,6 +154,33 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
       )
     } catch (err) {
       showToast(sanitizeErrorMessage(err, 'Failed to update quiz status.'), 'error')
+    }
+  }
+
+  async function handleToggleRetake(quiz: Quiz) {
+    try {
+      const nextRetake = quiz.allowRetake === false ? true : false
+      await updateQuiz(quiz.id, { allowRetake: nextRetake })
+      setQuizzes((prev) =>
+        prev.map((q) => (q.id === quiz.id ? { ...q, allowRetake: nextRetake } : q))
+      )
+      showToast(
+        nextRetake ? 'Student retakes enabled for this assessment.' : 'Student retakes disabled for this assessment.',
+        'info'
+      )
+    } catch (err) {
+      showToast(sanitizeErrorMessage(err, 'Failed to update retake permission.'), 'error')
+    }
+  }
+
+  async function handleResetAttempt(attemptId: string, candidateName: string) {
+    if (!window.confirm(`Reset attempt for ${candidateName}? This will remove their current score and allow them to take the assessment again.`)) return
+    try {
+      await deleteQuizAttempt(attemptId)
+      setAttempts((prev) => prev.filter((a) => a.id !== attemptId))
+      showToast(`Attempt reset. Candidate ${candidateName} can now retake.`, 'success')
+    } catch (err) {
+      showToast(sanitizeErrorMessage(err, 'Failed to reset attempt.'), 'error')
     }
   }
 
@@ -594,6 +623,27 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                   </button>
 
                   <button
+                    onClick={() => handleToggleRetake(q)}
+                    title={q.allowRetake === false ? 'Click to enable retakes' : 'Click to disable retakes'}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      background: q.allowRetake === false ? '#FEF2F2' : '#EFF6FF',
+                      color: q.allowRetake === false ? '#DC2626' : '#2563EB',
+                      border: `1px solid ${q.allowRetake === false ? '#FCA5A5' : '#BFDBFE'}`,
+                      borderRadius: 8,
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <RotateCcw size={13} />
+                    <span>{q.allowRetake === false ? 'Retake: OFF' : 'Retake: ON'}</span>
+                  </button>
+
+                  <button
                     onClick={() => handleViewAttempts(q)}
                     title="View Submissions"
                     style={{
@@ -927,6 +977,29 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                               ✓ No suspicious incidents detected during candidate session. Full academic integrity verified.
                             </div>
                           )}
+
+                          {/* Candidate Retake / Reset Action */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9' }}>
+                            <button
+                              onClick={() => handleResetAttempt(att.id, att.studentName || att.studentEmail)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                background: '#EFF6FF',
+                                color: '#2563EB',
+                                border: '1px solid #BFDBFE',
+                                borderRadius: 6,
+                                padding: '0.35rem 0.75rem',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                              title="Reset this attempt so candidate can re-attempt the quiz"
+                            >
+                              <RotateCcw size={13} /> Allow Candidate Retake
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

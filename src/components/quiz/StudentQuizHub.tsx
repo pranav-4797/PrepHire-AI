@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock,
   HelpCircle,
+  Lock,
   Play,
   RotateCcw,
   Search,
@@ -562,7 +563,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                           color: attempt.passed ? '#059669' : '#DC2626',
                         }}
                       >
-                        {attempt.passed ? '✓ Passed' : 'Retake Needed'} ({attempt.percentage}%)
+                        {attempt.passed ? '✓ Passed' : q.allowRetake === false ? 'Completed' : 'Retake Needed'} ({attempt.percentage}%)
                       </span>
                       <button
                         onClick={() => setReviewAttempt({ quiz: q, attempt })}
@@ -585,33 +586,55 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                     </span>
                   )}
 
-                  <button
-                    onClick={() => setActiveQuiz(q)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                      background: attempt ? '#F3F4F6' : T.primary,
-                      color: attempt ? T.txtPri : '#ffffff',
-                      border: attempt ? '1px solid #D1D5DB' : 'none',
-                      borderRadius: 8,
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      boxShadow: attempt ? 'none' : '0 2px 6px rgba(0, 30, 64, 0.2)',
-                    }}
-                  >
-                    {attempt ? (
-                      <>
-                        <RotateCcw size={13} /> Retake
-                      </>
-                    ) : (
-                      <>
-                        <Play size={13} fill="#ffffff" /> Start Quiz
-                      </>
-                    )}
-                  </button>
+                  {attempt && q.allowRetake === false ? (
+                    <button
+                      onClick={() => setReviewAttempt({ quiz: q, attempt })}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        background: '#F3F4F6',
+                        color: T.txtSec,
+                        border: '1px solid #E5E7EB',
+                        borderRadius: 8,
+                        padding: '0.5rem 0.85rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                      title="Retakes disabled by admin for this assessment"
+                    >
+                      <Lock size={12} color={T.txtSec} /> View Result
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setActiveQuiz(q)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        background: attempt ? '#F3F4F6' : T.primary,
+                        color: attempt ? T.txtPri : '#ffffff',
+                        border: attempt ? '1px solid #D1D5DB' : 'none',
+                        borderRadius: 8,
+                        padding: '0.5rem 1rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: attempt ? 'none' : '0 2px 6px rgba(0, 30, 64, 0.2)',
+                      }}
+                    >
+                      {attempt ? (
+                        <>
+                          <RotateCcw size={13} /> Retake
+                        </>
+                      ) : (
+                        <>
+                          <Play size={13} fill="#ffffff" /> Start Quiz
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </GlassCard>
             )
