@@ -39,8 +39,19 @@ export interface Quiz {
 
 export interface SuspiciousFlag {
   timestamp: string
-  type: 'tab_switch' | 'fullscreen_exit' | 'face_missing' | 'multiple_faces' | 'cell_phone' | 'focus_loss' | 'other'
+  type:
+    | 'tab_switch'
+    | 'fullscreen_exit'
+    | 'face_missing'
+    | 'multiple_faces'
+    | 'cell_phone'
+    | 'focus_loss'
+    | 'audio_anomaly'
+    | 'tamper_attempt'
+    | 'other'
   detail: string
+  snapshot?: string // Data URL: image/jpeg snapshot of evidence
+  durationSeconds?: number
 }
 
 export interface QuizAttempt {
@@ -60,9 +71,12 @@ export interface QuizAttempt {
   answers: Record<string, number> // questionId -> selected option index (0..3)
   timeSpentSeconds: number
   completedAt: string // ISO string
-  suspiciousFlags?: (SuspiciousFlag | string)[]
+  suspiciousFlags?: SuspiciousFlag[]
   tabSwitchesCount?: number
   fullscreenViolationsCount?: number
   faceMissingCount?: number
   multipleFacesCount?: number
+  audioAnomaliesCount?: number
+  integrityScore?: number // 0..100 forensic score
+  totalAwaySeconds?: number
 }

@@ -75,14 +75,22 @@ export function QuizPlayer({
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [completedAttempt, setCompletedAttempt] = useState<QuizAttempt | null>(null)
 
-  // ── Anti-Cheat & Proctoring State ─────────────────────────────────────────
+  // ── Anti-Cheat & Persistent Forensic Telemetry State ───────────────────────
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [showFsWarning, setShowFsWarning] = useState(false)
-  const [tabSwitchesCount, setTabSwitchesCount] = useState(0)
-  const [fullscreenViolationsCount, setFullscreenViolationsCount] = useState(0)
-  const [faceMissingCount, setFaceMissingCount] = useState(0)
-  const [multipleFacesCount, setMultipleFacesCount] = useState(0)
-  const [suspiciousFlags, setSuspiciousFlags] = useState<SuspiciousFlag[]>([])
+  const [, setSuspiciousFlags] = useState<SuspiciousFlag[]>([])
+
+  // Persistent telemetry refs to guarantee 100% data capture fidelity without React closure staleness
+  const suspiciousFlagsRef = useRef<SuspiciousFlag[]>([])
+  const tabSwitchesCountRef = useRef(0)
+  const fullscreenViolationsCountRef = useRef(0)
+  const faceMissingCountRef = useRef(0)
+  const multipleFacesCountRef = useRef(0)
+  const phoneDetectedCountRef = useRef(0)
+  const audioAnomaliesCountRef = useRef(0)
+  const tamperAttemptsCountRef = useRef(0)
+  const totalAwaySecondsRef = useRef(0)
+  const blurStartRef = useRef<number | null>(null)
+  const snapshotCaptureRef = useRef<(() => string | undefined) | null>(null)
 
   // Responsive mobile state
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 860 : false)
@@ -105,13 +113,12 @@ export function QuizPlayer({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // ── Fullscreen Request & Listener ─────────────────────────────────────────
+  // ── Fullscreen Request & Listener (Silent Forensic Tracking) ─────────────
   const enterFullscreen = useCallback(async () => {
     try {
       if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
         await document.documentElement.requestFullscreen()
         setIsFullscreen(true)
-        setShowFsWarning(false)
       }
     } catch (err) {
       console.warn('Fullscreen request was declined or blocked:', err)
@@ -130,18 +137,17 @@ export function QuizPlayer({
       setIsFullscreen(isFs)
 
       if (!isFs && !completedAttempt) {
-        setFullscreenViolationsCount((c) => c + 1)
+        fullscreenViolationsCountRef.current += 1
+        const snap = snapshotCaptureRef.current?.()
         const timestamp = new Date().toLocaleTimeString()
-        setSuspiciousFlags((prev) => [
-          ...prev,
-          {
-            timestamp,
-            type: 'fullscreen_exit',
-            detail: `Fullscreen mode exited at ${timestamp}`,
-          },
-        ])
-        setShowFsWarning(true)
-        showToast('⚠️ Fullscreen mode exited. Please return to fullscreen.', 'error')
+        const flag: SuspiciousFlag = {
+          timestamp,
+          type: 'fullscreen_exit',
+          detail: `Fullscreen mode exited by candidate at ${timestamp}`,
+          snapshot: snap,
+        }
+        suspiciousFlagsRef.current.push(flag)
+        setSuspiciousFlags((prev) => [...prev, flag])
       }
     }
 
@@ -152,76 +158,126 @@ export function QuizPlayer({
         document.exitFullscreen().catch(() => {})
       }
     }
-  }, [completedAttempt, enterFullscreen, showToast])
+  }, [completedAttempt, enterFullscreen])
 
-  // ── Tab Switch & Focus Loss Listener ──────────────────────────────────────
+  // ── Tab Switch & Focus Loss Listener (Stealth Duration Tracking) ───────────
   useEffect(() => {
     function handleVisibilityChange() {
-      if (document.hidden && !completedAttempt) {
-        const timestamp = new Date().toLocaleTimeString()
-        setTabSwitchesCount((prev) => {
-          const next = prev + 1
-          setSuspiciousFlags((s) => [
-            ...s,
-            {
-              timestamp,
-              type: 'tab_switch',
-              detail: `Browser tab switch or window minimized (Violation #${next})`,
-            },
-          ])
+      if (completedAttempt) return
+      const timestamp = new Date().toLocaleTimeString()
 
-          if (next >= 4) {
-            showToast(`Excessive tab switches (${next}/4). Submitting assessment automatically...`, 'error')
-            handleFinalSubmit(true)
-          } else {
-            showToast(`⚠️ Warning ${next}/4: Do not switch tabs during the assessment!`, 'error')
+      if (document.hidden) {
+        blurStartRef.current = Date.now()
+        tabSwitchesCountRef.current += 1
+        const snap = snapshotCaptureRef.current?.()
+        const flag: SuspiciousFlag = {
+          timestamp,
+          type: 'tab_switch',
+          detail: `Browser tab switch or window minimized (Infraction #${tabSwitchesCountRef.current})`,
+          snapshot: snap,
+        }
+        suspiciousFlagsRef.current.push(flag)
+        setSuspiciousFlags((s) => [...s, flag])
+      } else {
+        // Returned back to test
+        if (blurStartRef.current) {
+          const awaySec = Math.max(1, Math.round((Date.now() - blurStartRef.current) / 1000))
+          totalAwaySecondsRef.current += awaySec
+          const snap = snapshotCaptureRef.current?.()
+          const flag: SuspiciousFlag = {
+            timestamp,
+            type: 'focus_loss',
+            detail: `Candidate returned to assessment after ${awaySec}s away from window`,
+            snapshot: snap,
+            durationSeconds: awaySec,
           }
-          return next
-        })
+          suspiciousFlagsRef.current.push(flag)
+          setSuspiciousFlags((s) => [...s, flag])
+          blurStartRef.current = null
+        }
       }
     }
 
     function handleWindowBlur() {
-      if (!completedAttempt && !document.hidden) {
+      if (completedAttempt || document.hidden) return
+      const timestamp = new Date().toLocaleTimeString()
+      blurStartRef.current = Date.now()
+      tabSwitchesCountRef.current += 1
+      const snap = snapshotCaptureRef.current?.()
+      const flag: SuspiciousFlag = {
+        timestamp,
+        type: 'focus_loss',
+        detail: `Window focus lost or candidate switched applications (Infraction #${tabSwitchesCountRef.current})`,
+        snapshot: snap,
+      }
+      suspiciousFlagsRef.current.push(flag)
+      setSuspiciousFlags((s) => [...s, flag])
+    }
+
+    function handleWindowFocus() {
+      if (completedAttempt) return
+      if (blurStartRef.current) {
         const timestamp = new Date().toLocaleTimeString()
-        setTabSwitchesCount((prev) => {
-          const next = prev + 1
-          setSuspiciousFlags((s) => [
-            ...s,
-            {
-              timestamp,
-              type: 'focus_loss',
-              detail: `Window focus lost or candidate switched applications (Violation #${next})`,
-            },
-          ])
-          showToast(`⚠️ Warning ${next}/4: Window focus lost. Please stay focused on the assessment.`, 'error')
-          return next
-        })
+        const awaySec = Math.max(1, Math.round((Date.now() - blurStartRef.current) / 1000))
+        totalAwaySecondsRef.current += awaySec
+        const snap = snapshotCaptureRef.current?.()
+        const flag: SuspiciousFlag = {
+          timestamp,
+          type: 'focus_loss',
+          detail: `Candidate refocused assessment window after ${awaySec}s away`,
+          snapshot: snap,
+          durationSeconds: awaySec,
+        }
+        suspiciousFlagsRef.current.push(flag)
+        setSuspiciousFlags((s) => [...s, flag])
+        blurStartRef.current = null
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('focus', handleWindowFocus)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('focus', handleWindowFocus)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completedAttempt, showToast])
+  }, [completedAttempt])
 
-  // ── Anti-Cheat: Block Copy / Paste / Context Menu ─────────────────────────
+  // ── Honey-Trap: Silent Intercept of Copy / Context Menu / DevTools ──────────
   useEffect(() => {
     function preventCopy(e: ClipboardEvent) {
       if (!completedAttempt) {
         e.preventDefault()
-        showToast('Clipboard actions (copy/cut/paste) are disabled during this assessment.', 'error')
+        const snap = snapshotCaptureRef.current?.()
+        const timestamp = new Date().toLocaleTimeString()
+        tamperAttemptsCountRef.current += 1
+        const flag: SuspiciousFlag = {
+          timestamp,
+          type: 'tamper_attempt',
+          detail: `Clipboard copy/cut/paste attempt intercepted at ${timestamp}`,
+          snapshot: snap,
+        }
+        suspiciousFlagsRef.current.push(flag)
+        setSuspiciousFlags((s) => [...s, flag])
       }
     }
 
     function preventContextMenu(e: MouseEvent) {
       if (!completedAttempt) {
         e.preventDefault()
+        const snap = snapshotCaptureRef.current?.()
+        const timestamp = new Date().toLocaleTimeString()
+        tamperAttemptsCountRef.current += 1
+        const flag: SuspiciousFlag = {
+          timestamp,
+          type: 'tamper_attempt',
+          detail: `Right-click inspect context menu attempt at ${timestamp}`,
+          snapshot: snap,
+        }
+        suspiciousFlagsRef.current.push(flag)
+        setSuspiciousFlags((s) => [...s, flag])
       }
     }
 
@@ -236,7 +292,7 @@ export function QuizPlayer({
       document.removeEventListener('paste', preventCopy)
       document.removeEventListener('contextmenu', preventContextMenu)
     }
-  }, [completedAttempt, showToast])
+  }, [completedAttempt])
 
   // ── Timer Effect ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -279,37 +335,54 @@ export function QuizPlayer({
     }))
   }, [currentQ, currentIdx])
 
-  // ── AI Proctor Flag Handler ───────────────────────────────────────────────
-  const handleProctorFlag = useCallback((reason: string) => {
-    const type = reason.includes('No face')
-      ? 'face_missing'
-      : reason.includes('Multiple people')
-      ? 'multiple_faces'
-      : (reason.includes('Mobile phone') || reason.includes('phone'))
-      ? 'cell_phone'
-      : 'other'
+  // ── AI Proctor Flag Handler (Silent Forensic Capture) ─────────────────────
+  const handleProctorFlag = useCallback(
+    (reason: string, type?: SuspiciousFlag['type'], snapshot?: string) => {
+      const snap = snapshot || snapshotCaptureRef.current?.()
+      const flagType: SuspiciousFlag['type'] =
+        type ||
+        (reason.includes('No face')
+          ? 'face_missing'
+          : reason.includes('Multiple people')
+          ? 'multiple_faces'
+          : reason.includes('Mobile phone') || reason.includes('phone')
+          ? 'cell_phone'
+          : reason.includes('audio') || reason.includes('voice')
+          ? 'audio_anomaly'
+          : 'other')
 
-    if (type === 'face_missing') setFaceMissingCount((c) => c + 1)
-    if (type === 'multiple_faces') setMultipleFacesCount((c) => c + 1)
+      if (flagType === 'face_missing') {
+        faceMissingCountRef.current += 1
+      } else if (flagType === 'multiple_faces') {
+        multipleFacesCountRef.current += 1
+      } else if (flagType === 'cell_phone') {
+        phoneDetectedCountRef.current += 1
+      } else if (flagType === 'audio_anomaly') {
+        audioAnomaliesCountRef.current += 1
+      }
 
-    const timestamp = new Date().toLocaleTimeString()
-    setSuspiciousFlags((prev) => [
-      ...prev,
-      {
+      const timestamp = new Date().toLocaleTimeString()
+      const newFlag: SuspiciousFlag = {
         timestamp,
-        type: type as any,
+        type: flagType,
         detail: reason,
-      },
-    ])
-    showToast(`⚠️ Proctor Flag: ${reason}`, 'error')
-  }, [showToast])
+        snapshot: snap,
+      }
 
-  // ── Keyboard Shortcuts (A/B/C/D, 1/2/3/4, Arrows, M, C) ────────────────────
+      suspiciousFlagsRef.current.push(newFlag)
+      setSuspiciousFlags((prev) => [...prev, newFlag])
+
+      // Stealth Mode: Candidate is NOT alerted or given toasts,
+      // ensuring natural behavior while complete forensic evidence is preserved.
+    },
+    []
+  )
+
+  // ── Keyboard Shortcuts (A/B/C/D, 1/2/3/4, Arrows, M, C, DevTools Trap) ────
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (
         showConfirmModal ||
-        showFsWarning ||
         completedAttempt ||
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -318,6 +391,27 @@ export function QuizPlayer({
       }
 
       const key = e.key.toLowerCase()
+
+      // Honey-trap: Detect DevTools / Source inspection shortcuts silently
+      if (
+        e.key === 'F12' ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+        ((e.ctrlKey || e.metaKey) && ['u', 'p', 's'].includes(key))
+      ) {
+        e.preventDefault()
+        const snap = snapshotCaptureRef.current?.()
+        const timestamp = new Date().toLocaleTimeString()
+        tamperAttemptsCountRef.current += 1
+        const flag: SuspiciousFlag = {
+          timestamp,
+          type: 'tamper_attempt',
+          detail: `Developer tools / Source inspect attempted: ${e.key}`,
+          snapshot: snap,
+        }
+        suspiciousFlagsRef.current.push(flag)
+        setSuspiciousFlags((s) => [...s, flag])
+        return
+      }
 
       if (['a', '1'].includes(key) && currentQ?.options?.[0] !== undefined) {
         e.preventDefault()
@@ -341,11 +435,13 @@ export function QuizPlayer({
         e.preventDefault()
         handleToggleReview()
       } else if (key === 'delete' || key === 'backspace') {
-        if (answers[currentQ?.id] !== undefined) {
+        const qKey = currentQ?.id || `q-${currentIdx}`
+        if (answers[qKey] !== undefined || answers[String(currentIdx)] !== undefined) {
           e.preventDefault()
           setAnswers((prev) => {
             const copy = { ...prev }
-            delete copy[currentQ?.id]
+            delete copy[qKey]
+            delete copy[String(currentIdx)]
             return copy
           })
         }
@@ -359,13 +455,13 @@ export function QuizPlayer({
     totalQuestions,
     answers,
     showConfirmModal,
-    showFsWarning,
     completedAttempt,
     handleSelectOption,
     handleToggleReview,
+    currentIdx,
   ])
 
-  // ── Submission Handler ────────────────────────────────────────────────────
+  // ── Submission Handler (Transfers Complete Telemetry & Snapshots) ─────────
   async function handleFinalSubmit(isAuto = false) {
     if (submitting || completedAttempt) return
     setSubmitting(true)
@@ -392,6 +488,17 @@ export function QuizPlayer({
       const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
       const passed = percentage >= (quiz.passingPercentage || 60)
 
+      // Calculate Forensic Integrity Score (0..100)
+      let integrityScore = 100
+      integrityScore -= tabSwitchesCountRef.current * 12
+      integrityScore -= faceMissingCountRef.current * 10
+      integrityScore -= multipleFacesCountRef.current * 25
+      integrityScore -= phoneDetectedCountRef.current * 30
+      integrityScore -= audioAnomaliesCountRef.current * 15
+      integrityScore -= tamperAttemptsCountRef.current * 15
+      integrityScore -= Math.min(25, Math.floor(totalAwaySecondsRef.current / 5) * 5)
+      integrityScore = Math.max(0, Math.min(100, integrityScore))
+
       const attemptPayload: Omit<QuizAttempt, 'id'> = {
         quizId: quiz.id,
         quizTitle: quiz.title,
@@ -408,11 +515,14 @@ export function QuizPlayer({
         answers,
         timeSpentSeconds,
         completedAt: new Date().toISOString(),
-        suspiciousFlags,
-        tabSwitchesCount,
-        fullscreenViolationsCount,
-        faceMissingCount,
-        multipleFacesCount,
+        suspiciousFlags: [...suspiciousFlagsRef.current],
+        tabSwitchesCount: tabSwitchesCountRef.current,
+        fullscreenViolationsCount: fullscreenViolationsCountRef.current,
+        faceMissingCount: faceMissingCountRef.current,
+        multipleFacesCount: multipleFacesCountRef.current,
+        audioAnomaliesCount: audioAnomaliesCountRef.current,
+        totalAwaySeconds: totalAwaySecondsRef.current,
+        integrityScore,
       }
 
       const attemptId = await submitQuizAttempt(attemptPayload)
@@ -449,7 +559,6 @@ export function QuizPlayer({
   }).length
   const reviewCount = Object.values(markedForReview).filter(Boolean).length
   const unansweredCount = totalQuestions - answeredCount
-  const totalViolations = suspiciousFlags.length
 
   return (
     <div
@@ -539,7 +648,7 @@ export function QuizPlayer({
 
         {/* Live Status Indicators (Timer, Proctoring Pill, Submit) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-          {/* Proctoring Pill */}
+          {/* Proctoring Pill (Stealth & Calm for Candidate) */}
           <div
             style={{
               display: 'flex',
@@ -547,16 +656,16 @@ export function QuizPlayer({
               gap: '0.35rem',
               padding: '0.35rem 0.65rem',
               borderRadius: 8,
-              background: totalViolations > 0 ? '#FEF2F2' : '#F0FDF4',
-              border: `1px solid ${totalViolations > 0 ? '#FCA5A5' : '#86EFAC'}`,
-              color: totalViolations > 0 ? '#DC2626' : '#15803D',
+              background: '#F0FDF4',
+              border: '1px solid #86EFAC',
+              color: '#15803D',
               fontSize: '0.75rem',
               fontWeight: 700,
             }}
-            title={totalViolations > 0 ? `${totalViolations} integrity flag(s) detected` : 'Proctored Assessment Active'}
+            title="Proctored Assessment Active"
           >
-            <Shield size={13} />
-            <span>{totalViolations > 0 ? `${totalViolations} Flags` : 'Secure'}</span>
+            <Shield size={13} color="#15803D" />
+            <span>Proctored Session</span>
           </div>
 
           {/* Fullscreen Button */}
@@ -690,7 +799,11 @@ export function QuizPlayer({
           <QuizProctorCamera
             active={!completedAttempt}
             compact={true}
+            stealthMode={true}
             onFlag={handleProctorFlag}
+            onRegisterCapture={(fn) => {
+              snapshotCaptureRef.current = fn
+            }}
           />
         </GlassCard>
       )}
@@ -979,7 +1092,11 @@ export function QuizPlayer({
             {!isMobile && (
               <QuizProctorCamera
                 active={!completedAttempt}
+                stealthMode={true}
                 onFlag={handleProctorFlag}
+                onRegisterCapture={(fn) => {
+                  snapshotCaptureRef.current = fn
+                }}
               />
             )}
 
@@ -1252,80 +1369,6 @@ export function QuizPlayer({
         </div>
       )}
 
-      {/* Fullscreen Required Lockdown Modal */}
-      {showFsWarning && !completedAttempt && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.85)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            padding: '1.5rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: 16,
-              padding: '2rem',
-              maxWidth: 460,
-              width: '100%',
-              textAlign: 'center',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            }}
-          >
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: '50%',
-                background: '#FEF2F2',
-                color: '#DC2626',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1rem',
-              }}
-            >
-              <AlertTriangle size={28} />
-            </div>
-
-            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 800, color: T.txtPri }}>
-              Assessment Lockdown Active
-            </h3>
-
-            <p style={{ margin: '0 0 1.25rem', fontSize: '0.88rem', color: T.txtSec, lineHeight: 1.5 }}>
-              This proctored assessment requires full-screen mode at all times. Switching tabs or exiting full-screen has been recorded in your integrity log.
-            </p>
-
-            <button
-              onClick={enterFullscreen}
-              style={{
-                width: '100%',
-                background: T.primary,
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 10,
-                padding: '0.75rem 1rem',
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <Maximize size={16} /> Return to Fullscreen
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Confirmation Modal */}
       {showConfirmModal && (
         <div
@@ -1383,11 +1426,6 @@ export function QuizPlayer({
                   • ⚠️ <strong>Unanswered:</strong> {unansweredCount} questions
                 </div>
               )}
-              {totalViolations > 0 && (
-                <div style={{ color: '#B45309' }}>
-                  • ⚠️ <strong>Proctoring Flags:</strong> {totalViolations} flags recorded
-                </div>
-              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.6rem' }}>
@@ -1442,10 +1480,16 @@ export function QuizPlayer({
             setCurrentIdx(0)
             setSecondsLeft(initialSeconds)
             setSuspiciousFlags([])
-            setTabSwitchesCount(0)
-            setFullscreenViolationsCount(0)
-            setFaceMissingCount(0)
-            setMultipleFacesCount(0)
+            suspiciousFlagsRef.current = []
+            tabSwitchesCountRef.current = 0
+            fullscreenViolationsCountRef.current = 0
+            faceMissingCountRef.current = 0
+            multipleFacesCountRef.current = 0
+            phoneDetectedCountRef.current = 0
+            audioAnomaliesCountRef.current = 0
+            tamperAttemptsCountRef.current = 0
+            totalAwaySecondsRef.current = 0
+            blurStartRef.current = null
             startTimeRef.current = Date.now()
           }}
         />

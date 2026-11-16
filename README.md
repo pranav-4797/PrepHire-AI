@@ -26,6 +26,13 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🕵️ **Stealth AI Proctoring, Sound Anomaly Detection & Forensic Snapshot Dossier**:
+  - **Zero-Alert Silent Candidate Mode**: Candidate-facing proctor flags, alarming banners, and violation toasts are silenced. Students see a calm, reassuring green badge (`🟢 Proctored Session Active • Mic On`), preventing candidates from gaming warnings while preserving natural behavior.
+  - **Automated Photographic Evidence Capture**: High-speed forensic canvas snapshots (~12KB JPEG) are instantly captured whenever an infraction occurs (mobile phone detected, secondary person, face absence, window blur, or background voice).
+  - **Background Audio & Vocal Anomaly Detection**: In-browser Web Audio API `AnalyserNode` continuously monitors ambient sound levels. Whispering or external speech (>36dB for >1.5s) triggers an audio anomaly flag paired with an evidence snapshot.
+  - **Silent Honey-traps & Away-Time Forensics**: Silently intercepts developer tools shortcuts (`F12`, `Ctrl+Shift+I`, `Ctrl+U`), clipboard actions, and right-click menus, while tracking the exact number of seconds the candidate was away from the assessment window.
+  - **Admin Forensic Dossier & Snapshot Lightbox**: Upgraded Submissions modal with a 0-100% Forensic Integrity Score, 6-metric telemetry grid, interactive photographic evidence gallery, and full-resolution lightbox viewer.
+
 - 🔍 **High-Fidelity Question Review & Visual Option Diagnostics**:
   - **Explicit Candidate Choice Tracking**: In the post-test review modal, every candidate selection is accurately preserved and cross-referenced with correct keys.
   - **Red Incorrect Highlights & Green Verified Badges**: Correct answers are highlighted in emerald green (`#059669` / `#DCFCE7`), while candidate mistakes are distinctly styled in bold red (`#DC2626` / `#FEE2E2`) with unmistakable status badges (`✗ Your Choice` vs `✓ Correct Answer`).

@@ -17,6 +17,11 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  Camera,
+  AlertTriangle,
+  Smartphone,
+  Mic,
+  X,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -79,6 +84,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
   const [attempts, setAttempts] = useState<QuizAttempt[]>([])
   const [loadingAttempts, setLoadingAttempts] = useState(false)
   const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null)
+  const [previewSnapshot, setPreviewSnapshot] = useState<{ src: string; caption: string } | null>(null)
 
   function handleShareLink(quiz: Quiz) {
     const url = `${window.location.origin}/quiz/${quiz.id}`
@@ -786,8 +792,39 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {attempts.map((att) => {
                   const isExpanded = expandedAttemptId === att.id
-                  const violationCount = att.suspiciousFlags?.length || 0
+
+                  const rawFlags: any[] = Array.isArray(att.suspiciousFlags)
+                    ? att.suspiciousFlags.map((f) =>
+                        typeof f === 'string'
+                          ? { timestamp: '', type: 'other', detail: f }
+                          : f
+                      )
+                    : []
+
+                  const phoneCount = rawFlags.filter((f) => f.type === 'cell_phone').length
+                  const tamperCount = rawFlags.filter((f) => f.type === 'tamper_attempt').length
+                  const audioCount =
+                    (att.audioAnomaliesCount || 0) ||
+                    rawFlags.filter((f) => f.type === 'audio_anomaly').length
+
+                  const telemetrySum =
+                    (att.tabSwitchesCount || 0) +
+                    (att.fullscreenViolationsCount || 0) +
+                    (att.faceMissingCount || 0) +
+                    (att.multipleFacesCount || 0) +
+                    audioCount +
+                    phoneCount +
+                    tamperCount
+
+                  const violationCount = Math.max(rawFlags.length, telemetrySum)
                   const hasViolations = violationCount > 0
+
+                  const integrity =
+                    att.integrityScore !== undefined
+                      ? att.integrityScore
+                      : Math.max(0, 100 - violationCount * 12)
+
+                  const photoEvidence = rawFlags.filter((f) => !!f.snapshot)
 
                   return (
                     <div
@@ -860,7 +897,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                               display: 'flex',
                               alignItems: 'center',
                               gap: '0.35rem',
-                              padding: '0.25rem 0.55rem',
+                              padding: '0.25rem 0.6rem',
                               borderRadius: 6,
                               fontSize: '0.75rem',
                               fontWeight: 700,
@@ -870,7 +907,11 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                             }}
                           >
                             {hasViolations ? <ShieldAlert size={12} /> : <ShieldCheck size={12} />}
-                            <span>{hasViolations ? `${violationCount} Flag${violationCount > 1 ? 's' : ''}` : 'Clean'}</span>
+                            <span>
+                              {hasViolations
+                                ? `🚨 ${violationCount} Flag${violationCount > 1 ? 's' : ''} (${integrity}% Integrity)`
+                                : '🛡️ 100% Clean'}
+                            </span>
                           </div>
 
                           <span
@@ -904,69 +945,276 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                             fontSize: '0.82rem',
                           }}
                         >
-                          <div style={{ fontWeight: 700, color: T.txtPri, marginBottom: '0.4rem' }}>
-                            🛡️ Proctoring & Integrity Telemetry:
-                          </div>
-
+                          {/* Forensic Integrity Rating Banner */}
                           <div
                             style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                              gap: '0.5rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '0.65rem 0.85rem',
+                              borderRadius: 8,
+                              background:
+                                integrity >= 90
+                                  ? '#ECFDF5'
+                                  : integrity >= 60
+                                  ? '#FFFBEB'
+                                  : '#FEF2F2',
+                              border: `1px solid ${
+                                integrity >= 90
+                                  ? '#A7F3D0'
+                                  : integrity >= 60
+                                  ? '#FDE68A'
+                                  : '#FECACA'
+                              }`,
                               marginBottom: '0.75rem',
                             }}
                           >
-                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
-                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Tab Switches / Blur:</span>
-                              <div style={{ fontWeight: 700, color: (att.tabSwitchesCount || 0) > 0 ? '#DC2626' : '#059669' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                              {integrity >= 90 ? (
+                                <ShieldCheck size={20} color="#059669" />
+                              ) : integrity >= 60 ? (
+                                <AlertTriangle size={20} color="#D97706" />
+                              ) : (
+                                <ShieldAlert size={20} color="#DC2626" />
+                              )}
+                              <div>
+                                <div
+                                  style={{
+                                    fontWeight: 750,
+                                    fontSize: '0.88rem',
+                                    color:
+                                      integrity >= 90
+                                        ? '#065F46'
+                                        : integrity >= 60
+                                        ? '#92400E'
+                                        : '#991B1B',
+                                  }}
+                                >
+                                  {integrity >= 90
+                                    ? 'Verified Authentic Candidate Session'
+                                    : integrity >= 60
+                                    ? 'Mild Anomalies Detected (Review Recommended)'
+                                    : 'Severe Malpractice Flagged (High Risk)'}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: T.txtSec, marginTop: '0.1rem' }}>
+                                  Forensic Integrity Rating: <strong>{integrity}%</strong> • Total Recorded Infractions: <strong>{violationCount}</strong>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                fontSize: '1.2rem',
+                                color:
+                                  integrity >= 90
+                                    ? '#059669'
+                                    : integrity >= 60
+                                    ? '#D97706'
+                                    : '#DC2626',
+                              }}
+                            >
+                              {integrity}%
+                            </div>
+                          </div>
+
+                          {/* 6-Metric Telemetry Grid */}
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))',
+                              gap: '0.45rem',
+                              marginBottom: '0.85rem',
+                            }}
+                          >
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6, border: '1px solid #E5E7EB' }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.72rem' }}>Tab Switches / Blur:</span>
+                              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: (att.tabSwitchesCount || 0) > 0 ? '#DC2626' : '#059669' }}>
                                 {att.tabSwitchesCount || 0}
+                                {att.totalAwaySeconds ? (
+                                  <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#991B1B', marginLeft: 4 }}>
+                                    ({att.totalAwaySeconds}s away)
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
-                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
-                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Fullscreen Exits:</span>
-                              <div style={{ fontWeight: 700, color: (att.fullscreenViolationsCount || 0) > 0 ? '#DC2626' : '#059669' }}>
-                                {att.fullscreenViolationsCount || 0}
+
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6, border: '1px solid #E5E7EB' }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.72rem' }}>📱 Phone in Frame:</span>
+                              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: phoneCount > 0 ? '#DC2626' : '#059669' }}>
+                                {phoneCount}
                               </div>
                             </div>
-                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
-                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Face Missing Alerts:</span>
-                              <div style={{ fontWeight: 700, color: (att.faceMissingCount || 0) > 0 ? '#DC2626' : '#059669' }}>
+
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6, border: '1px solid #E5E7EB' }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.72rem' }}>👥 Multiple People:</span>
+                              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: (att.multipleFacesCount || 0) > 0 ? '#DC2626' : '#059669' }}>
+                                {att.multipleFacesCount || 0}
+                              </div>
+                            </div>
+
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6, border: '1px solid #E5E7EB' }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.72rem' }}>👁️ Face Absence:</span>
+                              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: (att.faceMissingCount || 0) > 0 ? '#DC2626' : '#059669' }}>
                                 {att.faceMissingCount || 0}
                               </div>
                             </div>
-                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6 }}>
-                              <span style={{ color: T.txtSec, fontSize: '0.75rem' }}>Multiple Faces Alerts:</span>
-                              <div style={{ fontWeight: 700, color: (att.multipleFacesCount || 0) > 0 ? '#DC2626' : '#059669' }}>
-                                {att.multipleFacesCount || 0}
+
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6, border: '1px solid #E5E7EB' }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.72rem' }}>🎙️ Sound / Voice:</span>
+                              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: audioCount > 0 ? '#DC2626' : '#059669' }}>
+                                {audioCount}
+                              </div>
+                            </div>
+
+                            <div style={{ background: '#F9FAFB', padding: '0.5rem', borderRadius: 6, border: '1px solid #E5E7EB' }}>
+                              <span style={{ color: T.txtSec, fontSize: '0.72rem' }}>⚠️ Tamper / Shortcuts:</span>
+                              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: tamperCount > 0 ? '#DC2626' : '#059669' }}>
+                                {tamperCount}
                               </div>
                             </div>
                           </div>
 
-                          {att.suspiciousFlags && att.suspiciousFlags.length > 0 ? (
-                            <div>
-                              <div style={{ fontWeight: 600, color: '#DC2626', marginBottom: '0.3rem', fontSize: '0.78rem' }}>
-                                Incident Timeline:
+                          {/* Photographic Evidence Gallery (Snapshots Captured at Violation Moments) */}
+                          {photoEvidence.length > 0 && (
+                            <div style={{ marginBottom: '0.85rem' }}>
+                              <div
+                                style={{
+                                  fontWeight: 700,
+                                  color: '#991B1B',
+                                  fontSize: '0.8rem',
+                                  marginBottom: '0.45rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                }}
+                              >
+                                <Camera size={14} color="#DC2626" />
+                                <span>Captured Forensic Evidence ({photoEvidence.length} Snapshots):</span>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: 140, overflowY: 'auto' }}>
-                                {att.suspiciousFlags.map((flag, fIdx) => {
-                                  const isObj = typeof flag === 'object' && flag !== null
-                                  const time = isObj ? (flag as any).timestamp : ''
-                                  const detail = isObj ? (flag as any).detail : String(flag)
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                  gap: '0.5rem',
+                                }}
+                              >
+                                {photoEvidence.map((snap, sIdx) => (
+                                  <div
+                                    key={sIdx}
+                                    onClick={() =>
+                                      setPreviewSnapshot({
+                                        src: snap.snapshot!,
+                                        caption: `${snap.timestamp || 'Violation'} — ${snap.detail}`,
+                                      })
+                                    }
+                                    style={{
+                                      borderRadius: 8,
+                                      border: '1px solid #FECACA',
+                                      background: '#FEF2F2',
+                                      overflow: 'hidden',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                      transition: 'all 0.15s ease',
+                                    }}
+                                    title="Click to zoom forensic evidence photo"
+                                  >
+                                    <img
+                                      src={snap.snapshot}
+                                      alt="Evidence snapshot"
+                                      style={{
+                                        width: '100%',
+                                        height: 95,
+                                        objectFit: 'cover',
+                                        display: 'block',
+                                        background: '#0F172A',
+                                      }}
+                                    />
+                                    <div style={{ padding: '0.35rem 0.45rem', fontSize: '0.68rem', color: '#991B1B', lineHeight: 1.25 }}>
+                                      <div style={{ fontWeight: 700 }}>⏱️ {snap.timestamp}</div>
+                                      <div
+                                        style={{
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
+                                          marginTop: 2,
+                                        }}
+                                      >
+                                        {snap.detail}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Chronological Incident Timeline */}
+                          {rawFlags.length > 0 ? (
+                            <div>
+                              <div style={{ fontWeight: 700, color: '#DC2626', marginBottom: '0.35rem', fontSize: '0.78rem' }}>
+                                Chronological Infraction Log ({rawFlags.length} Events):
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: 150, overflowY: 'auto' }}>
+                                {rawFlags.map((flag, fIdx) => {
+                                  const time = flag.timestamp || ''
+                                  const detail = flag.detail || String(flag)
+                                  const fType = flag.type || 'other'
 
                                   return (
                                     <div
                                       key={fIdx}
                                       style={{
-                                        fontSize: '0.75rem',
+                                        fontSize: '0.74rem',
                                         color: T.txtPri,
-                                        padding: '0.25rem 0.5rem',
+                                        padding: '0.3rem 0.55rem',
                                         background: '#FEF2F2',
-                                        borderRadius: 4,
+                                        borderRadius: 6,
                                         borderLeft: '3px solid #DC2626',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '0.5rem',
                                       }}
                                     >
-                                      {time && <strong>[{time}] </strong>}
-                                      {detail}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                        {fType === 'cell_phone' ? (
+                                          <Smartphone size={13} color="#DC2626" />
+                                        ) : fType === 'audio_anomaly' ? (
+                                          <Mic size={13} color="#DC2626" />
+                                        ) : fType === 'multiple_faces' ? (
+                                          <Users size={13} color="#DC2626" />
+                                        ) : (
+                                          <AlertTriangle size={13} color="#DC2626" />
+                                        )}
+                                        <div>
+                                          {time && <strong>[{time}] </strong>}
+                                          <span>{detail}</span>
+                                        </div>
+                                      </div>
+                                      {flag.snapshot && (
+                                        <button
+                                          onClick={() =>
+                                            setPreviewSnapshot({
+                                              src: flag.snapshot!,
+                                              caption: `${time} — ${detail}`,
+                                            })
+                                          }
+                                          style={{
+                                            background: '#ffffff',
+                                            border: '1px solid #FECACA',
+                                            borderRadius: 4,
+                                            padding: '0.15rem 0.4rem',
+                                            fontSize: '0.68rem',
+                                            color: '#DC2626',
+                                            cursor: 'pointer',
+                                            fontWeight: 600,
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          📷 View Photo
+                                        </button>
+                                      )}
                                     </div>
                                   )
                                 })}
@@ -1007,6 +1255,82 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Forensic Snapshot Lightbox Modal */}
+      {previewSnapshot && (
+        <div
+          onClick={() => setPreviewSnapshot(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001,
+            padding: '1.5rem',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: 14,
+              overflow: 'hidden',
+              maxWidth: 520,
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem 1rem',
+                borderBottom: '1px solid #E5E7EB',
+                background: '#FAFAFA',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, fontSize: '0.88rem', color: '#991B1B' }}>
+                <Camera size={16} color="#DC2626" />
+                <span>Forensic Evidence Snapshot</span>
+              </div>
+              <button
+                onClick={() => setPreviewSnapshot(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '0.2rem',
+                  color: T.txtSec,
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1rem', background: '#0F172A', display: 'flex', justifyContent: 'center' }}>
+              <img
+                src={previewSnapshot.src}
+                alt="Enlarged forensic snapshot"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: 380,
+                  borderRadius: 8,
+                  objectFit: 'contain',
+                }}
+              />
+            </div>
+
+            <div style={{ padding: '0.85rem 1rem', fontSize: '0.82rem', color: T.txtPri, background: '#ffffff', lineHeight: 1.4 }}>
+              <strong>Infraction Details:</strong>
+              <div style={{ color: '#DC2626', marginTop: 3 }}>{previewSnapshot.caption}</div>
+            </div>
           </div>
         </div>
       )}
