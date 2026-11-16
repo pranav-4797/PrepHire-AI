@@ -15,7 +15,14 @@
 
 const AI_RATE_LIMIT = 12
 const AI_RATE_WINDOW_MS = 60_000
-const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview'
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+const MODEL_CANDIDATES = [
+  DEFAULT_GEMINI_MODEL,
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-1.5-pro',
+]
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 const REQUEST_TIMEOUT_MS = 60_000
 
@@ -78,27 +85,39 @@ const joinParts = (parsed) =>
 
 export async function callGemini(prompt, sys, clientApiKey = null, images = null) {
   const key = resolveKey(clientApiKey)
-  let geminiRes
-  try {
-    geminiRes = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(prompt, sys, images),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
-  } catch (e) {
-    const err = new Error('AI generation service unreachable.')
-    err.status = 502
-    throw err
+  const models = [...new Set(MODEL_CANDIDATES)]
+  let lastErr = null
+
+  for (const model of models) {
+    try {
+      const geminiRes = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: requestBody(prompt, sys, images),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+      if (geminiRes.ok) {
+        const data = await geminiRes.json().catch(() => ({}))
+        return joinParts(data)
+      }
+      const data = await geminiRes.json().catch(() => ({}))
+      console.warn(`Gemini API returned ${geminiRes.status} on model ${model}:`, data?.error?.message || '')
+      if (geminiRes.status === 404) {
+        continue
+      }
+      const err = new Error(data?.error?.message || 'AI generation service error.')
+      err.status = geminiRes.status >= 500 ? 502 : geminiRes.status
+      lastErr = err
+      break
+    } catch (e) {
+      console.warn(`Gemini fetch error with ${model}:`, e.message)
+      lastErr = e
+    }
   }
-  const data = await geminiRes.json().catch(() => ({}))
-  if (!geminiRes.ok) {
-    console.error('Gemini API error:', geminiRes.status, data?.error?.message || '')
-    const err = new Error('AI generation service error.')
-    err.status = 502
-    throw err
-  }
-  return joinParts(data)
+
+  const err = new Error(lastErr?.message || 'AI generation service unreachable.')
+  err.status = lastErr?.status || 502
+  throw err
 }
 
 /**
@@ -108,25 +127,32 @@ export async function callGemini(prompt, sys, clientApiKey = null, images = null
 export async function streamGemini(prompt, sys, onChunk, clientApiKey = null, signal = null) {
   const key = resolveKey(clientApiKey)
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS * 2)
-  let geminiRes
-  try {
-    geminiRes = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:streamGenerateContent?alt=sse`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: requestBody(prompt, sys),
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-    })
-  } catch (e) {
-    if (signal?.aborted) return
-    const err = new Error('AI generation service unreachable.')
-    err.status = 502
-    throw err
+  const models = [...new Set(MODEL_CANDIDATES)]
+  let geminiRes = null
+
+  for (const model of models) {
+    try {
+      geminiRes = await fetch(`${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: requestBody(prompt, sys),
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      })
+      if (geminiRes.status === 404) {
+        continue
+      }
+      break
+    } catch (e) {
+      if (signal?.aborted) return
+      console.warn(`Gemini stream connect error on ${model}:`, e.message)
+    }
   }
 
-  if (!geminiRes.ok) {
-    const data = await geminiRes.json().catch(() => ({}))
-    console.error('Gemini stream error:', geminiRes.status, data?.error?.message || '')
-    const err = new Error('AI generation service error.')
+  if (!geminiRes || !geminiRes.ok) {
+    if (signal?.aborted) return
+    const data = await geminiRes?.json().catch(() => ({}))
+    console.error('Gemini stream error:', geminiRes?.status, data?.error?.message || '')
+    const err = new Error('AI streaming service error.')
     err.status = 502
     throw err
   }

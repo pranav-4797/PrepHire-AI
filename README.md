@@ -26,6 +26,12 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🛠️ **System Architecture Hardening & API Resilience**:
+  - 🔄 **AI Endpoint Normalization & Auth Fix**: Resolved unauthenticated 401 failures and schema mismatches in `AdminQuizEditor.tsx` by attaching verified Firebase Bearer tokens and normalizing `sys`/`systemPrompt` parameter shapes across `/api/ai/generate` and `/api/ai/stream`.
+  - 🛡️ **Multi-Tier Gemini Fallback Routing**: Integrated automated model cascade routing (`gemini-2.5-flash` $\to$ `gemini-1.5-flash` $\to$ `gemini-3.1-flash-lite-preview` $\to$ `gemini-1.5-pro`) in `server/gemini.js`. If a model returns 404 or encounters temporary service interruption, requests immediately failover to available models without dropping client requests.
+  - 🌐 **Robust URL & Route Parameter Decoding**: Hardened coding dashboard parameters with safe URI decoding (`decodeURIComponent`) in `server/coding/routes.js`.
+  - 📱 **UI/UX Pro Max Mobile & PC Ergonomics**: Applied touch accessibility targets ($\ge 40\text{px}$ / $44\text{px}$ touch-target compliance), smooth momentum scrolling (`-webkit-overflow-scrolling: touch`) with invisible scrollbars for mobile tab strips, and adaptive responsive navbar collapsing (`.app-navbar`, `.navbar-user-text`).
+
 - 🔗 **Shareable Public Assessment Links & AI Facial Scan Proctoring (`/quiz/:quizId`)**:
   - 🌐 **Dedicated Candidate Portal (`PublicQuizTake.tsx`)**: Admins can copy and share direct quiz links (`/quiz/:quizId`) with a single click. Any candidate can access the portal on mobile or desktop without pre-registration, input their details (Name, Email, Engineering Branch, Roll Number / PRN), test their camera stream, agree to academic integrity rules, and launch the proctored assessment.
   - 📱 **Cross-Platform Responsive Mobile & PC UI/UX**: Fluid layout supporting both mobile phones and desktop workstations. Includes collapsible question palette drawer, thumb-friendly 48px interactive option cards, sticky responsive timer cockpit, and pinned bottom navigation controls.

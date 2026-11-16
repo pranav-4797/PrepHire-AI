@@ -18,6 +18,7 @@ import type { Quiz, QuizQuestion, QuizCategory, QuizDifficulty } from '../../typ
 import { createQuiz, updateQuiz } from '../../services/quiz.service'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { parseQuizDocument } from '../../utils/quizDocParser'
+import { auth } from '../../firebase/firebase'
 
 function GlassCard({
   children,
@@ -239,10 +240,19 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
       }> = []
 
       try {
-        const res = await fetch('/api/ai/generate', {
+        const token = await auth.currentUser?.getIdToken()
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        const AI_API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
+        const res = await fetch(`${AI_API_URL}/api/ai/generate`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, systemPrompt: 'You are an expert technical interviewer and educator creating rigorous placement quiz questions.' }),
+          headers,
+          body: JSON.stringify({
+            prompt,
+            sys: 'You are an expert technical interviewer and educator creating rigorous placement quiz questions.',
+            systemPrompt: 'You are an expert technical interviewer and educator creating rigorous placement quiz questions.',
+          }),
         })
         if (res.ok) {
           const data = await res.json()

@@ -13,7 +13,6 @@ import { useAuth } from './hooks/useAuth'
 import { auth } from './firebase/firebase'
 import {
   deleteUserProfile,
-  listUserProfiles,
   updateUserProfile,
   listCourses,
   createCourse,
@@ -26,7 +25,7 @@ import {
   subscribeToFeedback,
 } from './services/firestore.service'
 import type { UserProfile, UserRole, Course, Feedback } from './services/firestore.service'
-import { loadSessions, loadStudentSessions, saveSession, updateSession } from './services/session.service'
+import { saveSession, updateSession } from './services/session.service'
 import { Leaderboard } from './components/Leaderboard'
 import { CodingHub } from './components/coding/CodingHub'
 import { AdminProblemsManager } from './components/coding/AdminProblemsManager'
@@ -837,7 +836,7 @@ function ProctoredCamera({
     ivRef.current = setInterval(runDetection, 5000)
     
     return () => { if (ivRef.current) clearInterval(ivRef.current) }
-  }, [active, camStatus])
+  }, [active, camStatus, addWarn])
 
   const sc =
     faceStatus === 'detected' ? T.green : faceStatus === 'missing' ? T.error : T.amber
@@ -977,7 +976,6 @@ function MicButton({
   useEffect(() => {
     onListeningChange?.(listening)
   }, [listening, onListeningChange])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recRef = useRef<any>(null)
   const supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
@@ -1670,6 +1668,7 @@ function Navbar({
 }) {
   return (
     <header
+      className="app-navbar"
       style={{
         position: 'sticky',
         top: 0,
@@ -1701,7 +1700,7 @@ function Navbar({
           PrepHire<span style={{ color: T.gold }}>.</span>AI
         </span>
         {!inInterview && (
-          <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center' }}>
+          <span className="navbar-pill-badge" style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center' }}>
             <Pill color={T.onGold} bg={T.goldFixed}>MIT AoE</Pill>
           </span>
         )}
@@ -1758,7 +1757,7 @@ function Navbar({
               <MessageSquare size={13} /> Feedback
             </button>
           )}
-          <div style={{ textAlign: 'right' }}>
+          <div className="navbar-user-text" style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: T.txtPri }}>{user.name}</div>
             <div style={{ fontSize: 11, color: T.txtSec }}>{user.role}</div>
           </div>
@@ -4574,6 +4573,7 @@ export default function App() {
     if (studentTab === 'courses') {
       loadStudentCourses()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentTab])
   const [domain, setDomain] = useState<string | null>(null)
   const [level, setLevel] = useState('Intermediate')

@@ -279,8 +279,9 @@ const MAX_PROMPT_CHARS = 60_000
 const MAX_SYS_CHARS = 20_000
 const validAiBody = (b) => {
   if (!b || typeof b.prompt !== 'string' || b.prompt.length === 0 || b.prompt.length > MAX_PROMPT_CHARS) return false
-  if (b.sys !== undefined && (typeof b.sys !== 'string' || b.sys.length > MAX_SYS_CHARS)) return false
-  if (b.images !== undefined) {
+  const sysVal = b.sys ?? b.systemPrompt ?? b.system
+  if (sysVal !== undefined && sysVal !== null && (typeof sysVal !== 'string' || sysVal.length > MAX_SYS_CHARS)) return false
+  if (b.images !== undefined && b.images !== null) {
     if (!Array.isArray(b.images) || b.images.length > 10) return false
     for (const img of b.images) {
       if (!img || typeof img.mimeType !== 'string' || typeof img.data !== 'string') return false
@@ -296,7 +297,9 @@ app.post('/api/ai/generate', requireAuth(), async (req, res) => {
   if (!validAiBody(req.body)) {
     return res.status(400).json({ error: 'prompt is required (string, max 60k chars), optional sys, or valid images' })
   }
-  const { prompt, sys, images } = req.body
+  const prompt = req.body.prompt
+  const sys = req.body.sys ?? req.body.systemPrompt ?? req.body.system ?? ''
+  const images = req.body.images || null
 
   const limitKey = req.authUser.uid || req.authUser.email
   if (isRateLimited(limitKey)) {
@@ -321,7 +324,8 @@ app.post('/api/ai/stream', requireAuth(), async (req, res) => {
   if (!validAiBody(req.body)) {
     return res.status(400).json({ error: 'prompt is required (string, max 60k chars)' })
   }
-  const { prompt, sys } = req.body
+  const prompt = req.body.prompt
+  const sys = req.body.sys ?? req.body.systemPrompt ?? req.body.system ?? ''
 
   const limitKey = req.authUser.uid || req.authUser.email
   if (isRateLimited(limitKey)) {

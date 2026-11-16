@@ -341,10 +341,43 @@ textarea.interview-textarea:focus-visible {
     gap: 8px !important;
     align-items: center;
     box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .portal-sidebar::-webkit-scrollbar {
+    display: none;
   }
   .portal-main {
     height: auto !important;
     min-height: calc(100vh - 120px) !important;
+  }
+}
+
+/* ── Mobile Navbar & Touch Ergonomics (UI/UX Pro Max) ──────── */
+@media (max-width: 640px) {
+  .app-navbar {
+    padding: 0 12px !important;
+    height: 56px !important;
+  }
+  .app-navbar .navbar-user-text {
+    display: none !important;
+  }
+  .app-navbar .navbar-pill-badge {
+    display: none !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  button, 
+  a, 
+  input[type="button"], 
+  input[type="submit"] {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+  .portal-sidebar button {
+    min-height: 42px;
+    padding: 8px 16px !important;
   }
 }
 

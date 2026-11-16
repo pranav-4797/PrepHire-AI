@@ -648,7 +648,9 @@ Test results: ${safeResults}`
   })
 
   router.get('/dashboard/:email', requireAuth(), (req, res) => {
-    const requestedEmail = req.params.email.toLowerCase()
+    let rawEmail = req.params.email
+    try { rawEmail = decodeURIComponent(rawEmail) } catch {}
+    const requestedEmail = String(rawEmail || '').toLowerCase()
     const privileged = isPrivileged(req)
     if (!privileged && requestedEmail !== (req.authUser.email || '').toLowerCase()) {
       return res.status(403).json({ error: 'Not authorized to view this dashboard' })
