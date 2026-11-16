@@ -84,8 +84,9 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
         setImportedQuestions(result.questions)
         setImportedTitle(result.titleSuggestion)
         setMode('create')
+        const speedBadge = result.fastPath ? '⚡ Instant' : '👁️ Vision OCR'
         showToast(
-          `Extracted ${result.questions.length} questions from ${file.name}!`,
+          `Extracted ${result.questions.length} questions from ${file.name} [${speedBadge}]!`,
           'success'
         )
       }

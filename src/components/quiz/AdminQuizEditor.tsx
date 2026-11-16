@@ -123,8 +123,9 @@ export function AdminQuizEditor({
         if (!title.trim() && result.titleSuggestion) {
           setTitle(result.titleSuggestion)
         }
+        const speedBadge = result.fastPath ? '⚡ Instant' : '👁️ Vision OCR'
         showToast(
-          `Successfully loaded ${result.questions.length} questions from ${file.name}!`,
+          `Successfully loaded ${result.questions.length} questions from ${file.name} [${speedBadge}]!`,
           'success'
         )
       }
