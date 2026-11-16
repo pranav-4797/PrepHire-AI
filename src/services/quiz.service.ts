@@ -218,3 +218,41 @@ export async function getQuizAttempts(quizId: string): Promise<QuizAttempt[]> {
     return []
   }
 }
+
+/**
+ * Upload assessment forensic evidence snapshots to Google Drive.
+ * Creates a folder named <studentName>_<quizTitle>_<timestamp> and stores named evidence.
+ */
+export async function uploadQuizEvidenceToDrive(payload: {
+  quizId: string
+  quizTitle: string
+  studentName: string
+  studentEmail: string
+  completedAt: string
+  snapshots: {
+    timestamp: string
+    type: string
+    detail: string
+    snapshot?: string
+    base64?: string
+  }[]
+}): Promise<{ driveFolderLink?: string; folderId?: string } | null> {
+  try {
+    const res = await fetch('/api/quiz/upload-evidence', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      console.warn('Failed to upload evidence to Drive endpoint:', res.statusText)
+      return null
+    }
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.warn('Network error uploading test evidence to Drive:', err)
+    return null
+  }
+}

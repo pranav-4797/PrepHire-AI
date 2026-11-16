@@ -22,6 +22,8 @@ import {
   Smartphone,
   Mic,
   X,
+  Folder,
+  ExternalLink,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -1226,8 +1228,32 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                             </div>
                           )}
 
-                          {/* Candidate Retake / Reset Action */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9' }}>
+                          {/* Candidate Actions (Drive Folder & Retake) */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9', flexWrap: 'wrap' }}>
+                            {att.driveEvidenceFolderLink && (
+                              <a
+                                href={att.driveEvidenceFolderLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                  background: '#F0FDF4',
+                                  color: '#15803D',
+                                  border: '1px solid #BBF7D0',
+                                  borderRadius: 6,
+                                  padding: '0.35rem 0.75rem',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 600,
+                                  textDecoration: 'none',
+                                }}
+                                title="Open Google Drive folder containing all evidence screenshots for this test"
+                              >
+                                <Folder size={13} color="#15803D" /> Drive Evidence Folder <ExternalLink size={11} />
+                              </a>
+                            )}
+
                             <button
                               onClick={() => handleResetAttempt(att.id, att.studentName || att.studentEmail)}
                               style={{

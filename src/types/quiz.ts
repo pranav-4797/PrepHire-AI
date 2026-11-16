@@ -79,4 +79,5 @@ export interface QuizAttempt {
   audioAnomaliesCount?: number
   integrityScore?: number // 0..100 forensic score
   totalAwaySeconds?: number
+  driveEvidenceFolderLink?: string
 }

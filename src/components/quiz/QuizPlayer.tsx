@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { T } from '../../theme'
 import type { Quiz, QuizAttempt, SuspiciousFlag } from '../../types/quiz'
-import { submitQuizAttempt } from '../../services/quiz.service'
+import { submitQuizAttempt, uploadQuizEvidenceToDrive } from '../../services/quiz.service'
 import { QuizResultModal } from './QuizResultModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { QuizProctorCamera } from './QuizProctorCamera'
@@ -499,6 +499,33 @@ export function QuizPlayer({
       integrityScore -= Math.min(25, Math.floor(totalAwaySecondsRef.current / 5) * 5)
       integrityScore = Math.max(0, Math.min(100, integrityScore))
 
+      // Silent Google Drive Evidence Folder Sync
+      const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot)
+      let driveEvidenceFolderLink: string | undefined = undefined
+
+      if (snapshotsToUpload.length > 0) {
+        try {
+          const driveRes = await uploadQuizEvidenceToDrive({
+            quizId: quiz.id,
+            quizTitle: quiz.title,
+            studentName: user.name || user.email.split('@')[0],
+            studentEmail: user.email,
+            completedAt: new Date().toISOString(),
+            snapshots: snapshotsToUpload.map((s) => ({
+              timestamp: s.timestamp,
+              type: s.type,
+              detail: s.detail,
+              snapshot: s.snapshot,
+            })),
+          })
+          if (driveRes?.driveFolderLink) {
+            driveEvidenceFolderLink = driveRes.driveFolderLink
+          }
+        } catch (e) {
+          console.warn('Drive evidence upload error:', e)
+        }
+      }
+
       const attemptPayload: Omit<QuizAttempt, 'id'> = {
         quizId: quiz.id,
         quizTitle: quiz.title,
@@ -523,6 +550,7 @@ export function QuizPlayer({
         audioAnomaliesCount: audioAnomaliesCountRef.current,
         totalAwaySeconds: totalAwaySecondsRef.current,
         integrityScore,
+        driveEvidenceFolderLink,
       }
 
       const attemptId = await submitQuizAttempt(attemptPayload)
