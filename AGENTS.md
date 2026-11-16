@@ -93,6 +93,14 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **CodeChef-grade Judge0 integration & modular adapter architecture**: Integrated Judge0 (open-source GPLv3) as primary code execution and evaluation engine (`server/coding/adapters/judge0.js`), paired with secondary Piston adapter (`server/coding/adapters/piston.js`) and host native toolchain fallback (`server/coding/adapters/local.js`). Supports Base64 protocol, microsecond cgroup CPU and memory limit tracking, dynamic language ID discovery, JIT runtime multipliers for Python/Java/JS, and full competitive verdict fidelity (Accepted, WA, TLE, MLE, ILE, RE, CE). Configured via `JUDGE_PROVIDER` (`'auto' | 'judge0' | 'piston' | 'local'`), with diagnostics endpoint `GET /api/coding/judge-status` and automated 9-stage test suite `npm run test:judge`.
 - **Clean competitive templates & standard C++ namespace**: Built `codeSanitizer.ts` to mandate `using namespace std;` whenever `<iostream>` is imported in C++, stripping verbose `std::cin`, `std::cout`, `std::endl`, and `std::vector` prefixes. Replaced pre-solved solutions in `starterCode` with clean unsolved skeletons across all 10 seed problems and updated `server/nvidia.js` prompt. Added dual-mode Reset ("Clean Scratch Template" vs "Problem Stub") and 1-click Scratch action in `ProblemWorkspace.tsx`.
 
+## Recent fixes (2026-11-16)
+
+- **Admin-Managed Quizzes & Assessment Studio**: Added full-lifecycle multiple-choice assessment creation (`AdminQuizManager.tsx`, `AdminQuizEditor.tsx`) and student exam workspace (`StudentQuizHub.tsx`, `QuizPlayer.tsx`, `QuizResultModal.tsx`).
+- **Timed Assessment Cockpit & Palette**: Live countdown timer, 1..N question palette navigator (Answered, Marked for Review, Unanswered), anti-cheat tab-blur warning detection, and automatic submission on time expiration.
+- **AI Question Generation**: Integrated AI question generation in `AdminQuizEditor` powered by Gemini/NVIDIA API endpoints with algorithmic template fallbacks.
+- **Deep Routing & Browser History**: Synchronized `/dashboard/quizzes` and `/admin/quizzes` with React state and browser History API (`pushState` / `popstate`).
+- **Firestore Governance**: Secured collections `quizzes` and `quiz_attempts` with zero-trust Firestore rules restricting creation/management to Admins and scoring attempts to authenticated Students.
+
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit

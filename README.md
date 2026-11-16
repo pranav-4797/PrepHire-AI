@@ -26,6 +26,12 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📝 **Admin-Managed Assessment Studio & Timed Student Quizzes**: Integrated an institutional MCQ testing and assessment engine with deep browser history synchronization (`/dashboard/quizzes`, `/admin/quizzes`):
+  - 🛠️ **Admin Quiz Studio (`AdminQuizManager` & `AdminQuizEditor`)**: Empowers administrators to author timed multi-question assessments with code snippets, 4 interactive options, passing percentages, and branch targeting (All Branches vs 9 MIT AoE engineering programs). Includes a 1-click **AI Question Generator** that automatically drafts rigorous MCQs and explanations on any topic.
+  - 🎓 **Student Assessment Hub (`StudentQuizHub`)**: Provides students with a dedicated catalog featuring branch/category filters, attempt history, and instant performance metrics.
+  - ⏱️ **Interactive Quiz Workspace (`QuizPlayer`)**: Proctored testing environment with live countdown timer, 1..N question palette navigator (Answered, Marked for Review, Unanswered), anti-cheat tab-blur warning detection, and automated timeout submission.
+  - 📊 **Detailed Evaluation & Explanations (`QuizResultModal`)**: Immediate scoring with accuracy breakdown, answer key reviews, and detailed technical explanations.
+
 - ⚡ **High-Speed Native C++ Single-Compilation Engine & Sub-Second Evaluation**: Built a high-performance native compilation pipeline (`compileAndRunBatchLocally` in `server/coding/adapters/local.js` and `server/coding/judge.js`) modeled after Codeforces and LeetCode judging architecture:
   - 🔨 **Single Compilation Phase**: C++ and C submissions are compiled **exactly once** using native `g++ -O2` (or `gcc -O2`). If compilation fails, the compiler diagnostic output is returned in ~0.7 seconds without executing test cases.
   - 🏎️ **Microsecond Batch Execution**: Once compiled, the generated native binary is executed directly against all test cases with stdin pipelining in **~30ms per test**, cutting total submission and evaluation time from 20–30 seconds down to **~1.2 seconds** (a **20x speedup**).

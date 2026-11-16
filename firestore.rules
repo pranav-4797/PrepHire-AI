@@ -72,6 +72,24 @@ service cloud.firestore {
       allow read: if signedIn() && isAdmin();
     }
 
+    match /quizzes/{quizId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isAdmin();
+    }
+
+    match /quiz_attempts/{attemptId} {
+      allow create: if signedIn() && (
+        isAdmin() ||
+        (isStudent() && request.resource.data.studentUid == request.auth.uid)
+      );
+      allow read: if signedIn() && (
+        isAdmin() ||
+        isFaculty() ||
+        (isStudent() && resource.data.studentUid == request.auth.uid)
+      );
+      allow update, delete: if signedIn() && isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -30,6 +30,8 @@ import { loadSessions, loadStudentSessions, saveSession, updateSession } from '.
 import { Leaderboard } from './components/Leaderboard'
 import { CodingHub } from './components/coding/CodingHub'
 import { AdminProblemsManager } from './components/coding/AdminProblemsManager'
+import { AdminQuizManager } from './components/quiz/AdminQuizManager'
+import { StudentQuizHub } from './components/quiz/StudentQuizHub'
 import { AudioVisualizer } from './components/interview/AudioVisualizer'
 import { AiQuestionCard, CandidateAnswerBubble } from './components/interview/AiQuestionCard'
 import { CookieBanner } from './components/cookies/CookieBanner'
@@ -3155,10 +3157,10 @@ function AdminDashboard({
   onDepartmentChange: (userId: string, department: string) => Promise<void>
   onLogout: () => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
-  activeTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'
-  onTabChange?: (tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback') => void
+  activeTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes'
+  onTabChange?: (tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes') => void
 }) {
-  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'>('overview')
+  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes'>('overview')
   const activeTab = activeTabProp ?? localActiveTab
   const setActiveTab = onTabChange ?? setLocalActiveTab
   const [strictProctoring, setStrictProctoring] = useState(true)
@@ -3423,9 +3425,10 @@ function AdminDashboard({
             { id: 'overview', label: 'Analytics Overview' },
             { id: 'ranking', label: 'Student Rankings' },
             { id: 'users', label: 'User Management' },
-            { id: 'feedback', label: 'Feedback' },
-            { id: 'courses', label: 'Course Approvals' },
+            { id: 'quizzes', label: 'Quizzes & Tests' },
             { id: 'coding', label: 'Coding Problems' },
+            { id: 'courses', label: 'Course Approvals' },
+            { id: 'feedback', label: 'Feedback' },
             { id: 'logs', label: 'System Audit Logs' },
             { id: 'config', label: 'Global Configurations' },
           ].map((tab) => (
@@ -4327,6 +4330,10 @@ function AdminDashboard({
             <AdminProblemsManager userEmail={user.email} showToast={showToast} />
           )}
 
+          {activeTab === 'quizzes' && (
+            <AdminQuizManager userEmail={user.email} showToast={showToast} />
+          )}
+
           {activeTab === 'feedback' && (
             <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: 20 }}>
               <section>
@@ -4387,9 +4394,9 @@ function AdminDashboard({
 // ── ROUTING & URL SYNC HELPERS ──────────────────────────────────────────────
 function parsePathname(pathname: string): {
   screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound'
-  studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history'
+  studentTab?: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' | 'quizzes'
   facultyTab?: 'overview' | 'ranking' | 'courses' | 'coding'
-  adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'
+  adminTab?: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes'
 } {
   const p = pathname.toLowerCase()
   if (p === '' || p === '/') {
@@ -4411,8 +4418,9 @@ function parsePathname(pathname: string): {
     return { screen: 'report' }
   }
   if (p.startsWith('/admin')) {
-    let tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' = 'overview'
-    if (p.includes('users')) tab = 'users'
+    let tab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes' = 'overview'
+    if (p.includes('quizzes') || p.includes('tests')) tab = 'quizzes'
+    else if (p.includes('users')) tab = 'users'
     else if (p.includes('ranking')) tab = 'ranking'
     else if (p.includes('courses')) tab = 'courses'
     else if (p.includes('coding')) tab = 'coding'
@@ -4428,9 +4436,10 @@ function parsePathname(pathname: string): {
     else if (p.includes('coding')) tab = 'coding'
     return { screen: 'home', facultyTab: tab }
   }
-  if (p.startsWith('/dashboard') || p === '/courses' || p === '/coding' || p === '/profile' || p === '/ranking' || p === '/leaderboard' || p === '/history' || p === '/assessments') {
-    let tab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' = 'interview'
-    if (p.includes('courses')) tab = 'courses'
+  if (p.startsWith('/dashboard') || p === '/courses' || p === '/coding' || p === '/quizzes' || p === '/profile' || p === '/ranking' || p === '/leaderboard' || p === '/history' || p === '/assessments') {
+    let tab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' | 'quizzes' = 'interview'
+    if (p.includes('quizzes') || p.includes('tests')) tab = 'quizzes'
+    else if (p.includes('courses')) tab = 'courses'
     else if (p.includes('coding')) tab = 'coding'
     else if (p.includes('ranking') || p.includes('leaderboard')) tab = 'ranking'
     else if (p.includes('profile')) tab = 'profile'
@@ -4443,9 +4452,9 @@ function parsePathname(pathname: string): {
 function getUrlPath(
   screen: 'landing' | 'auth' | 'home' | 'intro' | 'consent' | 'interview' | 'loading' | 'report' | 'notFound',
   role: string | null | undefined,
-  studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history',
+  studentTab: 'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' | 'quizzes',
   facultyTab: 'overview' | 'ranking' | 'courses' | 'coding',
-  adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'
+  adminTab: 'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes'
 ): string {
   if (screen === 'landing') return '/'
   if (screen === 'auth') return '/login'
@@ -4484,13 +4493,13 @@ export default function App() {
     return () => clearTimeout(tId)
   }, [toast])
 
-  const [studentTab, setStudentTab] = useState<'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history'>(
+  const [studentTab, setStudentTab] = useState<'interview' | 'courses' | 'ranking' | 'coding' | 'profile' | 'history' | 'quizzes'>(
     initialRoute.studentTab || 'interview'
   )
   const [facultyTab, setFacultyTab] = useState<'overview' | 'ranking' | 'courses' | 'coding'>(
     initialRoute.facultyTab || 'overview'
   )
-  const [adminTab, setAdminTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback'>(
+  const [adminTab, setAdminTab] = useState<'overview' | 'ranking' | 'users' | 'logs' | 'config' | 'courses' | 'coding' | 'feedback' | 'quizzes'>(
     initialRoute.adminTab || 'overview'
   )
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
@@ -5352,10 +5361,11 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
             {[
               { id: 'interview', label: 'Mock Interview' },
               { id: 'history', label: 'My Assessments' },
-              { id: 'profile', label: 'Profile' },
+              { id: 'quizzes', label: 'Quizzes & Practice Tests' },
               { id: 'coding', label: 'Coding Platform' },
               { id: 'courses', label: 'Resource Library' },
               { id: 'ranking', label: 'Leaderboard' },
+              { id: 'profile', label: 'Profile' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -6275,6 +6285,18 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                   userEmail={user?.email || ''}
                   userName={user?.name || ''}
                   userDepartment={user?.department || profile?.department}
+                  showToast={showToast}
+                />
+              </div>
+            ) : studentTab === 'quizzes' ? (
+              <div className="home-screen-content" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px 24px', animation: 'fadeIn 0.4s ease' }}>
+                <StudentQuizHub
+                  user={{
+                    uid: user?.uid || profile?.uid || '',
+                    email: user?.email || profile?.email || '',
+                    name: user?.name || profile?.name,
+                    department: user?.department || profile?.department,
+                  }}
                   showToast={showToast}
                 />
               </div>
