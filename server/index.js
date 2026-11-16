@@ -497,7 +497,8 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
 // ── Proctored Assessment Evidence Upload to Google Drive ─────────────────────
 // Creates a candidate evidence folder named: <studentName>_<quizTitle>_<timestamp>
 // inside "PrepHire_Test_Evidences" and saves named snapshots for forensic audit.
-app.post('/api/quiz/upload-evidence', express.json({ limit: '25mb' }), async (req, res) => {
+// Uses a 3MB limit and slices to top 4 snapshots to protect Render Free Tier memory (512MB).
+app.post('/api/quiz/upload-evidence', uploadLimiter, express.json({ limit: '3mb' }), async (req, res) => {
   try {
     const {
       quizId = 'general',
@@ -508,7 +509,9 @@ app.post('/api/quiz/upload-evidence', express.json({ limit: '25mb' }), async (re
       snapshots = [],
     } = req.body
 
-    if (!Array.isArray(snapshots) || snapshots.length === 0) {
+    const validSnapshots = (Array.isArray(snapshots) ? snapshots : []).slice(0, 4)
+
+    if (validSnapshots.length === 0) {
       return res.json({ success: true, message: 'No snapshots provided', files: [] })
     }
 
@@ -523,7 +526,7 @@ app.post('/api/quiz/upload-evidence', express.json({ limit: '25mb' }), async (re
       fs.mkdirSync(mockEvidenceDir, { recursive: true })
 
       const savedFiles = []
-      snapshots.forEach((snap, idx) => {
+      validSnapshots.forEach((snap, idx) => {
         const raw = snap.snapshot || snap.base64
         if (!raw) return
         const base64Data = raw.replace(/^data:image\/\w+;base64,/, '')
@@ -603,7 +606,7 @@ app.post('/api/quiz/upload-evidence', express.json({ limit: '25mb' }), async (re
 
     // 3. Upload each evidence snapshot with student name, time, and infraction type
     const { Readable } = await import('stream')
-    const uploadPromises = snapshots.map(async (snap, idx) => {
+    const uploadPromises = validSnapshots.map(async (snap, idx) => {
       const raw = snap.snapshot || snap.base64
       if (!raw) return null
       const base64Data = raw.replace(/^data:image\/\w+;base64,/, '')
