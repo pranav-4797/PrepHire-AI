@@ -497,8 +497,10 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
 // ── Proctored Assessment Evidence Upload to Google Drive ─────────────────────
 // Creates a candidate evidence folder named: <studentName>_<quizTitle>_<timestamp>
 // inside "PrepHire_Test_Evidences" and saves named snapshots for forensic audit.
-// Uses a 3MB limit and slices to top 4 snapshots to protect Render Free Tier memory (512MB).
-app.post('/api/quiz/upload-evidence', uploadLimiter, express.json({ limit: '3mb' }), async (req, res) => {
+// Upload Quiz Evidence Snapshots to Google Drive
+// Saves evidence screenshots into a dedicated candidate folder inside PrepHire_Test_Evidences.
+// Supports up to 25 snapshots per test, using minimal memory (~80KB total payload).
+app.post('/api/quiz/upload-evidence', uploadLimiter, express.json({ limit: '4mb' }), async (req, res) => {
   try {
     const {
       quizId = 'general',
@@ -509,7 +511,7 @@ app.post('/api/quiz/upload-evidence', uploadLimiter, express.json({ limit: '3mb'
       snapshots = [],
     } = req.body
 
-    const validSnapshots = (Array.isArray(snapshots) ? snapshots : []).slice(0, 4)
+    const validSnapshots = (Array.isArray(snapshots) ? snapshots : []).slice(0, 25)
 
     if (validSnapshots.length === 0) {
       return res.json({ success: true, message: 'No snapshots provided', files: [] })

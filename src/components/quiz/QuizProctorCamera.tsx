@@ -42,21 +42,29 @@ export function QuizProctorCamera({
   const [faceStatus, setFaceStatus] = useState<'verified' | 'missing' | 'multiple' | 'phone' | 'detecting'>('detecting')
   const [violationCount, setViolationCount] = useState(0)
   const [_lastWarning, setLastWarning] = useState<string | null>(null)
+  const lastCapturedFrameRef = useRef<string | undefined>(undefined)
 
-  // Forensic snapshot capture - Ultra-optimized downscale (200x150 @ 0.35 JPEG)
-  // Preserves clear visual recognition while reducing payload size to ~3KB (90% bandwidth & storage savings)
+  // Forensic snapshot capture - Ultra-optimized downscale (200x150 @ 0.38 JPEG)
+  // Preserves clear visual recognition while reducing payload size to ~3.2KB (safe for high-volume evidence storage)
   const captureSnapshot = useCallback((): string | undefined => {
-    if (!videoRef.current || videoRef.current.readyState < 2) return undefined
+    const video = videoRef.current
+    if (!video) return lastCapturedFrameRef.current
     try {
-      const canvas = document.createElement('canvas')
-      canvas.width = 200
-      canvas.height = 150
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return undefined
-      ctx.drawImage(videoRef.current, 0, 0, 200, 150)
-      return canvas.toDataURL('image/jpeg', 0.35)
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        const canvas = document.createElement('canvas')
+        canvas.width = 200
+        canvas.height = 150
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, 200, 150)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.38)
+          lastCapturedFrameRef.current = dataUrl
+          return dataUrl
+        }
+      }
+      return lastCapturedFrameRef.current
     } catch {
-      return undefined
+      return lastCapturedFrameRef.current
     }
   }, [])
 
@@ -238,17 +246,20 @@ export function QuizProctorCamera({
 
       isBusy = true
       try {
-        // High-sensitivity inference: pass minScore 0.18 so phones and off-angle faces aren't pre-filtered
-        const predictions = await modelRef.current.detect(videoRef.current, 20, 0.18)
+        // Continuously refresh the cached frame so any instant blur/tab-switch has a valid snapshot
+        captureSnapshot()
+
+        // High-sensitivity inference: pass minScore 0.15 so phones and off-angle faces aren't pre-filtered
+        const predictions = await modelRef.current.detect(videoRef.current, 25, 0.15)
         let personCount = 0
         let phoneDetected = false
 
         predictions.forEach((p: { class: string; score: number }) => {
-          if (p.class === 'person' && p.score >= 0.25) personCount++
-          // Phones can be classified as 'cell phone', 'remote' (dark slab), or handheld electronic
+          if (p.class === 'person' && p.score >= 0.22) personCount++
+          // Phones can be classified by COCO-SSD as 'cell phone', 'remote' (dark slab), or handheld electronic
           if (
             (p.class === 'cell phone' || p.class === 'remote') &&
-            p.score >= 0.18
+            p.score >= 0.15
           ) {
             phoneDetected = true
           }
@@ -260,35 +271,42 @@ export function QuizProctorCamera({
         if (phoneDetected) {
           setFaceStatus('phone')
           onFaceStatusChange?.('phone')
-          if (now - (lastWarnTimesRef.current['phone'] || 0) > 3000) {
+          if (now - (lastWarnTimesRef.current['phone'] || 0) > 2500) {
             lastWarnTimesRef.current['phone'] = now
             const snap = captureSnapshot()
             triggerViolation(`Mobile phone detected in camera at ${timestamp}`, 'cell_phone', snap)
           }
-        } else if (personCount > 1) {
-          setFaceStatus('multiple')
-          onFaceStatusChange?.('multiple')
+        }
+
+        if (personCount > 1) {
+          if (!phoneDetected) {
+            setFaceStatus('multiple')
+            onFaceStatusChange?.('multiple')
+          }
           lastFaceSeenRef.current = now
-          if (now - (lastWarnTimesRef.current['multiple'] || 0) > 3000) {
+          if (now - (lastWarnTimesRef.current['multiple'] || 0) > 2500) {
             lastWarnTimesRef.current['multiple'] = now
             const snap = captureSnapshot()
             triggerViolation(`Multiple people (${personCount}) detected in camera at ${timestamp}`, 'multiple_faces', snap)
           }
         } else if (personCount === 1) {
-          setFaceStatus('verified')
-          onFaceStatusChange?.('verified')
+          if (!phoneDetected) {
+            setFaceStatus('verified')
+            onFaceStatusChange?.('verified')
+          }
           lastFaceSeenRef.current = now
         } else if (personCount === 0) {
-          setFaceStatus('missing')
-          onFaceStatusChange?.('missing')
-          // Trigger violation if missing for > 3.5 seconds
-          if (now - lastFaceSeenRef.current > 3500) {
-            if (now - (lastWarnTimesRef.current['missing'] || 0) > 3500) {
+          if (!phoneDetected) {
+            setFaceStatus('missing')
+            onFaceStatusChange?.('missing')
+          }
+          // Trigger violation if missing for > 2 seconds
+          if (now - lastFaceSeenRef.current > 2000) {
+            if (now - (lastWarnTimesRef.current['missing'] || 0) > 2500) {
               lastWarnTimesRef.current['missing'] = now
               const snap = captureSnapshot()
-              triggerViolation(`No face detected in camera at ${timestamp}`, 'face_missing', snap)
+              triggerViolation(`No face detected in camera (candidate absent) at ${timestamp}`, 'face_missing', snap)
             }
-            lastFaceSeenRef.current = now
           }
         }
       } catch (err) {

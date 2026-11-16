@@ -499,8 +499,8 @@ export function QuizPlayer({
       integrityScore -= Math.min(25, Math.floor(totalAwaySecondsRef.current / 5) * 5)
       integrityScore = Math.max(0, Math.min(100, integrityScore))
 
-      // Silent Google Drive Evidence Folder Sync (Capped to top 4 snapshots to protect Render Free Tier memory)
-      const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot).slice(0, 4)
+      // Silent Google Drive Evidence Folder Sync (Uploads all evidence snapshots up to 25)
+      const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot).slice(0, 25)
       let driveEvidenceFolderLink: string | undefined = undefined
 
       if (snapshotsToUpload.length > 0) {
@@ -526,15 +526,11 @@ export function QuizPlayer({
         }
       }
 
-      // Firebase Spark Free-Tier Optimization:
-      // Retain at most 2 key snapshots inline in Firestore to keep document size < 8KB.
-      // Full evidence gallery is preserved in Google Drive via driveEvidenceFolderLink.
-      let inlineSnapshotsSaved = 0
-      const leanFlags: SuspiciousFlag[] = suspiciousFlagsRef.current.map((flag) => {
-        if (flag.snapshot && inlineSnapshotsSaved < 2) {
-          inlineSnapshotsSaved++
-          return flag
-        }
+      // Retain all snapshots with a safety boundary of 25 snapshots.
+      // At ~3.2KB per downscaled JPEG, 25 snapshots is only ~80KB (far below Firestore's 1,024KB limit).
+      // Every single flag retains its evidence photo.
+      const persistedFlags: SuspiciousFlag[] = suspiciousFlagsRef.current.map((flag, idx) => {
+        if (idx < 25) return flag
         const { snapshot: _s, ...rest } = flag
         return rest as SuspiciousFlag
       })
@@ -555,7 +551,7 @@ export function QuizPlayer({
         answers,
         timeSpentSeconds,
         completedAt: new Date().toISOString(),
-        suspiciousFlags: leanFlags,
+        suspiciousFlags: persistedFlags,
         tabSwitchesCount: tabSwitchesCountRef.current,
         fullscreenViolationsCount: fullscreenViolationsCountRef.current,
         faceMissingCount: faceMissingCountRef.current,

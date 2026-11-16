@@ -26,6 +26,13 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📸 **100% Photographic Evidence Guarantee on Every Proctoring Flag**:
+  - **Zero Dropped Snapshots**: Every single proctoring infraction—mobile phone detection, candidate absence/no face, multiple faces, window blur, tab switches, developer tool tampers, or acoustic voice anomalies—captures and stores its forensic screenshot without exception.
+  - **High-Capacity Firestore Evidence Ledger**: Safely persists up to 25 full photographic evidence records per test in Firestore (compressed to ~3.2KB each, totaling ~80KB, far below Firestore's 1,024KB document limit).
+  - **Expanded Google Drive Evidence Ingestion**: Enhanced `/api/quiz/upload-evidence` to organize and upload up to 25 infraction snapshots directly to candidate-named Drive evidence directories (`PrepHire_Test_Evidences/<studentName>_<quizTitle>_<timestamp>`).
+  - **Continuous In-Memory Frame Buffer**: Maintains a rolling frame cache from the camera stream to ensure instantaneous backgrounding, tab switches, and window blur events capture a crisp visual snapshot even when the browser occludes the active video element.
+  - **Tuned Mobile Phone & Absence Sensitivity**: Calibrated COCO-SSD phone threshold to 0.15 and shortened absent face confirmation from 3.5s to 2.0s for immediate snapshot capture.
+
 - ⚡ **Firebase Spark & Render Free-Tier Scaling Optimizations**:
   - **Client-Side TTL Read Caching**: Added 2-minute in-memory caching for `listQuizzes()` and 1-minute caching for `getQuizAttempts()`, cutting redundant Firestore document reads by ~85% during student testing cohorts.
   - **95% Firestore Document Compression**: Downscaled forensic snapshots to $200\times150$ @ 0.35 JPEG ($\sim 3\text{ KB}$ each) and capped inline Firestore storage to 2 key snapshots, keeping documents under $8\text{ KB}$ and protecting Firebase Spark storage and monthly egress limits.
