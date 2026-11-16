@@ -201,69 +201,68 @@ PrepHire.AI supports tailored tracks for 9 institutional branches:
 
 ---
 
-## ⚡ Quick Start & Local Setup
+## 🏗️ System Architecture & Enterprise Infrastructure
 
-### Prerequisites
-- **Node.js** (v20 or higher)
-- **npm** (v10 or higher)
+PrepHire.AI is architected as an institutional-grade, zero-trust cloud platform ensuring high availability, sub-second evaluation latencies, and strict departmental data boundaries.
 
-### 1. Clone & Install Dependencies
+```mermaid
+flowchart TD
+    subgraph ClientLayer ["Client Layer (Edge Delivery)"]
+        SPA["PrepHire.AI Web Client<br/>(React 19 + TypeScript + Vite)"]
+        Monaco["Monaco Code Editor<br/>(Competitive IDE)"]
+        Audio["Web Audio Waveform<br/>& Speech Synthesis Engine"]
+    end
 
-```bash
-# Clone the repository
-git clone https://github.com/pranav-4797/PrepHire-AI.git
-cd PrepHire-AI
+    subgraph SecurityGate ["Security & Authentication Boundary"]
+        FBAuth["Firebase Authentication<br/>(Strict ID Token Verification)"]
+        TenantGuard["Departmental Isolation<br/>& Role-Based Access Control"]
+    end
 
-# Install client dependencies
-npm install
+    subgraph BackendAPI ["Backend Microservices (Node.js API)"]
+        Express["Express Server<br/>(Reverse-Proxy Hardened)"]
+        AIStream["SSE Streaming Voice<br/>& Clause-Boundary Speaker"]
+        ProblemGen["NVIDIA NIM & Gemini<br/>Problem Engine"]
+        JudgeOrchestrator["Judge Orchestrator<br/>(3-Tier Fault Tolerant)"]
+    end
 
-# Install server dependencies
-cd server
-npm install
-cd ..
+    subgraph ExecutionTiers ["Sandboxed Code Execution Infrastructure"]
+        Judge0["Judge0 Sandbox API<br/>(Microsecond cgroup Tracking)"]
+        Piston["Piston Sandbox Engine<br/>(Multi-Language Isolation)"]
+    end
+
+    subgraph DataStorage ["Data & Enterprise Persistence"]
+        Firestore["Cloud Firestore<br/>(Users, Sessions, Badges)"]
+        Drive["Google Drive API<br/>(Proctored Transcoded Video)"]
+        AuditLedger["Persistent Problem &<br/>Submission Store"]
+    end
+
+    SPA --> FBAuth
+    SPA --> Express
+    Express --> TenantGuard
+    TenantGuard --> Firestore
+    Express --> AIStream
+    Express --> ProblemGen
+    Express --> JudgeOrchestrator
+    JudgeOrchestrator --> Judge0
+    JudgeOrchestrator --> Piston
+    Express --> Drive
+    Express --> AuditLedger
 ```
-
-### 2. Configure Environment Variables
-
-Create `.env.local` in the root directory:
-```env
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-```
-
-Create `server/.env` in the `server` directory:
-```env
-PORT=3001
-GEMINI_API_KEY=your_gemini_api_key
-PISTON_API_URL=https://emkc.org/api/v2/piston
-```
-
-### 3. Run Locally
-
-```bash
-npm run dev
-```
-
-- **Frontend**: [http://localhost:5173](http://localhost:5173)
-- **Backend API**: [http://localhost:3001](http://localhost:3001)
 
 ---
 
-## 🌐 Deployment Overview
+## 🔒 Enterprise Security & Governance
 
-PrepHire.AI is ready to deploy on modern cloud platforms:
-- **Frontend Hosting**: Firebase Hosting (`firebase deploy --only hosting`)
-- **Backend Service**: Render or Docker container (`render.yaml`)
-- **Database**: Cloud Firestore (`firebase deploy --only firestore:rules`)
-
-*For step-by-step administrator pilot deployment, refer to [`DEPLOY.md`](./DEPLOY.md).*
+- **Zero-Trust Identity Verification**: Every privileged API endpoint (`/api/coding/*`, `/api/upload`, `/api/courses`) cryptographically verifies Firebase ID tokens server-side. Unsigned headers and client role spoofing are rejected with HTTP 401.
+- **Departmental Multi-Tenancy**: Faculty access is strictly scoped to their engineering program via Firestore security rules and backend query constraints. Cross-department session inspection is programmatically blocked.
+- **Secure Sandbox Execution**: Student submissions execute inside containerized cgroup-isolated sandboxes with enforced CPU time limits, memory caps, and process limits. Host execution is locked down by default (`JUDGE_ALLOW_LOCAL=false`).
+- **Data Privacy & ATS Compliance**: Candidate PDF resumes are parsed in-memory client-side; raw PDF files are never stored or transmitted to third-party databases. Proctored interview recordings follow automated retention policies with Google Drive API integration.
+- **XSS & Injection Hardening**: All candidate reports, gradebook exports, and evaluation rubrics feature context-aware HTML escaping and CSV formula injection mitigations.
 
 ---
 
-## 📄 License & Credits
+## 🏛️ Institutional Governance & Legal Notice
 
-Distributed under the **MIT License**. Built for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
+**PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
+
+*Confidential & Proprietary. All rights reserved. Unauthorized reproduction, distribution, or public hosting of this software is strictly prohibited.*
