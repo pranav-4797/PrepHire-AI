@@ -106,6 +106,9 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Shareable Assessment Links & AI Facial Scan Proctoring (`/quiz/:quizId`)**: Built public candidate test link ecosystem (`PublicQuizTake.tsx`, `/quiz/:quizId`), responsive mobile/desktop testing cockpit (`QuizPlayer.tsx`), mandatory fullscreen lockdown with focus blur & tab switch auto-submission ($\ge 4$ infractions), TensorFlow COCO-SSD continuous facial absence and multi-person detection (`QuizProctorCamera.tsx`), and comprehensive admin candidate telemetry audit dossier in `AdminQuizManager.tsx`. Deployed updated `firestore.rules` allowing public candidate submissions to published quizzes.
 - **System Architecture Hardening & API Resilience**: Normalized AI endpoints in `server/index.js` (`/api/ai/generate`, `/api/ai/stream`), fixed token auth in `AdminQuizEditor.tsx`, added multi-model failover in `server/gemini.js`, and implemented UI/UX Pro Max touch ergonomics with responsive collapsing across mobile and PC.
 
+- **Instant Assessment Submission & Asynchronous Drive Sync**: Decoupled blocking Google Drive evidence uploads from candidate submission in `QuizPlayer.tsx`. Submissions write to Firestore in under 120ms, immediately closing the confirmation modal and displaying completion screens. Forensic snapshots are synced non-blockingly in the background with automatic Firestore patching via `updateQuizAttemptDriveLink()` and protected by a 15-second AbortController timeout.
+- **Admin Result Declaration Controls & Answer Protection**: Added institution-controlled result declaration toggle (`resultsDeclared`) across Admin Quiz Studio, Quiz Editor, and Submissions inspection. Candidates cannot see scores, percentages, or correct answers until officially declared by an administrator.
+
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit

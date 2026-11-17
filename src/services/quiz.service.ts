@@ -313,6 +313,7 @@ const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
 /**
  * Upload assessment forensic evidence snapshots to Google Drive.
  * Creates a folder named <studentName>_<quizTitle>_<timestamp> and stores named evidence.
+ * Guarded with a 15-second timeout to prevent indefinite hangs.
  */
 export async function uploadQuizEvidenceToDrive(payload: {
   quizId: string
@@ -329,13 +330,19 @@ export async function uploadQuizEvidenceToDrive(payload: {
   }[]
 }): Promise<{ driveFolderLink?: string; folderId?: string } | null> {
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+
     const res = await fetch(`${API_URL}/api/quiz/upload-evidence`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
+
     if (!res.ok) {
       console.warn('Failed to upload evidence to Drive endpoint:', res.statusText)
       return null
@@ -343,7 +350,22 @@ export async function uploadQuizEvidenceToDrive(payload: {
     const data = await res.json()
     return data
   } catch (err) {
-    console.warn('Network error uploading test evidence to Drive:', err)
+    console.warn('Network error or timeout uploading test evidence to Drive:', err)
     return null
+  }
+}
+
+/**
+ * Asynchronously attach Google Drive evidence folder link to an existing attempt.
+ */
+export async function updateQuizAttemptDriveLink(
+  attemptId: string,
+  driveEvidenceFolderLink: string
+): Promise<void> {
+  try {
+    const docRef = doc(db, ATTEMPTS_COLL, attemptId)
+    await updateDoc(docRef, { driveEvidenceFolderLink })
+  } catch (err) {
+    console.warn('Failed to patch attempt with Drive link:', err)
   }
 }

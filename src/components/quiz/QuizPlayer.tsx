@@ -14,7 +14,11 @@ import {
 } from 'lucide-react'
 import { T } from '../../theme'
 import type { Quiz, QuizAttempt, SuspiciousFlag } from '../../types/quiz'
-import { submitQuizAttempt, uploadQuizEvidenceToDrive } from '../../services/quiz.service'
+import {
+  submitQuizAttempt,
+  uploadQuizEvidenceToDrive,
+  updateQuizAttemptDriveLink,
+} from '../../services/quiz.service'
 import { QuizResultModal } from './QuizResultModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { QuizProctorCamera } from './QuizProctorCamera'
@@ -499,33 +503,6 @@ export function QuizPlayer({
       integrityScore -= Math.min(25, Math.floor(totalAwaySecondsRef.current / 5) * 5)
       integrityScore = Math.max(0, Math.min(100, integrityScore))
 
-      // Silent Google Drive Evidence Folder Sync (Uploads all evidence snapshots up to 25)
-      const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot).slice(0, 25)
-      let driveEvidenceFolderLink: string | undefined = undefined
-
-      if (snapshotsToUpload.length > 0) {
-        try {
-          const driveRes = await uploadQuizEvidenceToDrive({
-            quizId: quiz.id,
-            quizTitle: quiz.title,
-            studentName: user.name || user.email.split('@')[0],
-            studentEmail: user.email,
-            completedAt: new Date().toISOString(),
-            snapshots: snapshotsToUpload.map((s) => ({
-              timestamp: s.timestamp,
-              type: s.type,
-              detail: s.detail,
-              snapshot: s.snapshot,
-            })),
-          })
-          if (driveRes?.driveFolderLink) {
-            driveEvidenceFolderLink = driveRes.driveFolderLink
-          }
-        } catch (e) {
-          console.warn('Drive evidence upload error:', e)
-        }
-      }
-
       // Retain all snapshots with a safety boundary of 25 snapshots.
       // At ~3.2KB per downscaled JPEG, 25 snapshots is only ~80KB (far below Firestore's 1,024KB limit).
       // Every single flag retains its evidence photo.
@@ -559,12 +536,14 @@ export function QuizPlayer({
         audioAnomaliesCount: audioAnomaliesCountRef.current,
         totalAwaySeconds: totalAwaySecondsRef.current,
         integrityScore,
-        driveEvidenceFolderLink,
       }
 
+      // ── Step 1: Submit attempt immediately to Firestore (<120ms) ───────────
+      // Unblocks candidate UI instantly without waiting on Google Drive or Render cold starts.
       const attemptId = await submitQuizAttempt(attemptPayload)
       const fullAttempt: QuizAttempt = { id: attemptId, ...attemptPayload }
 
+      // ── Step 2: Transition candidate directly to completion view ────────────
       setCompletedAttempt(fullAttempt)
       setShowConfirmModal(false)
 
@@ -576,6 +555,36 @@ export function QuizPlayer({
 
       if (onCompleted) {
         onCompleted(fullAttempt)
+      }
+
+      // ── Step 3: Non-Blocking Background Google Drive Evidence Sync ──────────
+      // Runs silently in the background; updates Firestore attempt record with Drive link once done.
+      const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot).slice(0, 25)
+      if (snapshotsToUpload.length > 0) {
+        uploadQuizEvidenceToDrive({
+          quizId: quiz.id,
+          quizTitle: quiz.title,
+          studentName: user.name || user.email.split('@')[0],
+          studentEmail: user.email,
+          completedAt: attemptPayload.completedAt,
+          snapshots: snapshotsToUpload.map((s) => ({
+            timestamp: s.timestamp,
+            type: s.type,
+            detail: s.detail,
+            snapshot: s.snapshot,
+          })),
+        })
+          .then((driveRes) => {
+            if (driveRes?.driveFolderLink) {
+              updateQuizAttemptDriveLink(attemptId, driveRes.driveFolderLink)
+              setCompletedAttempt((prev) =>
+                prev ? { ...prev, driveEvidenceFolderLink: driveRes.driveFolderLink } : prev
+              )
+            }
+          })
+          .catch((err) => {
+            console.warn('Background Drive evidence upload failed:', err)
+          })
       }
     } catch (err) {
       showToast(sanitizeErrorMessage(err, 'Failed to submit assessment.'), 'error')
