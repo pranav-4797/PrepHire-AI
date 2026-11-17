@@ -308,6 +308,8 @@ export async function getQuizAttempts(
   }
 }
 
+const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
+
 /**
  * Upload assessment forensic evidence snapshots to Google Drive.
  * Creates a folder named <studentName>_<quizTitle>_<timestamp> and stores named evidence.
@@ -327,7 +329,7 @@ export async function uploadQuizEvidenceToDrive(payload: {
   }[]
 }): Promise<{ driveFolderLink?: string; folderId?: string } | null> {
   try {
-    const res = await fetch('/api/quiz/upload-evidence', {
+    const res = await fetch(`${API_URL}/api/quiz/upload-evidence`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

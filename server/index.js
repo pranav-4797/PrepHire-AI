@@ -155,12 +155,11 @@ app.use(helmet({
 
 app.use(express.json({ limit: '25mb' }))
 
-// Baseline abuse/DoS guard on every route. Generous enough for a classroom
-// of ~20 concurrent students; tighter, endpoint-specific limiters are added
-// below for the expensive routes (AI generation, video upload, code exec).
+// Baseline abuse/DoS guard on every route. Calibrated for a cohort of 30-50 concurrent students
+// sharing a single campus Wi-Fi or lab NAT router.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 600,
+  limit: 2500,
   standardHeaders: true,
   legacyHeaders: false,
 })
@@ -168,10 +167,20 @@ app.use(generalLimiter)
 
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,
+  limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many video uploads from this network. Please wait a few minutes.' },
+})
+
+// Dedicated rate limiter for quiz forensic snapshot evidence uploads.
+// Lightweight (~80KB per student attempt); comfortably handles 30+ simultaneous submissions.
+const quizEvidenceLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many assessment submissions from this network. Please wait a moment.' },
 })
 
 // IP-level flood guard only; per-user limits (userRateLimit) do the fine-grained work.
@@ -500,7 +509,7 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
 // Upload Quiz Evidence Snapshots to Google Drive
 // Saves evidence screenshots into a dedicated candidate folder inside PrepHire_Test_Evidences.
 // Supports up to 25 snapshots per test, using minimal memory (~80KB total payload).
-app.post('/api/quiz/upload-evidence', uploadLimiter, express.json({ limit: '4mb' }), async (req, res) => {
+app.post('/api/quiz/upload-evidence', quizEvidenceLimiter, express.json({ limit: '4mb' }), async (req, res) => {
   try {
     const {
       quizId = 'general',
