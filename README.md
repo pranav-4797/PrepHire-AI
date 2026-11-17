@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📢 **Admin Result Declaration Governance & Answer Protection**:
+  - **1-Click Result Declaration Controls**: Added `resultsDeclared` toggle across Admin Quiz Studio cards, Quiz Editor, and the Submissions Inspection Modal (`📢 Declare Results` vs `🔒 Results: Withheld`).
+  - **Zero Early Answer Leaks for Candidates**: When an assessment's results are withheld (default), students who submit see a secure completion screen confirming receipt and proctoring synchronization. Scores, percentage grades, and question-by-question answer solutions are completely hidden until officially declared by the institution.
+  - **Dynamic Student Hub Status**: When results are pending declaration, student cards display `⏳ Results Pending` and a `Status` review button instead of premature scores, keeping the entire cohort fair and leak-free.
+
 - 🍪 **Cookie Registry & Cache Architecture Modernization**:
   - **Adapted Cookie Registry**: Expanded `COOKIE_REGISTRY` in `cookieManager.ts` to catalog assessment proctoring session tokens (`prephire_proctor_token`), timed quiz alert preferences (`prephire_quiz_timer_alert`), and on-device COCO-SSD inference telemetry (`prephire_quiz_telemetry`).
   - **Dynamic Cookie Preferences Modal**: Upgraded `CookieBanner.tsx` to dynamically query category counts from the registry rather than using hardcoded label values.

@@ -12,6 +12,7 @@ import {
   UploadCloud,
   FileText,
   RotateCcw,
+  Megaphone,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -89,6 +90,9 @@ export function AdminQuizEditor({
   )
   const [allowRetake, setAllowRetake] = useState(
     initialQuiz?.allowRetake !== undefined ? initialQuiz.allowRetake : true
+  )
+  const [resultsDeclared, setResultsDeclared] = useState(
+    initialQuiz?.resultsDeclared !== undefined ? initialQuiz.resultsDeclared : false
   )
   const [questions, setQuestions] = useState<QuizQuestion[]>(
     initialQuiz?.questions && initialQuiz.questions.length > 0
@@ -371,6 +375,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
         timeLimitMinutes: Math.max(1, timeLimitMinutes),
         passingPercentage: Math.max(1, Math.min(100, passingPercentage)),
         allowRetake,
+        resultsDeclared,
         questions,
         createdBy: userEmail || 'admin',
         createdAt: initialQuiz?.createdAt || now,
@@ -700,6 +705,36 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
             >
               <RotateCcw size={14} />
               <span>{allowRetake ? 'Retakes Allowed' : 'Retakes Disabled'}</span>
+            </button>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: T.txtSec, marginBottom: '0.35rem' }}>
+              Result Declaration
+            </label>
+            <button
+              type="button"
+              onClick={() => setResultsDeclared(!resultsDeclared)}
+              style={{
+                width: '100%',
+                padding: '0.62rem 0.85rem',
+                borderRadius: 8,
+                border: `1px solid ${resultsDeclared ? '#A7F3D0' : '#FDE68A'}`,
+                background: resultsDeclared ? '#ECFDF5' : '#FFFBEB',
+                color: resultsDeclared ? '#059669' : '#D97706',
+                fontSize: '0.88rem',
+                fontWeight: 650,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                boxSizing: 'border-box',
+              }}
+              title={resultsDeclared ? 'Results & answers will be visible to candidates upon submission' : 'Results & answers will be withheld until officially declared'}
+            >
+              <Megaphone size={14} />
+              <span>{resultsDeclared ? 'Results: Declared' : 'Results: Withheld'}</span>
             </button>
           </div>
         </div>

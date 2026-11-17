@@ -35,6 +35,7 @@ export interface Quiz {
   updatedAt: string // ISO string
   published: boolean
   allowRetake?: boolean // Whether students can retake the quiz (default: true)
+  resultsDeclared?: boolean // Whether assessment results & correct answers are released to students (default: false)
 }
 
 export interface SuspiciousFlag {

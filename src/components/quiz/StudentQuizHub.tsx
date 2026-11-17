@@ -553,32 +553,66 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                 >
                   {attempt ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <span
-                        style={{
-                          padding: '0.25rem 0.55rem',
-                          borderRadius: 6,
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          background: attempt.passed ? '#ECFDF5' : '#FEE2E2',
-                          color: attempt.passed ? '#059669' : '#DC2626',
-                        }}
-                      >
-                        {attempt.passed ? '✓ Passed' : q.allowRetake === false ? 'Completed' : 'Retake Needed'} ({attempt.percentage}%)
-                      </span>
-                      <button
-                        onClick={() => setReviewAttempt({ quiz: q, attempt })}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#2563EB',
-                          fontSize: '0.78rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          padding: '0.2rem 0.4rem',
-                        }}
-                      >
-                        Review
-                      </button>
+                      {q.resultsDeclared ? (
+                        <>
+                          <span
+                            style={{
+                              padding: '0.25rem 0.55rem',
+                              borderRadius: 6,
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: attempt.passed ? '#ECFDF5' : '#FEE2E2',
+                              color: attempt.passed ? '#059669' : '#DC2626',
+                            }}
+                          >
+                            {attempt.passed ? '✓ Passed' : q.allowRetake === false ? 'Completed' : 'Retake Needed'} ({attempt.percentage}%)
+                          </span>
+                          <button
+                            onClick={() => setReviewAttempt({ quiz: q, attempt })}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#2563EB',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: '0.2rem 0.4rem',
+                            }}
+                          >
+                            Review
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            style={{
+                              padding: '0.25rem 0.55rem',
+                              borderRadius: 6,
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: '#FFFBEB',
+                              color: '#D97706',
+                              border: '1px solid #FDE68A',
+                            }}
+                          >
+                            ⏳ Results Pending
+                          </span>
+                          <button
+                            onClick={() => setReviewAttempt({ quiz: q, attempt })}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#D97706',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: '0.2rem 0.4rem',
+                            }}
+                          >
+                            Status
+                          </button>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <span style={{ fontSize: '0.78rem', color: T.txtSec, fontStyle: 'italic' }}>
@@ -604,7 +638,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                       }}
                       title="Retakes disabled by admin for this assessment"
                     >
-                      <Lock size={12} color={T.txtSec} /> View Result
+                      <Lock size={12} color={T.txtSec} /> {q.resultsDeclared ? 'View Result' : 'View Status'}
                     </button>
                   ) : (
                     <button

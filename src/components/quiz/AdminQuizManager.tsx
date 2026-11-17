@@ -24,6 +24,7 @@ import {
   X,
   Folder,
   ExternalLink,
+  Megaphone,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -178,6 +179,27 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
       )
     } catch (err) {
       showToast(sanitizeErrorMessage(err, 'Failed to update retake permission.'), 'error')
+    }
+  }
+
+  async function handleToggleDeclareResults(quiz: Quiz) {
+    try {
+      const nextDeclared = quiz.resultsDeclared !== true
+      await updateQuiz(quiz.id, { resultsDeclared: nextDeclared })
+      setQuizzes((prev) =>
+        prev.map((q) => (q.id === quiz.id ? { ...q, resultsDeclared: nextDeclared } : q))
+      )
+      if (viewingAttemptsQuiz && viewingAttemptsQuiz.id === quiz.id) {
+        setViewingAttemptsQuiz({ ...viewingAttemptsQuiz, resultsDeclared: nextDeclared })
+      }
+      showToast(
+        nextDeclared
+          ? 'Results officially declared! Candidates can now view their scores and question review.'
+          : 'Results withheld. Candidates can no longer view detailed scores and solutions.',
+        'success'
+      )
+    } catch (err) {
+      showToast(sanitizeErrorMessage(err, 'Failed to update result declaration status.'), 'error')
     }
   }
 
@@ -631,6 +653,27 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                   </button>
 
                   <button
+                    onClick={() => handleToggleDeclareResults(q)}
+                    title={q.resultsDeclared ? 'Results visible to candidates. Click to withhold.' : 'Results hidden from candidates. Click to declare results.'}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      background: q.resultsDeclared ? '#ECFDF5' : '#FFFBEB',
+                      color: q.resultsDeclared ? '#059669' : '#D97706',
+                      border: `1px solid ${q.resultsDeclared ? '#A7F3D0' : '#FDE68A'}`,
+                      borderRadius: 8,
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Megaphone size={13} />
+                    <span>{q.resultsDeclared ? 'Results: Live' : 'Results: Hidden'}</span>
+                  </button>
+
+                  <button
                     onClick={() => handleToggleRetake(q)}
                     title={q.allowRetake === false ? 'Click to enable retakes' : 'Click to disable retakes'}
                     style={{
@@ -763,23 +806,46 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  setViewingAttemptsQuiz(null)
-                  setExpandedAttemptId(null)
-                }}
-                style={{
-                  background: '#F3F4F6',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '0.45rem 0.85rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Close
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => handleToggleDeclareResults(viewingAttemptsQuiz)}
+                  title={viewingAttemptsQuiz.resultsDeclared ? 'Click to withhold results from candidates' : 'Click to declare and release results and answers to all candidates'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    background: viewingAttemptsQuiz.resultsDeclared ? '#ECFDF5' : '#FFFBEB',
+                    color: viewingAttemptsQuiz.resultsDeclared ? '#059669' : '#D97706',
+                    border: `1px solid ${viewingAttemptsQuiz.resultsDeclared ? '#A7F3D0' : '#FDE68A'}`,
+                    borderRadius: 8,
+                    padding: '0.45rem 0.85rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Megaphone size={14} />
+                  <span>{viewingAttemptsQuiz.resultsDeclared ? 'Results: Declared (Live)' : '📢 Declare Results'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setViewingAttemptsQuiz(null)
+                    setExpandedAttemptId(null)
+                  }}
+                  style={{
+                    background: '#F3F4F6',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '0.45rem 0.85rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             {loadingAttempts ? (

@@ -4,10 +4,12 @@ import {
   Award,
   RotateCcw,
   BookOpen,
+  Lock,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react'
 import { T } from '../../theme'
 import type { Quiz, QuizAttempt } from '../../types/quiz'
-
 
 interface QuizResultModalProps {
   quiz: Quiz
@@ -22,6 +24,7 @@ export function QuizResultModal({
   onClose,
   onRetake,
 }: QuizResultModalProps) {
+  const resultsDeclared = quiz.resultsDeclared === true
   const isPassed = attempt.passed
   const totalQuestions = quiz.questions.length
   let correctCount = 0
@@ -32,6 +35,8 @@ export function QuizResultModal({
       correctCount++
     }
   })
+
+  const answeredCount = Object.keys(attempt.answers || {}).length
 
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60)
@@ -72,7 +77,9 @@ export function QuizResultModal({
         <div
           style={{
             padding: '1.5rem 1.75rem',
-            background: isPassed
+            background: !resultsDeclared
+              ? 'linear-gradient(135deg, #1E3A8A, #2563EB)'
+              : isPassed
               ? 'linear-gradient(135deg, #059669, #10B981)'
               : 'linear-gradient(135deg, #DC2626, #EF4444)',
             color: '#ffffff',
@@ -95,11 +102,19 @@ export function QuizResultModal({
                 justifyContent: 'center',
               }}
             >
-              <Award size={26} color="#ffffff" />
+              {!resultsDeclared ? (
+                <ShieldCheck size={26} color="#ffffff" />
+              ) : (
+                <Award size={26} color="#ffffff" />
+              )}
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>
-                {isPassed ? 'Assessment Passed! 🎉' : 'Assessment Completed'}
+                {!resultsDeclared
+                  ? 'Assessment Submitted! 🎉'
+                  : isPassed
+                  ? 'Assessment Passed! 🎉'
+                  : 'Assessment Completed'}
               </h2>
               <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', opacity: 0.9 }}>
                 {quiz.title} • {quiz.category}
@@ -110,19 +125,32 @@ export function QuizResultModal({
           <div
             style={{
               display: 'flex',
-              alignItems: 'baseline',
-              gap: '0.3rem',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
               background: 'rgba(255, 255, 255, 0.2)',
               padding: '0.45rem 1rem',
               borderRadius: 10,
             }}
           >
-            <span style={{ fontSize: '1.75rem', fontWeight: 800 }}>
-              {attempt.percentage}%
-            </span>
-            <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>
-              ({attempt.score} / {attempt.maxScore} pts)
-            </span>
+            {resultsDeclared ? (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem' }}>
+                <span style={{ fontSize: '1.75rem', fontWeight: 800 }}>
+                  {attempt.percentage}%
+                </span>
+                <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>
+                  ({attempt.score} / {attempt.maxScore} pts)
+                </span>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.92rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  ⏳ Results Pending
+                </span>
+                <div style={{ fontSize: '0.72rem', opacity: 0.9 }}>
+                  Responses Registered
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -131,9 +159,20 @@ export function QuizResultModal({
           {/* Quick Metrics */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
             <div style={{ padding: '0.85rem', borderRadius: 10, background: '#F9FAFB', border: '1px solid #E5E7EB', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.78rem', color: T.txtSec, fontWeight: 600 }}>ACCURACY</div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: isPassed ? '#059669' : '#DC2626', marginTop: '0.2rem' }}>
-                {correctCount} / {totalQuestions} Correct
+              <div style={{ fontSize: '0.78rem', color: T.txtSec, fontWeight: 600 }}>
+                {resultsDeclared ? 'ACCURACY' : 'QUESTIONS ANSWERED'}
+              </div>
+              <div
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 700,
+                  color: resultsDeclared ? (isPassed ? '#059669' : '#DC2626') : '#2563EB',
+                  marginTop: '0.2rem',
+                }}
+              >
+                {resultsDeclared
+                  ? `${correctCount} / ${totalQuestions} Correct`
+                  : `${answeredCount} / ${totalQuestions} Attempted`}
               </div>
             </div>
 
@@ -145,21 +184,67 @@ export function QuizResultModal({
             </div>
 
             <div style={{ padding: '0.85rem', borderRadius: 10, background: '#F9FAFB', border: '1px solid #E5E7EB', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.78rem', color: T.txtSec, fontWeight: 600 }}>PASSING TARGET</div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: T.txtPri, marginTop: '0.2rem' }}>
-                {quiz.passingPercentage}% Required
+              <div style={{ fontSize: '0.78rem', color: T.txtSec, fontWeight: 600 }}>
+                {resultsDeclared ? 'PASSING TARGET' : 'PROCTORING STATUS'}
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: resultsDeclared ? T.txtPri : '#059669', marginTop: '0.2rem' }}>
+                {resultsDeclared ? `${quiz.passingPercentage}% Required` : 'Verified & Synced'}
               </div>
             </div>
           </div>
 
-          {/* Detailed Question Review */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.75rem' }}>
-              <BookOpen size={16} color={T.primary} />
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: T.txtPri }}>
-                Detailed Question Review
-              </h3>
+          {/* Conditional View: When results are withheld, hide answers & question review */}
+          {!resultsDeclared ? (
+            <div
+              style={{
+                background: '#F0F9FF',
+                border: '1px solid #BAE6FD',
+                borderRadius: 12,
+                padding: '1.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.85rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Lock size={20} color="#0284C7" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0369A1' }}>
+                  Results Awaiting Institutional Declaration
+                </h3>
+              </div>
+
+              <p style={{ margin: 0, fontSize: '0.88rem', color: '#0C4A6E', lineHeight: 1.6 }}>
+                Your assessment responses, telemetry, and forensic verification logs have been successfully submitted to the department examination cell.
+              </p>
+
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #E0F2FE',
+                  borderRadius: 8,
+                  padding: '0.85rem 1rem',
+                  fontSize: '0.82rem',
+                  color: '#0369A1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                }}
+              >
+                <Clock size={16} color="#0284C7" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Why aren't answers shown yet?</strong> To preserve academic integrity while other students complete the assessment, correct answers and detailed scores are withheld. Once the administrator declares results, your score and detailed answer review will be accessible on your dashboard.
+                </span>
+              </div>
             </div>
+          ) : (
+            /* Detailed Question Review (Shown ONLY when resultsDeclared is true) */
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                <BookOpen size={16} color={T.primary} />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: T.txtPri }}>
+                  Detailed Question Review
+                </h3>
+              </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {quiz.questions.map((q, idx) => {
@@ -372,6 +457,7 @@ export function QuizResultModal({
               })}
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer actions */}
