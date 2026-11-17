@@ -39,7 +39,7 @@ By combining conversational AI, resume intelligence, interactive code execution,
   - **Render Cold-Start Shield & Timeout Protection**: Added an `AbortController` 15-second timeout to the Drive evidence upload endpoint in `quiz.service.ts` to ensure network spikes or backend cold starts never block or hang client submission.
 
 - 📢 **Admin Result Declaration Governance & Answer Protection**:
-  - **1-Click Result Declaration Controls**: Added `resultsDeclared` toggle across Admin Quiz Studio cards, Quiz Editor, and the Submissions Inspection Modal (`📢 Declare Results` vs `🔒 Results: Withheld`).
+  - **1-Click Result Declaration Controls**: Added `resultsDeclared` toggle across Admin Quiz Studio cards, Quiz Editor, and the Submissions Inspection Modal (`📢 Declare Results` vs `🔒 Result: Withheld`).
   - **Zero Early Answer Leaks for Candidates**: When an assessment's results are withheld (default), students who submit see a secure completion screen confirming receipt and proctoring synchronization. Scores, percentage grades, and question-by-question answer solutions are completely hidden until officially declared by the institution.
   - **Dynamic Student Hub Status**: When results are pending declaration, student cards display `⏳ Results Pending` and a `Status` review button instead of premature scores, keeping the entire cohort fair and leak-free.
 
