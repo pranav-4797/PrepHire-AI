@@ -562,6 +562,7 @@ export function QuizPlayer({
       const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot).slice(0, 25)
       if (snapshotsToUpload.length > 0) {
         uploadQuizEvidenceToDrive({
+          attemptId,
           quizId: quiz.id,
           quizTitle: quiz.title,
           studentName: user.name || user.email.split('@')[0],

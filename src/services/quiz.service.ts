@@ -316,6 +316,7 @@ const API_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || '')
  * Guarded with a 15-second timeout to prevent indefinite hangs.
  */
 export async function uploadQuizEvidenceToDrive(payload: {
+  attemptId?: string
   quizId: string
   quizTitle: string
   studentName: string
@@ -328,7 +329,12 @@ export async function uploadQuizEvidenceToDrive(payload: {
     snapshot?: string
     base64?: string
   }[]
-}): Promise<{ driveFolderLink?: string; folderId?: string } | null> {
+}): Promise<{
+  driveFolderLink?: string
+  folderId?: string
+  queued?: boolean
+  jobId?: string
+} | null> {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000)

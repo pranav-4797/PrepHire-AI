@@ -26,6 +26,13 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📥 **Unified Google Drive Upload Queue & Rate-Limiting Protection (`driveQueue.js`)**:
+  - **Free-Tier 512MB RAM Shield via Serialized Video Transcoding**: Integrated an in-memory priority queue (`DriveUploadQueue`) that serializes heavy ffmpeg video transcoding and streaming (`MAX_CONCURRENT_VIDEO = 1`), preventing multiple concurrent video uploads from exhausting Render's 512MB RAM and triggering OOM crashes during peak interview sessions.
+  - **Throttled Assessment Snapshot Ingestion**: Replaced unbuffered `Promise.all` bursts with serialized snapshot streaming (`MAX_CONCURRENT_EVIDENCE = 1`) and a 40ms inter-snapshot delay, eliminating Google Drive API `403 rateLimitExceeded` and `429 Too Many Requests` when 30+ students submit assessments concurrently.
+  - **Exponential Backoff & Jitter**: Automated 4-tier exponential retry logic with randomized jitter for transient network glitches (500/502/503) and Google Drive rate-limit quotas.
+  - **Immediate Response & Automated Firestore Sync**: `POST /api/quiz/upload-evidence` responds in under 20ms with queue status; the background queue worker automatically links the final Drive folder URL to Firestore attempt documents upon completion.
+  - **Queue Health & Diagnostics API**: Exposed `GET /api/drive/queue-status` and `GET /api/quiz/upload-status/:jobId` for real-time monitoring of active and queued tasks.
+
 - 🚀 **Instant Assessment Submission (<150ms) & Non-Blocking Evidence Pipeline**:
   - **Zero-Latency Modal Dismissal**: Decoupled heavy Google Drive evidence snapshot uploading from the primary assessment submission flow. Firestore attempts write immediately in under 120ms, instantly dismissing the "Submitting..." modal and advancing students to the completed screen without UI freezing.
   - **Asynchronous Background Evidence Sync**: Photographic infraction evidence uploads non-blockingly in the background; once Google Drive returns the folder link, the Firestore attempt is patched silently via `updateQuizAttemptDriveLink()`.

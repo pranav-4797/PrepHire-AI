@@ -20,6 +20,7 @@ import { initCleanup } from './cleanupService.js'
 import { registerCodingRoutes } from './coding/routes.js'
 import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
 import { callGemini, streamGemini, isRateLimited } from './gemini.js'
+import { initDriveQueue } from './driveQueue.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -371,7 +372,9 @@ app.post('/api/ai/stream', requireAuth(), async (req, res) => {
 // with the Admin SDK (which bypasses Firestore rules), so any signed-in user
 // could overwrite another student's driveLink/driveFileId. Only write when the
 // session already exists AND belongs to the authenticated user.
-async function attachUploadToSession(req, sessionId, fields) {
+const rawSessionIdOk = (id) => typeof id === 'string' && SESSION_ID_RE.test(id)
+
+async function attachUploadToSession(reqOrAuthUser, sessionId, fields) {
   if (!db || !rawSessionIdOk(sessionId)) return
   try {
     const ref = db.collection('sessions').doc(sessionId)
@@ -380,8 +383,9 @@ async function attachUploadToSession(req, sessionId, fields) {
       console.warn(`ℹ️ Session ${sessionId} not found; skipping upload metadata write.`)
       return
     }
+    const authUser = reqOrAuthUser?.authUser || reqOrAuthUser
     const owner = String(snap.data().studentEmail || '').toLowerCase()
-    if (!owner || owner !== String(req.authUser.email || '').toLowerCase()) {
+    if (!owner || owner !== String(authUser?.email || '').toLowerCase()) {
       console.warn(`⚠️ Refused to attach upload to session ${sessionId}: not owned by caller.`)
       return
     }
@@ -390,7 +394,18 @@ async function attachUploadToSession(req, sessionId, fields) {
     console.error(`⚠️ Failed to save upload metadata for session ${sessionId}:`, dbErr.message)
   }
 }
-const rawSessionIdOk = (id) => typeof id === 'string' && SESSION_ID_RE.test(id)
+
+// ── Unified Google Drive Upload Queue ───────────────────────────────────────
+// Protects Render free-tier (512MB RAM) and Google Drive rate limits by serializing
+// ffmpeg transcoding and throttling snapshot evidence uploads.
+const driveQueue = initDriveQueue({
+  drive,
+  serviceAccount,
+  FOLDER_ID,
+  uploadsDir,
+  convertToMp4,
+  attachUploadToSession,
+})
 
 // Upload interview video to Google Shared Drive (converts to MP4)
 app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), async (req, res) => {
@@ -417,67 +432,20 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
   const isMp4 = container === 'mp4'
   const fileName = `${studentName}_${domain}_${level}_${date}.mp4`
 
-  let mp4Path = null
-
   try {
-    if (isMp4) {
-      console.log(`✅ File is already MP4, skipping transcoding: ${fileName}`)
-      mp4Path = file.path
-    } else {
-      // Convert to MP4 using optimized fast conversion parameters
-      mp4Path = await convertToMp4(file.path)
-      console.log(`✅ Converted to MP4: ${path.basename(mp4Path)}`)
-    }
-
-    if (!drive || !serviceAccount) {
-      const mockFileId = 'mock-file-id-' + sessionId
-      const mockDriveLink = `https://drive.google.com/file/d/${mockFileId}/view?usp=drivesdk`
-      const mockDest = path.join(uploadsDir, 'mock_' + fileName)
-      try {
-        fs.copyFileSync(mp4Path, mockDest)
-        console.log(`ℹ️ Saved local copy of interview video at: ${mockDest}`)
-      } catch (copyErr) {
-        console.error('⚠️ Failed to save local copy of mock interview:', copyErr.message)
-      }
-
-      await attachUploadToSession(req, sessionId, { driveFileId: mockFileId, driveLink: mockDriveLink })
-
-      return res.json({
-        success: true,
-        fileId: mockFileId,
-        driveLink: mockDriveLink,
-        fileName,
-        mock: true
-      })
-    }
-
-    const response = await drive.files.create({
-      supportsAllDrives: true,
-      requestBody: {
-        name: fileName,
-        parents: [FOLDER_ID],
-        mimeType: 'video/mp4',
-      },
-      media: {
-        mimeType: 'video/mp4',
-        body: fs.createReadStream(mp4Path),
-      },
-      fields: 'id, webViewLink',
-    })
-
-    const fileId = response.data.id
-    const driveLink = response.data.webViewLink
-
-    console.log(`✅ Uploaded: ${fileName} → ${fileId}`)
-
-    await attachUploadToSession(req, sessionId, { driveFileId: fileId, driveLink })
-
-    return res.json({
-      success: true,
-      fileId,
-      driveLink,
+    const result = await driveQueue.enqueueVideoAndWait({
+      filePath: file.path,
       fileName,
+      studentName,
+      domain,
+      level,
+      sessionId,
+      userIdentifier,
+      reqAuthUser: req.authUser,
+      isMp4,
     })
+
+    return res.json(result)
   } catch (err) {
     console.error('❌ Drive upload failed:', err.message || err)
 
@@ -494,24 +462,18 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
     }
 
     return res.status(500).json({ error: 'Failed to upload video to Google Drive.' })
-  } finally {
-    // Always clean up temporary files
-    try { fs.unlinkSync(file.path) } catch {}
-    if (mp4Path && mp4Path !== file.path) {
-      try { fs.unlinkSync(mp4Path) } catch {}
-    }
   }
 })
 
 // ── Proctored Assessment Evidence Upload to Google Drive ─────────────────────
-// Creates a candidate evidence folder named: <studentName>_<quizTitle>_<timestamp>
-// inside "PrepHire_Test_Evidences" and saves named snapshots for forensic audit.
-// Upload Quiz Evidence Snapshots to Google Drive
-// Saves evidence screenshots into a dedicated candidate folder inside PrepHire_Test_Evidences.
-// Supports up to 25 snapshots per test, using minimal memory (~80KB total payload).
-app.post('/api/quiz/upload-evidence', quizEvidenceLimiter, express.json({ limit: '4mb' }), async (req, res) => {
+// Enqueues candidate evidence snapshots to the unified Drive queue.
+// Responds immediately to the client (<20ms) so testing and submission are instantaneous.
+// In the background, the queue worker uploads snapshots to Drive sequentially with rate-limit
+// protection and automatically patches the Firestore attempt document with the Drive folder link.
+app.post('/api/quiz/upload-evidence', quizEvidenceLimiter, express.json({ limit: '4mb' }), (req, res) => {
   try {
     const {
+      attemptId,
       quizId = 'general',
       quizTitle = 'Assessment',
       studentName = 'Candidate',
@@ -526,148 +488,44 @@ app.post('/api/quiz/upload-evidence', quizEvidenceLimiter, express.json({ limit:
       return res.json({ success: true, message: 'No snapshots provided', files: [] })
     }
 
-    const sanitizedStudent = (studentName || studentEmail.split('@')[0] || 'Candidate').replace(/[^a-zA-Z0-9_-]/g, '_')
-    const sanitizedTitle = (quizTitle || 'Quiz').replace(/[^a-zA-Z0-9_-]/g, '_')
-    const timestampStr = new Date(completedAt).toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const folderName = `${sanitizedStudent}_${sanitizedTitle}_${timestampStr}`
-
-    // ── Mock / Local Fallback Mode (No Service Account or Drive Not Configured) ──
-    if (!drive || !serviceAccount) {
-      const mockEvidenceDir = path.resolve(uploadsDir, 'evidences', folderName)
-      fs.mkdirSync(mockEvidenceDir, { recursive: true })
-
-      const savedFiles = []
-      validSnapshots.forEach((snap, idx) => {
-        const raw = snap.snapshot || snap.base64
-        if (!raw) return
-        const base64Data = raw.replace(/^data:image\/\w+;base64,/, '')
-        const buffer = Buffer.from(base64Data, 'base64')
-
-        const timeLabel = (snap.timestamp || `snap_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '_')
-        const typeLabel = (snap.type || 'infraction').replace(/[^a-zA-Z0-9_-]/g, '_')
-        const fileName = `${sanitizedStudent}_${timeLabel}_${typeLabel}.jpg`
-        const filePath = path.join(mockEvidenceDir, fileName)
-
-        fs.writeFileSync(filePath, buffer)
-        savedFiles.push({
-          name: fileName,
-          driveLink: `https://drive.google.com/file/d/mock-evidence-${folderName}-${idx}/view?usp=drivesdk`,
-          type: snap.type,
-          detail: snap.detail,
-        })
-      })
-
-      const mockFolderLink = `https://drive.google.com/drive/folders/mock-evidence-${folderName}`
-      console.log(`ℹ️ [EVIDENCE] Saved ${savedFiles.length} evidence snapshots locally at: ${mockEvidenceDir}`)
-
-      return res.json({
-        success: true,
-        mock: true,
-        folderName,
-        driveFolderLink: mockFolderLink,
-        files: savedFiles,
-      })
-    }
-
-    // ── Production Google Drive Mode ─────────────────────────────────────────
-    // 1. Locate or create parent "PrepHire_Test_Evidences" directory inside FOLDER_ID
-    let parentEvidencesFolderId = FOLDER_ID
-    try {
-      const parentSearch = await drive.files.list({
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-        q: `'${FOLDER_ID}' in parents and name = 'PrepHire_Test_Evidences' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id, name)',
-      })
-
-      if (parentSearch.data.files && parentSearch.data.files.length > 0) {
-        parentEvidencesFolderId = parentSearch.data.files[0].id
-      } else {
-        const createParent = await drive.files.create({
-          supportsAllDrives: true,
-          requestBody: {
-            name: 'PrepHire_Test_Evidences',
-            mimeType: 'application/vnd.google-apps.folder',
-            parents: [FOLDER_ID],
-          },
-          fields: 'id',
-        })
-        parentEvidencesFolderId = createParent.data.id
-        console.log(`✅ Created parent Google Drive evidence folder: ${parentEvidencesFolderId}`)
-      }
-    } catch (e) {
-      console.warn('⚠️ Could not locate/create PrepHire_Test_Evidences, saving in root FOLDER_ID:', e.message)
-      parentEvidencesFolderId = FOLDER_ID
-    }
-
-    // 2. Create the student candidate attempt folder
-    const folderRes = await drive.files.create({
-      supportsAllDrives: true,
-      requestBody: {
-        name: folderName,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [parentEvidencesFolderId],
-      },
-      fields: 'id, webViewLink',
+    const job = driveQueue.enqueueEvidenceTask({
+      attemptId,
+      quizId,
+      quizTitle,
+      studentName,
+      studentEmail,
+      completedAt,
+      snapshots: validSnapshots,
     })
-
-    const studentFolderId = folderRes.data.id
-    const driveFolderLink = folderRes.data.webViewLink || `https://drive.google.com/drive/folders/${studentFolderId}`
-    console.log(`✅ Created Google Drive folder for ${sanitizedStudent}: ${studentFolderId}`)
-
-    // 3. Upload each evidence snapshot with student name, time, and infraction type
-    const { Readable } = await import('stream')
-    const uploadPromises = validSnapshots.map(async (snap, idx) => {
-      const raw = snap.snapshot || snap.base64
-      if (!raw) return null
-      const base64Data = raw.replace(/^data:image\/\w+;base64,/, '')
-      const buffer = Buffer.from(base64Data, 'base64')
-
-      const timeLabel = (snap.timestamp || `snap_${idx}`).replace(/[^a-zA-Z0-9_-]/g, '_')
-      const typeLabel = (snap.type || 'infraction').replace(/[^a-zA-Z0-9_-]/g, '_')
-      const fileName = `${sanitizedStudent}_${timeLabel}_${typeLabel}.jpg`
-
-      const fileStream = new Readable()
-      fileStream.push(buffer)
-      fileStream.push(null)
-
-      const fileRes = await drive.files.create({
-        supportsAllDrives: true,
-        requestBody: {
-          name: fileName,
-          parents: [studentFolderId],
-          mimeType: 'image/jpeg',
-          description: `Infraction: ${snap.detail || snap.type} at ${snap.timestamp}`,
-        },
-        media: {
-          mimeType: 'image/jpeg',
-          body: fileStream,
-        },
-        fields: 'id, webViewLink',
-      })
-
-      return {
-        name: fileName,
-        fileId: fileRes.data.id,
-        driveLink: fileRes.data.webViewLink,
-        type: snap.type,
-        detail: snap.detail,
-      }
-    })
-
-    const uploadedFiles = (await Promise.all(uploadPromises)).filter(Boolean)
-    console.log(`✅ Uploaded ${uploadedFiles.length} evidence snapshots to Drive folder: ${driveFolderLink}`)
 
     return res.json({
       success: true,
-      folderId: studentFolderId,
-      driveFolderLink,
-      files: uploadedFiles,
+      queued: true,
+      jobId: job.jobId,
+      folderName: job.folderName,
+      queuePosition: job.queuePosition,
+      message: 'Evidence snapshots queued for Google Drive background sync.',
     })
   } catch (err) {
-    console.error('❌ Failed to upload assessment evidence to Google Drive:', err.message || err)
+    console.error('❌ Failed to enqueue assessment evidence for Google Drive:', err.message || err)
     return res.status(500).json({ error: 'Failed to upload test evidence to Google Drive.' })
   }
+})
+
+// ── Google Drive Upload Queue Health & Diagnostics Endpoint ──────────────────
+app.get('/api/drive/queue-status', (_req, res) => {
+  res.json({
+    success: true,
+    ...driveQueue.getQueueStats(),
+  })
+})
+
+app.get('/api/quiz/upload-status/:jobId', (req, res) => {
+  const status = driveQueue.getEvidenceJobStatus(req.params.jobId)
+  if (!status) {
+    return res.status(404).json({ error: 'Job not found or expired' })
+  }
+  return res.json({ success: true, job: status })
 })
 
 // ── Courses CRUD API ──────────────────────────────────────────────────────────
