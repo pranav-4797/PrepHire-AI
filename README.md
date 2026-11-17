@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🍪 **Cookie Registry & Cache Architecture Modernization**:
+  - **Adapted Cookie Registry**: Expanded `COOKIE_REGISTRY` in `cookieManager.ts` to catalog assessment proctoring session tokens (`prephire_proctor_token`), timed quiz alert preferences (`prephire_quiz_timer_alert`), and on-device COCO-SSD inference telemetry (`prephire_quiz_telemetry`).
+  - **Dynamic Cookie Preferences Modal**: Upgraded `CookieBanner.tsx` to dynamically query category counts from the registry rather than using hardcoded label values.
+  - **Bounded Multi-Tier Query Caching**: Enhanced `quiz.service.ts` with a dedicated 60-second TTL cache for student quiz attempts (`studentAttemptsCache`) and in-memory cache lookup for `getQuizById`, preventing redundant Firestore reads across cohort dashboards while capping in-memory cache size with automatic FIFO pruning.
+
 - 📸 **100% Photographic Evidence Guarantee on Every Proctoring Flag**:
   - **Zero Dropped Snapshots**: Every single proctoring infraction—mobile phone detection, candidate absence/no face, multiple faces, window blur, tab switches, developer tool tampers, or acoustic voice anomalies—captures and stores its forensic screenshot without exception.
   - **High-Capacity Firestore Evidence Ledger**: Safely persists up to 25 full photographic evidence records per test in Firestore (compressed to ~3.2KB each, totaling ~80KB, far below Firestore's 1,024KB document limit).

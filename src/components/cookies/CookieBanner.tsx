@@ -359,7 +359,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       }}
                     >
                       {expandedCategory === 'necessary' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      {expandedCategory === 'necessary' ? 'Hide Details' : 'View Cookies (3)'}
+                      {expandedCategory === 'necessary' ? 'Hide Details' : `View Cookies (${COOKIE_REGISTRY.necessary.cookies.length})`}
                     </button>
                   </div>
                 </div>
@@ -410,7 +410,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       }}
                     >
                       {expandedCategory === 'preferences' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      {expandedCategory === 'preferences' ? 'Hide Details' : 'View Cookies (3)'}
+                      {expandedCategory === 'preferences' ? 'Hide Details' : `View Cookies (${COOKIE_REGISTRY.preferences.cookies.length})`}
                     </button>
                   </div>
                   <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginTop: '2px' }}>
@@ -474,7 +474,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       }}
                     >
                       {expandedCategory === 'analytics' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      {expandedCategory === 'analytics' ? 'Hide Details' : 'View Cookies (2)'}
+                      {expandedCategory === 'analytics' ? 'Hide Details' : `View Cookies (${COOKIE_REGISTRY.analytics.cookies.length})`}
                     </button>
                   </div>
                   <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginTop: '2px' }}>
@@ -538,7 +538,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       }}
                     >
                       {expandedCategory === 'marketing' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      {expandedCategory === 'marketing' ? 'Hide Details' : 'View Cookies (2)'}
+                      {expandedCategory === 'marketing' ? 'Hide Details' : `View Cookies (${COOKIE_REGISTRY.marketing.cookies.length})`}
                     </button>
                   </div>
                   <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginTop: '2px' }}>

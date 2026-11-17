@@ -62,6 +62,13 @@ export const COOKIE_REGISTRY: Record<CookieCategory, { title: string; descriptio
         duration: 'Session',
         provider: 'PrepHire.AI',
       },
+      {
+        name: 'prephire_proctor_token',
+        category: 'necessary',
+        purpose: 'Maintains live candidate proctoring state, tab-lock, and camera stream validation.',
+        duration: 'Assessment Session',
+        provider: 'PrepHire.AI Proctor Engine',
+      },
     ],
   },
   preferences: {
@@ -90,6 +97,13 @@ export const COOKIE_REGISTRY: Record<CookieCategory, { title: string; descriptio
         duration: '365 Days',
         provider: 'PrepHire.AI',
       },
+      {
+        name: 'prephire_quiz_timer_alert',
+        category: 'preferences',
+        purpose: 'Stores candidate alert preference when 5 minutes or 1 minute remain in timed tests.',
+        duration: '180 Days',
+        provider: 'PrepHire.AI',
+      },
     ],
   },
   analytics: {
@@ -108,6 +122,13 @@ export const COOKIE_REGISTRY: Record<CookieCategory, { title: string; descriptio
         name: 'prephire_perf_telemetry',
         category: 'analytics',
         purpose: 'Monitors audio WebRTC latency and Piston execution round-trip times.',
+        duration: '30 Days',
+        provider: 'PrepHire.AI',
+      },
+      {
+        name: 'prephire_quiz_telemetry',
+        category: 'analytics',
+        purpose: 'Tracks TensorFlow COCO-SSD client inference latency and question submission durations.',
         duration: '30 Days',
         provider: 'PrepHire.AI',
       },

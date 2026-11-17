@@ -26,18 +26,34 @@ interface CacheEntry<T> {
 
 const quizListCache = new Map<string, CacheEntry<Quiz[]>>()
 const attemptsCache = new Map<string, CacheEntry<QuizAttempt[]>>()
+const studentAttemptsCache = new Map<string, CacheEntry<QuizAttempt[]>>()
+
 const QUIZ_CACHE_TTL_MS = 120_000 // 2 minutes TTL
 const ATTEMPTS_CACHE_TTL_MS = 60_000 // 1 minute TTL
+const STUDENT_ATTEMPTS_CACHE_TTL_MS = 60_000 // 1 minute TTL
+const MAX_CACHE_ENTRIES = 100 // Prevent unbounded memory growth
+
+function pruneCache<T>(cache: Map<string, CacheEntry<T>>) {
+  if (cache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value
+    if (oldestKey) cache.delete(oldestKey)
+  }
+}
 
 export function invalidateQuizCache() {
   quizListCache.clear()
 }
 
-export function invalidateAttemptsCache(quizId?: string) {
+export function invalidateAttemptsCache(quizId?: string, studentUid?: string) {
   if (quizId) {
     attemptsCache.delete(quizId)
   } else {
     attemptsCache.clear()
+  }
+  if (studentUid) {
+    studentAttemptsCache.delete(studentUid)
+  } else {
+    studentAttemptsCache.clear()
   }
 }
 
@@ -84,6 +100,7 @@ export async function listQuizzes(options?: {
     // Sort by createdAt descending
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
+    pruneCache(quizListCache)
     quizListCache.set(cacheKey, { data: list, cachedAt: Date.now() })
     return list
   } catch (err) {
@@ -141,8 +158,21 @@ export function subscribeToQuizzes(
 
 /**
  * Get a single quiz by ID.
+ * Checks in-memory cache first to avoid redundant Firestore reads.
  */
-export async function getQuizById(quizId: string): Promise<Quiz | null> {
+export async function getQuizById(
+  quizId: string,
+  options?: { forceRefresh?: boolean }
+): Promise<Quiz | null> {
+  if (!options?.forceRefresh) {
+    for (const entry of quizListCache.values()) {
+      if (Date.now() - entry.cachedAt < QUIZ_CACHE_TTL_MS) {
+        const found = entry.data.find((q) => q.id === quizId)
+        if (found) return found
+      }
+    }
+  }
+
   try {
     const snap = await getDoc(doc(db, QUIZZES_COLL, quizId))
     if (!snap.exists()) return null
@@ -196,7 +226,7 @@ export async function deleteQuiz(quizId: string): Promise<void> {
 export async function submitQuizAttempt(
   attemptData: Omit<QuizAttempt, 'id'>
 ): Promise<string> {
-  invalidateAttemptsCache(attemptData.quizId)
+  invalidateAttemptsCache(attemptData.quizId, attemptData.studentUid)
   const aRef = collection(db, ATTEMPTS_COLL)
   const newDoc = doc(aRef)
   const payload = {
@@ -209,8 +239,17 @@ export async function submitQuizAttempt(
 
 /**
  * Get all quiz attempts for a specific student.
+ * Uses 60-second in-memory TTL cache to slash repeated Firestore queries on student dashboard.
  */
-export async function getStudentQuizAttempts(studentUid: string): Promise<QuizAttempt[]> {
+export async function getStudentQuizAttempts(
+  studentUid: string,
+  options?: { forceRefresh?: boolean }
+): Promise<QuizAttempt[]> {
+  const cached = studentAttemptsCache.get(studentUid)
+  if (!options?.forceRefresh && cached && Date.now() - cached.cachedAt < STUDENT_ATTEMPTS_CACHE_TTL_MS) {
+    return cached.data
+  }
+
   try {
     const qRef = collection(db, ATTEMPTS_COLL)
     const q = query(qRef, where('studentUid', '==', studentUid))
@@ -220,18 +259,20 @@ export async function getStudentQuizAttempts(studentUid: string): Promise<QuizAt
       ...(d.data() as Omit<QuizAttempt, 'id'>),
     }))
     list.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    pruneCache(studentAttemptsCache)
+    studentAttemptsCache.set(studentUid, { data: list, cachedAt: Date.now() })
     return list
   } catch (err) {
     console.error('Failed to fetch student quiz attempts:', err)
-    return []
+    return cached?.data || []
   }
 }
 
 /**
  * Delete a specific attempt (to grant a retake or reset submission).
  */
-export async function deleteQuizAttempt(attemptId: string): Promise<void> {
-  invalidateAttemptsCache()
+export async function deleteQuizAttempt(attemptId: string, studentUid?: string): Promise<void> {
+  invalidateAttemptsCache(undefined, studentUid)
   const docRef = doc(db, ATTEMPTS_COLL, attemptId)
   await deleteDoc(docRef)
 }
@@ -258,6 +299,7 @@ export async function getQuizAttempts(
       ...(d.data() as Omit<QuizAttempt, 'id'>),
     }))
     list.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    pruneCache(attemptsCache)
     attemptsCache.set(quizId, { data: list, cachedAt: Date.now() })
     return list
   } catch (err) {
