@@ -756,7 +756,7 @@ export function QuizLeaderboardModal({
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 220, overflowY: 'auto' }}>
                                       {quiz.questions.map((q, qIdx) => {
-                                        const candidateChoice = attempt.answers?.[q.id] ?? attempt.answers?.[String(qIdx)] ?? attempt.answers?.[qIdx]
+                                        const candidateChoice = attempt.answers?.[q.id] ?? attempt.answers?.[`q-${qIdx}`] ?? attempt.answers?.[String(qIdx)] ?? attempt.answers?.[qIdx]
                                         const isCorrect = candidateChoice === q.correctIndex
                                         return (
                                           <div

@@ -30,7 +30,7 @@ export function QuizResultModal({
   let correctCount = 0
 
   quiz.questions.forEach((q, idx) => {
-    const ans = attempt.answers?.[q.id] ?? attempt.answers?.[String(idx)] ?? attempt.answers?.[idx]
+    const ans = attempt.answers?.[q.id] ?? attempt.answers?.[`q-${idx}`] ?? attempt.answers?.[String(idx)] ?? attempt.answers?.[idx]
     if (ans === q.correctIndex) {
       correctCount++
     }
@@ -248,7 +248,7 @@ export function QuizResultModal({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {quiz.questions.map((q, idx) => {
-                const selectedOpt = attempt.answers?.[q.id] ?? attempt.answers?.[String(idx)] ?? attempt.answers?.[idx]
+                const selectedOpt = attempt.answers?.[q.id] ?? attempt.answers?.[`q-${idx}`] ?? attempt.answers?.[String(idx)] ?? attempt.answers?.[idx]
                 const hasAnswered = selectedOpt !== undefined && selectedOpt !== null
                 const isCorrect = hasAnswered && selectedOpt === q.correctIndex
 

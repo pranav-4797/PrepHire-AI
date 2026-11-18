@@ -119,8 +119,10 @@ export function generateShuffledQuiz(
   })
 
   const questionMap = new Map<string, ShuffledQuizQuestion>()
-  for (const sq of shuffledQuestions) {
-    questionMap.set(sq.id, sq)
+  for (let idx = 0; idx < shuffledQuestions.length; idx++) {
+    const sq = shuffledQuestions[idx]
+    if (sq.id) questionMap.set(sq.id, sq)
+    questionMap.set(`q-${idx}`, sq)
   }
 
   return { shuffledQuestions, questionMap }
