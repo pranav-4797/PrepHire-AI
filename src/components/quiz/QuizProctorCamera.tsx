@@ -127,6 +127,7 @@ export function QuizProctorCamera({
       videoRef.current.play().catch(() => {})
     }
     setCamStatus('active')
+    setFaceStatus('verified')
     lastFaceSeenRef.current = Date.now()
 
     // Initialize audio analyzer if microphone track is present
@@ -236,17 +237,15 @@ export function QuizProctorCamera({
       if (!modelRef.current) {
         try {
           await tf.ready()
-          if (tf.getBackend() !== 'webgl' && tf.findBackend('webgl')) {
-            await tf.setBackend('webgl')
-          }
-          modelRef.current = await cocoSsd.load({ base: 'mobilenet_v2' })
-        } catch {
           try {
-            modelRef.current = await cocoSsd.load()
-          } catch (e) {
-            console.error('Failed to load COCO-SSD model:', e)
-            return
+            await tf.setBackend('webgl')
+          } catch {
+            // WebGL acceleration fallback
           }
+          modelRef.current = await cocoSsd.load()
+        } catch (e) {
+          console.warn('COCO-SSD model initialization deferred:', e)
+          return
         }
       }
 
@@ -373,11 +372,11 @@ export function QuizProctorCamera({
       icon: stealthMode ? <ShieldCheck size={12} color="#059669" /> : <Smartphone size={12} color="#DC2626" />,
     },
     detecting: {
-      label: 'Initializing...',
-      color: '#D97706',
-      bg: '#FFFBEB',
-      border: '#FDE68A',
-      icon: <Camera size={12} color="#D97706" />,
+      label: stealthMode ? 'Proctor Active' : 'Initializing...',
+      color: stealthMode ? '#059669' : '#D97706',
+      bg: stealthMode ? '#ECFDF5' : '#FFFBEB',
+      border: stealthMode ? '#A7F3D0' : '#FDE68A',
+      icon: stealthMode ? <ShieldCheck size={12} color="#059669" /> : <Camera size={12} color="#D97706" />,
     },
   }[faceStatus]
 
