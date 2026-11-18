@@ -37,6 +37,8 @@ export function QuizProctorCamera({
   const audioCtxRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const speechStreakRef = useRef<number>(0)
+  const phoneStreakRef = useRef<number>(0)
+  const multiplePersonsStreakRef = useRef<number>(0)
   const lastFaceSeenRef = useRef<number>(0)
   const lastWarnTimesRef = useRef<Record<string, number>>({})
 
@@ -153,13 +155,13 @@ export function QuizProctorCamera({
             }
             const avg = sum / (checkBins - 2)
 
-            // Sustained vocal noise (> 36) indicates talking or whispering
-            if (avg > 36) {
+            // Sustained loud voice/whispering (> 52) - ignores PC fans, typing, and ambient AC hum
+            if (avg > 52) {
               speechStreakRef.current += 1
-              if (speechStreakRef.current >= 3) {
+              if (speechStreakRef.current >= 5) {
                 speechStreakRef.current = 0
                 const now = Date.now()
-                if (now - (lastWarnTimesRef.current['audio'] || 0) > 4500) {
+                if (now - (lastWarnTimesRef.current['audio'] || 0) > 15000) {
                   lastWarnTimesRef.current['audio'] = now
                   const snap = captureSnapshot()
                   const timestamp = new Date().toLocaleTimeString()
@@ -253,60 +255,73 @@ export function QuizProctorCamera({
         // Continuously refresh the cached frame so any instant blur/tab-switch has a valid snapshot
         captureSnapshot()
 
-        // High-sensitivity inference: pass minScore 0.15 so phones and off-angle faces aren't pre-filtered
-        const predictions = await modelRef.current.detect(videoRef.current, 25, 0.15)
+        // Balanced inference: minScore 0.35 to filter out phantom detections while reliably detecting persons and phones
+        const predictions = await modelRef.current.detect(videoRef.current, 20, 0.35)
         let personCount = 0
-        let phoneDetected = false
+        let rawPhoneDetected = false
 
         predictions.forEach((p: { class: string; score: number }) => {
-          if (p.class === 'person' && p.score >= 0.22) personCount++
-          // Phones can be classified by COCO-SSD as 'cell phone', 'remote' (dark slab), or handheld electronic
-          if (
-            (p.class === 'cell phone' || p.class === 'remote') &&
-            p.score >= 0.15
-          ) {
-            phoneDetected = true
+          if (p.class === 'person' && p.score >= 0.40) personCount++
+          // High-confidence mobile phone detection (avoid classifying remote/mice/dark mugs as phones)
+          if (p.class === 'cell phone' && p.score >= 0.52) {
+            rawPhoneDetected = true
           }
         })
 
         const now = Date.now()
         const timestamp = new Date().toLocaleTimeString()
 
-        if (phoneDetected) {
+        // 1. Phone Detection with Multi-Frame Streak Confirmation (>= 2 cycles = ~3s)
+        if (rawPhoneDetected) {
+          phoneStreakRef.current += 1
+        } else {
+          phoneStreakRef.current = 0
+        }
+
+        const phoneConfirmed = phoneStreakRef.current >= 2
+        if (phoneConfirmed) {
           setFaceStatus('phone')
           onFaceStatusChange?.('phone')
-          if (now - (lastWarnTimesRef.current['phone'] || 0) > 2500) {
+          if (now - (lastWarnTimesRef.current['phone'] || 0) > 15000) {
             lastWarnTimesRef.current['phone'] = now
             const snap = captureSnapshot()
             triggerViolation(`Mobile phone detected in camera at ${timestamp}`, 'cell_phone', snap)
           }
         }
 
+        // 2. Multiple Persons Detection with Streak Confirmation (>= 2 cycles = ~3s)
         if (personCount > 1) {
-          if (!phoneDetected) {
+          multiplePersonsStreakRef.current += 1
+        } else {
+          multiplePersonsStreakRef.current = 0
+        }
+
+        const multipleConfirmed = multiplePersonsStreakRef.current >= 2
+        if (multipleConfirmed) {
+          if (!phoneConfirmed) {
             setFaceStatus('multiple')
             onFaceStatusChange?.('multiple')
           }
           lastFaceSeenRef.current = now
-          if (now - (lastWarnTimesRef.current['multiple'] || 0) > 2500) {
+          if (now - (lastWarnTimesRef.current['multiple'] || 0) > 15000) {
             lastWarnTimesRef.current['multiple'] = now
             const snap = captureSnapshot()
             triggerViolation(`Multiple people (${personCount}) detected in camera at ${timestamp}`, 'multiple_faces', snap)
           }
-        } else if (personCount === 1) {
-          if (!phoneDetected) {
+        } else if (personCount >= 1) {
+          if (!phoneConfirmed) {
             setFaceStatus('verified')
             onFaceStatusChange?.('verified')
           }
           lastFaceSeenRef.current = now
         } else if (personCount === 0) {
-          if (!phoneDetected) {
+          if (!phoneConfirmed) {
             setFaceStatus('missing')
             onFaceStatusChange?.('missing')
           }
-          // Trigger violation if missing for > 2 seconds
-          if (now - lastFaceSeenRef.current > 2000) {
-            if (now - (lastWarnTimesRef.current['missing'] || 0) > 2500) {
+          // Candidate Absence: Only trigger if continuously missing for > 7 seconds (prevents false flags on normal reading/glances)
+          if (now - lastFaceSeenRef.current > 7000) {
+            if (now - (lastWarnTimesRef.current['missing'] || 0) > 15000) {
               lastWarnTimesRef.current['missing'] = now
               const snap = captureSnapshot()
               triggerViolation(`No face detected in camera (candidate absent) at ${timestamp}`, 'face_missing', snap)
@@ -321,7 +336,7 @@ export function QuizProctorCamera({
     }
 
     lastFaceSeenRef.current = Date.now()
-    ivRef.current = setInterval(detect, 1200)
+    ivRef.current = setInterval(detect, 1500)
 
     return () => {
       if (ivRef.current) clearInterval(ivRef.current)

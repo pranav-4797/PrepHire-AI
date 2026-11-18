@@ -1,13 +1,33 @@
 // ── Real-Time Proctoring WebSocket & WebRTC P2P Client Service ─────────────
 // Zero-database-cost real-time telemetry, instant infraction alerts,
-// administrative warning messaging, and 1-click WebRTC peer video streaming.
+// administrative warning messaging, and low-latency WebRTC peer video streaming.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { LiveCandidateSession, ProctorRealtimeAlert, SuspiciousFlag } from '../types/quiz'
 
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || 'http://localhost:3001'
-const WS_BASE_URL = BACKEND_URL.replace(/^http/, 'ws') + '/ws/proctor'
+const API_URL =
+  (import.meta.env.VITE_API_URL as string) ||
+  (import.meta.env.VITE_BACKEND_URL as string) ||
+  (import.meta.env.DEV ? 'http://localhost:3001' : '')
+
+function getProctorWebSocketUrl(): string {
+  if (API_URL) {
+    return API_URL.replace(/^http/, 'ws') + '/ws/proctor'
+  }
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${proto}//${window.location.host}/ws/proctor`
+  }
+  return 'ws://localhost:3001/ws/proctor'
+}
+
+// Pre-warm / wake-up ping for Render sleeping dyno
+function wakeUpBackendServer() {
+  if (API_URL) {
+    fetch(`${API_URL}/api/health`, { mode: 'no-cors' }).catch(() => {})
+  }
+}
 
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
@@ -48,11 +68,13 @@ export function useStudentProctorSocket(options: StudentProctorOptions) {
 
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
+  const studentIceQueueRef = useRef<RTCIceCandidateInit[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const isMountedRef = useRef(true)
 
   // ── WebRTC Handlers (Student Peer Streamer) ───────────────────────────────
   const closePeerConnection = useCallback(() => {
+    studentIceQueueRef.current = []
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close()
       peerConnectionRef.current = null
@@ -119,10 +141,14 @@ export function useStudentProctorSocket(options: StudentProctorOptions) {
     isMountedRef.current = true
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
 
+    // Wake up backend server immediately
+    wakeUpBackendServer()
+
     function connect() {
       if (!isMountedRef.current) return
       try {
-        const ws = new WebSocket(WS_BASE_URL)
+        const wsUrl = getProctorWebSocketUrl()
+        const ws = new WebSocket(wsUrl)
         wsRef.current = ws
 
         ws.onopen = () => {
@@ -165,16 +191,27 @@ export function useStudentProctorSocket(options: StudentProctorOptions) {
                 await peerConnectionRef.current.setRemoteDescription(
                   new RTCSessionDescription(data.sdp)
                 )
+                // Flush queued ICE candidates
+                while (studentIceQueueRef.current.length > 0) {
+                  const candidate = studentIceQueueRef.current.shift()
+                  if (candidate) {
+                    await peerConnectionRef.current
+                      .addIceCandidate(new RTCIceCandidate(candidate))
+                      .catch(() => {})
+                  }
+                }
               }
               return
             }
 
             // 4. Invigilator sent ICE Candidate
             if (data.type === 'webrtc:ice-candidate') {
-              if (peerConnectionRef.current && data.candidate) {
-                await peerConnectionRef.current.addIceCandidate(
-                  new RTCIceCandidate(data.candidate)
-                ).catch(() => {})
+              if (peerConnectionRef.current?.remoteDescription && data.candidate) {
+                await peerConnectionRef.current
+                  .addIceCandidate(new RTCIceCandidate(data.candidate))
+                  .catch(() => {})
+              } else if (data.candidate) {
+                studentIceQueueRef.current.push(data.candidate)
               }
               return
             }
@@ -192,7 +229,7 @@ export function useStudentProctorSocket(options: StudentProctorOptions) {
         ws.onclose = () => {
           if (!isMountedRef.current) return
           setIsConnected(false)
-          reconnectTimeout = setTimeout(connect, 4000)
+          reconnectTimeout = setTimeout(connect, 3000)
         }
 
         ws.onerror = () => {
@@ -200,7 +237,7 @@ export function useStudentProctorSocket(options: StudentProctorOptions) {
         }
       } catch (err) {
         console.warn('Proctor WS connect failed:', err)
-        reconnectTimeout = setTimeout(connect, 5000)
+        reconnectTimeout = setTimeout(connect, 3500)
       }
     }
 
@@ -307,6 +344,7 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
   const wsRef = useRef<WebSocket | null>(null)
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
   const activeStreamingUidRef = useRef<string | null>(null)
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([])
 
   const [isConnected, setIsConnected] = useState(false)
   const [students, setStudents] = useState<LiveCandidateSession[]>([])
@@ -357,6 +395,10 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
         const pc = new RTCPeerConnection(ICE_SERVERS)
         peerConnectionRef.current = pc
 
+        // Add receive transceivers so SDP answer accepts video and audio immediately
+        pc.addTransceiver('video', { direction: 'recvonly' })
+        pc.addTransceiver('audio', { direction: 'recvonly' })
+
         pc.ontrack = (event) => {
           if (event.streams && event.streams[0]) {
             setLiveStream(event.streams[0])
@@ -378,6 +420,15 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(sdp))
+
+        // Flush queued ICE candidates
+        while (pendingIceCandidatesRef.current.length > 0) {
+          const candidate = pendingIceCandidatesRef.current.shift()
+          if (candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {})
+          }
+        }
+
         const answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
 
@@ -399,6 +450,7 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
   )
 
   const stopLiveCamera = useCallback(() => {
+    pendingIceCandidatesRef.current = []
     const streamingUid = activeStreamingUidRef.current
     if (streamingUid && wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(
@@ -422,6 +474,7 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
 
   const startLiveCamera = useCallback(
     (studentUid: string) => {
+      pendingIceCandidatesRef.current = []
       activeStreamingUidRef.current = studentUid
       setActiveStreamingUid(studentUid)
       setLiveStream(null)
@@ -445,10 +498,14 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
     isMountedRef.current = true
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
 
+    // Wake up backend server immediately
+    wakeUpBackendServer()
+
     function connect() {
       if (!isMountedRef.current) return
       try {
-        const ws = new WebSocket(WS_BASE_URL)
+        const wsUrl = getProctorWebSocketUrl()
+        const ws = new WebSocket(wsUrl)
         wsRef.current = ws
 
         ws.onopen = () => {
@@ -530,10 +587,12 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
 
             // 7. WebRTC ICE Candidate from Candidate
             if (data.type === 'webrtc:ice-candidate') {
-              if (peerConnectionRef.current && data.candidate) {
+              if (peerConnectionRef.current?.remoteDescription && data.candidate) {
                 await peerConnectionRef.current
                   .addIceCandidate(new RTCIceCandidate(data.candidate))
                   .catch(() => {})
+              } else if (data.candidate) {
+                pendingIceCandidatesRef.current.push(data.candidate)
               }
               return
             }
@@ -553,7 +612,7 @@ export function useAdminProctorSocket(quizId: string): AdminProctorHookResult {
         }
       } catch (err) {
         console.warn('Admin proctor connect error:', err)
-        reconnectTimeout = setTimeout(connect, 4000)
+        reconnectTimeout = setTimeout(connect, 3500)
       }
     }
 
