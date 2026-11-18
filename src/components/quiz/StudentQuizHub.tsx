@@ -17,9 +17,11 @@ import type { Quiz, QuizAttempt } from '../../types/quiz'
 import {
   listQuizzes,
   getStudentQuizAttempts,
+  getQuizAttempts,
 } from '../../services/quiz.service'
 import { QuizPlayer } from './QuizPlayer'
 import { QuizResultModal } from './QuizResultModal'
+import { QuizLeaderboardModal } from './QuizLeaderboardModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 
 function GlassCard({
@@ -66,6 +68,24 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
     quiz: Quiz
     attempt: QuizAttempt
   } | null>(null)
+
+  // Leaderboard Modal State
+  const [leaderboardQuiz, setLeaderboardQuiz] = useState<Quiz | null>(null)
+  const [leaderboardAttempts, setLeaderboardAttempts] = useState<QuizAttempt[]>([])
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false)
+
+  async function handleOpenLeaderboard(quiz: Quiz) {
+    setLeaderboardQuiz(quiz)
+    setLoadingLeaderboard(true)
+    try {
+      const list = await getQuizAttempts(quiz.id)
+      setLeaderboardAttempts(list)
+    } catch (err) {
+      showToast(sanitizeErrorMessage(err, 'Failed to load leaderboard.'), 'error')
+    } finally {
+      setLoadingLeaderboard(false)
+    }
+  }
 
   useEffect(() => {
     onActiveQuizChange?.(!!activeQuiz)
@@ -581,6 +601,25 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                           >
                             Review
                           </button>
+                          <button
+                            onClick={() => handleOpenLeaderboard(q)}
+                            style={{
+                              background: '#FFFBEB',
+                              border: '1px solid #FDE68A',
+                              borderRadius: 6,
+                              color: '#B45309',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              padding: '0.2rem 0.5rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                            }}
+                            title="View official student leaderboard standings"
+                          >
+                            🏆 Leaderboard
+                          </button>
                         </>
                       ) : (
                         <>
@@ -682,11 +721,29 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
           quiz={reviewAttempt.quiz}
           attempt={reviewAttempt.attempt}
           onClose={() => setReviewAttempt(null)}
+          onViewLeaderboard={() => {
+            const q = reviewAttempt.quiz
+            setReviewAttempt(null)
+            handleOpenLeaderboard(q)
+          }}
           onRetake={() => {
             const q = reviewAttempt.quiz
             setReviewAttempt(null)
             setActiveQuiz(q)
           }}
+        />
+      )}
+
+      {/* Assessment Leaderboard Modal */}
+      {leaderboardQuiz && (
+        <QuizLeaderboardModal
+          quiz={leaderboardQuiz}
+          attempts={leaderboardAttempts}
+          currentUserEmail={user.email}
+          userRole="student"
+          loading={loadingLeaderboard}
+          onClose={() => setLeaderboardQuiz(null)}
+          showToast={showToast}
         />
       )}
     </div>

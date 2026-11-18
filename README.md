@@ -33,6 +33,18 @@ By combining conversational AI, resume intelligence, interactive code execution,
   - **Immediate Response & Automated Firestore Sync**: `POST /api/quiz/upload-evidence` responds in under 20ms with queue status; the background queue worker automatically links the final Drive folder URL to Firestore attempt documents upon completion.
   - **Queue Health & Diagnostics API**: Exposed `GET /api/drive/queue-status` and `GET /api/quiz/upload-status/:jobId` for real-time monitoring of active and queued tasks.
 
+### Assessment Leaderboards, Cohort Analytics & Ranked Dossiers (2026-11-18)
+
+- 🏆 **Competitive Assessment Leaderboards & Top 3 Podium**:
+  - **Gold, Silver & Bronze Podium**: Dynamic Top 3 champions podium highlighting the 1st (🥇 Gold), 2nd (🥈 Silver), and 3rd (🥉 Bronze) place cohort winners with distinct badges, scores, percentage rings, and completion times.
+  - **Full Ranked Table & Cards View**: Flexible dual-mode viewing (`Table View` vs `Cards View`) displaying sequential ranks (`#1`, `#2`, ...), candidate credentials (name, email, roll number, department), score breakdown, completion speed, proctoring integrity, and direct dossier inspection.
+  - **Cohort Overview Analytics Bar**: Live cohort performance dashboard displaying total test submissions, top score, cohort average score, cohort pass rate percentage, and average proctoring integrity index.
+  - **Multi-Parameter Search, Filtering & Sorting**: Real-time candidate search by name, email, roll number, or department. Filter pills for `All`, `Passed`, `Flagged (Integrity < 75%)`, `Clean (100% Integrity)`, and `Retake Allowed`. Sort by `Rank (Score)`, `Fastest Time`, `Cleanest Integrity`, `Latest Submission`, or `Lowest Score`.
+  - **Candidate Retake Reset Control**: Administrators can directly reset any candidate's attempt from within the leaderboard with one click, clearing their previous attempt and allowing them an immediate retake.
+  - **1-Click Gradebook CSV Export**: Direct batch export of the full assessment gradebook to CSV format (`<Quiz_Title>_Leaderboard_<Date>.csv`), including rank, candidate details, score, percentage, elapsed time, integrity score, infraction counts, and Google Drive evidence links.
+  - **Student Cohort Access**: Once results are officially declared by administrators, students can access the cohort leaderboard directly from their Student Assessment Hub (`🏆 Leaderboard` button) or the Quiz Completion Result Modal (`🏆 Cohort Leaderboard` button).
+  - **Firestore Rules Security**: Updated `firestore.rules` for the `quiz_attempts` collection to allow authenticated students read access to cohort attempts for declared assessments while strictly enforcing admin-only mutations.
+
 - 🚀 **Instant Assessment Submission (<150ms) & Non-Blocking Evidence Pipeline**:
   - **Zero-Latency Modal Dismissal**: Decoupled heavy Google Drive evidence snapshot uploading from the primary assessment submission flow. Firestore attempts write immediately in under 120ms, instantly dismissing the "Submitting..." modal and advancing students to the completed screen without UI freezing.
   - **Asynchronous Background Evidence Sync**: Photographic infraction evidence uploads non-blockingly in the background; once Google Drive returns the folder link, the Firestore attempt is patched silently via `updateQuizAttemptDriveLink()`.

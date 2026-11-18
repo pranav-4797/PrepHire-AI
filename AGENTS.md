@@ -110,6 +110,13 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Instant Assessment Submission & Asynchronous Drive Sync**: Decoupled blocking Google Drive evidence uploads from candidate submission in `QuizPlayer.tsx`. Submissions write to Firestore in under 120ms, immediately closing the confirmation modal and displaying completion screens. Forensic snapshots are synced non-blockingly in the background with automatic Firestore patching via `updateQuizAttemptDriveLink()` and protected by a 15-second AbortController timeout.
 - **Admin Result Declaration Controls & Answer Protection**: Added institution-controlled result declaration toggle (`resultsDeclared`) across Admin Quiz Studio, Quiz Editor, and Submissions inspection. Candidates cannot see scores, percentages, or correct answers until officially declared by an administrator.
 
+## Recent fixes (2026-11-18)
+
+- **Assessment Leaderboard, Podium & Cohort Analytics**: Built modular `QuizLeaderboardModal.tsx` replacing plain chronological lists. Features Top 3 Gold/Silver/Bronze podium, 5-metric cohort summary bar (Total Submissions, Highest Score, Cohort Average, Pass Rate %, Average Integrity %), real-time candidate search, status filters (`All`, `Passed`, `Flagged`, `Clean`), multi-column sorting (Rank, Fastest, Integrity, Time, Lowest), and dual table/cards views.
+- **Candidate Retake Reset & Administrative Audit Dossier**: Integrated candidate attempt reset button directly within the leaderboard, telemetry audit dossier, forensic snapshot gallery with lightbox preview, question-by-question candidate answer reviews, and Drive links.
+- **1-Click Gradebook CSV Export**: Direct batch export of formatted assessment gradebooks to CSV format for faculty and administrators.
+- **Student Cohort Access & Security**: Students can view the cohort leaderboard from `StudentQuizHub.tsx` and `QuizResultModal.tsx` once results are declared. Updated `firestore.rules` to allow authenticated students read access to cohort attempts.
+
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit

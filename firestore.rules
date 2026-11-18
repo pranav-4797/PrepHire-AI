@@ -79,11 +79,7 @@ service cloud.firestore {
 
     match /quiz_attempts/{attemptId} {
       allow create: if signedIn() || (request.resource.data.studentEmail != null && request.resource.data.quizId != null);
-      allow read: if signedIn() && (
-        isAdmin() ||
-        isFaculty() ||
-        (isStudent() && resource.data.studentUid == request.auth.uid)
-      );
+      allow read: if signedIn();
       allow update, delete: if signedIn() && isAdmin();
     }
 
