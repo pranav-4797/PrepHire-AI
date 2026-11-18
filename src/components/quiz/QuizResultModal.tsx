@@ -7,7 +7,6 @@ import {
   Lock,
   Clock,
   ShieldCheck,
-  Trophy,
 } from 'lucide-react'
 import { T } from '../../theme'
 import type { Quiz, QuizAttempt } from '../../types/quiz'
@@ -17,7 +16,6 @@ interface QuizResultModalProps {
   attempt: QuizAttempt
   onClose: () => void
   onRetake?: () => void
-  onViewLeaderboard?: () => void
 }
 
 export function QuizResultModal({
@@ -25,7 +23,6 @@ export function QuizResultModal({
   attempt,
   onClose,
   onRetake,
-  onViewLeaderboard,
 }: QuizResultModalProps) {
   const resultsDeclared = quiz.resultsDeclared === true
   const isPassed = attempt.passed
@@ -495,27 +492,6 @@ export function QuizResultModal({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            {onViewLeaderboard && resultsDeclared && (
-              <button
-                onClick={onViewLeaderboard}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  background: '#FFFBEB',
-                  border: '1px solid #FDE68A',
-                  borderRadius: 8,
-                  padding: '0.55rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 700,
-                  color: '#B45309',
-                  cursor: 'pointer',
-                }}
-              >
-                <Trophy size={15} color="#D97706" /> Cohort Leaderboard
-              </button>
-            )}
-
             {onRetake && retakeAllowed && (
               <button
                 onClick={onRetake}

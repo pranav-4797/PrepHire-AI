@@ -1,63 +1,25 @@
-// ── Quiz Leaderboard & Submissions Dossier Modal ────────────────────────────
-// Presents assessment submissions in a high-fidelity competitive leaderboard format
-// with Top 3 Podium, ranks (🥇 🥈 🥉), cohort analytics, search/filter controls,
-// CSV gradebook export, and comprehensive forensic proctoring audit dossiers.
+// ── Simple & Clean Assessment Leaderboard (Admin Only) ───────────────────────
+// Minimalist, high-legibility tabular gradebook with neutral institutional styling.
+// Free of distracting neon gradients, flashy podiums, and loud colors.
+// Includes search/filtering, CSV export, proctoring telemetry audit, and attempt reset.
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useMemo, Fragment } from 'react'
-import type { ReactNode } from 'react'
 import {
-  Trophy,
-  Crown,
-  CheckCircle2,
-  XCircle,
-  ShieldCheck,
-  ShieldAlert,
-  Clock,
-  ChevronDown,
-  ChevronUp,
   Download,
-  ExternalLink,
   Search,
   Megaphone,
-  Camera,
   X,
   Users,
   RotateCcw,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Camera,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
-import { T } from '../../theme'
 import type { Quiz, QuizAttempt } from '../../types/quiz'
-
-function Pill({
-  children,
-  color = T.primary,
-  bg = '#EFF6FF',
-  border,
-}: {
-  children: ReactNode
-  color?: string
-  bg?: string
-  border?: string
-}) {
-  return (
-    <span
-      style={{
-        fontSize: '0.72rem',
-        fontWeight: 700,
-        padding: '0.2rem 0.55rem',
-        borderRadius: 999,
-        background: bg,
-        color,
-        border: border ? `1px solid ${border}` : 'none',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '0.25rem',
-        lineHeight: 1.2,
-      }}
-    >
-      {children}
-    </span>
-  )
-}
 
 interface RankedAttempt extends QuizAttempt {
   rank: number
@@ -72,7 +34,6 @@ interface RankedAttempt extends QuizAttempt {
 interface QuizLeaderboardModalProps {
   quiz: Quiz
   attempts: QuizAttempt[]
-  currentUserEmail?: string
   userRole?: 'admin' | 'faculty' | 'student'
   loading?: boolean
   onClose: () => void
@@ -89,18 +50,9 @@ function formatDuration(seconds: number): string {
   return `${mins}m ${remSecs < 10 ? '0' : ''}${remSecs}s`
 }
 
-function scoreBadgeColor(percentage: number): { text: string; bg: string; border: string } {
-  if (percentage >= 85) return { text: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' }
-  if (percentage >= 70) return { text: '#047857', bg: '#ECFDF5', border: '#A7F3D0' }
-  if (percentage >= 50) return { text: '#B45309', bg: '#FFFBEB', border: '#FDE68A' }
-  return { text: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' }
-}
-
 export function QuizLeaderboardModal({
   quiz,
   attempts,
-  currentUserEmail,
-  userRole = 'admin',
   loading = false,
   onClose,
   onToggleDeclareResults,
@@ -108,101 +60,69 @@ export function QuizLeaderboardModal({
   showToast,
 }: QuizLeaderboardModalProps) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterMode, setFilterMode] = useState<'all' | 'passed' | 'retake' | 'flagged' | 'clean'>('all')
-  const [sortBy, setSortBy] = useState<'rank' | 'fastest' | 'integrity' | 'latest' | 'lowest'>('rank')
-  const [viewLayout, setViewLayout] = useState<'table' | 'cards'>('table')
+  const [filterMode, setFilterMode] = useState<'all' | 'passed' | 'failed' | 'flagged'>('all')
+  const [sortBy, setSortBy] = useState<'rank' | 'fastest' | 'integrity' | 'latest'>('rank')
   const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null)
-  const [previewSnapshot, setPreviewSnapshot] = useState<{ src: string; caption: string } | null>(null)
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
-  // ── Compute Rankings & Enhanced Telemetry ─────────────────────────────────
-  const rankedAttempts = useMemo<RankedAttempt[]>(() => {
-    if (!attempts || attempts.length === 0) return []
+  // Rank attempts: score desc, time asc
+  const rankedAttempts: RankedAttempt[] = useMemo(() => {
+    const list = [...attempts].map((att) => {
+      const flags = att.suspiciousFlags || []
+      const phoneCount = flags.filter((f) => f.type === 'cell_phone').length
+      const tamperCount = flags.filter((f) => f.type === 'tamper_attempt').length
+      const audioCount = flags.filter((f) => f.type === 'audio_anomaly').length
+      const violationCount = flags.length
 
-    // 1. Sort by performance for official rank assignment
-    const sorted = [...attempts].sort((a, b) => {
-      // Primary: Score points descending
-      if (b.score !== a.score) return b.score - a.score
-      // Secondary: Percentage descending
-      if (b.percentage !== a.percentage) return b.percentage - a.percentage
-      // Tertiary: Time spent ascending (faster is ranked higher)
-      const aTime = a.timeSpentSeconds || 99999
-      const bTime = b.timeSpentSeconds || 99999
-      if (aTime !== bTime) return aTime - bTime
-      // Quaternary: Integrity descending
-      const aInt = a.integrityScore ?? 100
-      const bInt = b.integrityScore ?? 100
-      if (bInt !== aInt) return bInt - aInt
-      // Earlier completedAt
-      return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
-    })
-
-    // 2. Assign standard ranks and parse telemetry
-    return sorted.map((att, idx) => {
-      const rawFlags: any[] = Array.isArray(att.suspiciousFlags)
-        ? att.suspiciousFlags.map((f) =>
-            typeof f === 'string' ? { timestamp: '', type: 'other', detail: f } : f
-          )
-        : []
-
-      const phoneCount = rawFlags.filter((f) => f.type === 'cell_phone').length
-      const tamperCount = rawFlags.filter((f) => f.type === 'tamper_attempt').length
-      const audioCount =
-        (att.audioAnomaliesCount || 0) || rawFlags.filter((f) => f.type === 'audio_anomaly').length
-
-      const telemetrySum =
-        (att.tabSwitchesCount || 0) +
-        (att.fullscreenViolationsCount || 0) +
-        (att.faceMissingCount || 0) +
-        (att.multipleFacesCount || 0) +
-        audioCount +
-        phoneCount +
-        tamperCount
-
-      const violationCount = Math.max(rawFlags.length, telemetrySum)
-      const calculatedIntegrity =
-        att.integrityScore !== undefined
-          ? att.integrityScore
-          : Math.max(0, 100 - violationCount * 12)
-
-      const photoEvidence = rawFlags.filter((f) => !!f.snapshot)
+      const photoEvidence = flags
+        .filter((f) => !!f.snapshot)
+        .map((f) => ({
+          timestamp: f.timestamp,
+          type: f.type,
+          detail: f.detail,
+          snapshot: f.snapshot,
+        }))
 
       return {
         ...att,
-        rank: idx + 1,
+        rank: 0,
         violationCount,
         phoneCount,
         tamperCount,
         audioCount,
-        calculatedIntegrity,
+        calculatedIntegrity: typeof att.integrityScore === 'number' ? att.integrityScore : 100,
         photoEvidence,
       }
     })
+
+    list.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return (a.timeSpentSeconds || 0) - (b.timeSpentSeconds || 0)
+    })
+
+    return list.map((item, idx) => ({
+      ...item,
+      rank: idx + 1,
+    }))
   }, [attempts])
 
-  // ── Cohort Summary Analytics ──────────────────────────────────────────────
+  // Summary Metrics
   const stats = useMemo(() => {
-    if (rankedAttempts.length === 0) {
-      return { total: 0, high: 0, avg: 0, passRate: 0, avgIntegrity: 100, passed: 0, retake: 0, clean: 0, flagged: 0 }
-    }
     const total = rankedAttempts.length
+    if (total === 0) return { total: 0, high: 0, avg: 0, passRate: 0, clean: 0 }
     const high = Math.max(...rankedAttempts.map((a) => a.score))
-    const avg = Math.round(rankedAttempts.reduce((s, a) => s + (a.percentage || 0), 0) / total)
+    const sumScore = rankedAttempts.reduce((acc, a) => acc + (a.percentage || 0), 0)
+    const avg = Math.round(sumScore / total)
     const passed = rankedAttempts.filter((a) => a.passed).length
     const passRate = Math.round((passed / total) * 100)
-    const avgIntegrity = Math.round(
-      rankedAttempts.reduce((s, a) => s + a.calculatedIntegrity, 0) / total
-    )
     const clean = rankedAttempts.filter((a) => a.violationCount === 0).length
-    const flagged = total - clean
-
-    return { total, high, avg, passRate, avgIntegrity, passed, retake: total - passed, clean, flagged }
+    return { total, high, avg, passRate, clean, passed }
   }, [rankedAttempts])
 
-  // ── Filter & Search Logic ─────────────────────────────────────────────────
+  // Filter & Search
   const filteredAndSorted = useMemo(() => {
     let list = [...rankedAttempts]
 
-    // Search filter
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase()
       list = list.filter(
@@ -214,18 +134,14 @@ export function QuizLeaderboardModal({
       )
     }
 
-    // Status filter
     if (filterMode === 'passed') {
       list = list.filter((a) => a.passed)
-    } else if (filterMode === 'retake') {
+    } else if (filterMode === 'failed') {
       list = list.filter((a) => !a.passed)
     } else if (filterMode === 'flagged') {
-      list = list.filter((a) => a.violationCount > 0)
-    } else if (filterMode === 'clean') {
-      list = list.filter((a) => a.violationCount === 0)
+      list = list.filter((a) => a.violationCount > 0 || a.calculatedIntegrity < 80)
     }
 
-    // Sort
     if (sortBy === 'rank') {
       list.sort((a, b) => a.rank - b.rank)
     } else if (sortBy === 'fastest') {
@@ -234,46 +150,41 @@ export function QuizLeaderboardModal({
       list.sort((a, b) => b.calculatedIntegrity - a.calculatedIntegrity)
     } else if (sortBy === 'latest') {
       list.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-    } else if (sortBy === 'lowest') {
-      list.sort((a, b) => a.score - b.score)
     }
 
     return list
   }, [rankedAttempts, searchTerm, filterMode, sortBy])
 
-  // ── CSV Gradebook Export ──────────────────────────────────────────────────
+  // CSV Export
   function handleExportCSV() {
     if (rankedAttempts.length === 0) return
-
     const headers = [
       'Rank',
-      'Student Name',
+      'Candidate Name',
       'Email',
       'Department',
       'Roll Number',
       'Score',
       'Max Score',
       'Percentage',
-      'Verdict',
-      'Time Spent (Seconds)',
-      'Formatted Time',
+      'Status',
+      'Time Spent',
       'Integrity Score',
-      'Violations Count',
-      'Drive Evidence Folder',
-      'Submission Timestamp',
+      'Infraction Count',
+      'Drive Evidence Link',
+      'Completed At',
     ]
 
     const rows = rankedAttempts.map((a) => [
       a.rank,
       `"${(a.studentName || a.studentEmail.split('@')[0] || '').replace(/"/g, '""')}"`,
       `"${a.studentEmail.replace(/"/g, '""')}"`,
-      `"${(a.department || 'General').replace(/"/g, '""')}"`,
+      `"${(a.department || '').replace(/"/g, '""')}"`,
       `"${(a.rollNumber || '').replace(/"/g, '""')}"`,
       a.score,
       a.maxScore,
       `${a.percentage}%`,
-      a.passed ? 'PASSED' : 'NEEDS_RETAKE',
-      a.timeSpentSeconds,
+      a.passed ? 'PASSED' : 'FAILED',
       `"${formatDuration(a.timeSpentSeconds)}"`,
       `${a.calculatedIntegrity}%`,
       a.violationCount,
@@ -285,209 +196,102 @@ export function QuizLeaderboardModal({
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.setAttribute('href', url)
-    link.setAttribute(
-      'download',
-      `${(quiz.title || 'Assessment').replace(/[^a-zA-Z0-9_-]/g, '_')}_Leaderboard_Gradebook.csv`
-    )
+    link.href = url
+    link.download = `${(quiz.title || 'Quiz').replace(/[^a-zA-Z0-9_-]/g, '_')}_Leaderboard.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
 
-    if (showToast) {
-      showToast('Assessment gradebook CSV exported successfully!', 'success')
-    }
+    showToast?.('Leaderboard gradebook exported as CSV', 'success')
   }
-
-  // Helper for rank medal visual
-  const renderRankMedal = (rank: number) => {
-    if (rank === 1) {
-      return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #FDE68A, #F59E0B)',
-            color: '#78350F',
-            fontSize: '1rem',
-            fontWeight: 800,
-            boxShadow: '0 2px 6px rgba(245, 158, 11, 0.4)',
-          }}
-          title="1st Place - Gold Medal"
-        >
-          🥇
-        </span>
-      )
-    }
-    if (rank === 2) {
-      return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 30,
-            height: 30,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #E2E8F0, #94A3B8)',
-            color: '#1E293B',
-            fontSize: '0.95rem',
-            fontWeight: 800,
-            boxShadow: '0 2px 4px rgba(148, 163, 184, 0.4)',
-          }}
-          title="2nd Place - Silver Medal"
-        >
-          🥈
-        </span>
-      )
-    }
-    if (rank === 3) {
-      return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #FED7AA, #D97706)',
-            color: '#7C2D12',
-            fontSize: '0.9rem',
-            fontWeight: 800,
-            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.3)',
-          }}
-          title="3rd Place - Bronze Medal"
-        >
-          🥉
-        </span>
-      )
-    }
-    return (
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minWidth: 26,
-          height: 26,
-          borderRadius: 6,
-          background: '#F3F4F6',
-          color: T.txtSec,
-          fontSize: '0.8rem',
-          fontWeight: 700,
-        }}
-      >
-        #{rank}
-      </span>
-    )
-  }
-
-  const top3 = rankedAttempts.slice(0, 3)
 
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(5px)',
+        zIndex: 9999,
+        background: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9999,
-        padding: '1rem',
+        padding: '1.25rem',
       }}
     >
       <div
         style={{
           background: '#ffffff',
-          borderRadius: 16,
-          maxWidth: 1040,
+          borderRadius: 12,
+          maxWidth: 1060,
           width: '100%',
-          maxHeight: '90vh',
+          maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+          boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
           overflow: 'hidden',
+          border: '1px solid #CBD5E1',
         }}
       >
-        {/* ── Modal Header ─────────────────────────────────────────────────── */}
+        {/* ── Modal Header (Simple Clean Slate) ─────────────────────────────── */}
         <div
           style={{
-            padding: '1.25rem 1.5rem',
-            background: 'linear-gradient(135deg, #001E40, #0F3764)',
+            padding: '1rem 1.5rem',
+            background: '#0F172A',
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '1rem',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            borderBottom: '1px solid #1E293B',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                background: 'rgba(255, 255, 255, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Trophy size={22} color="#FEA619" />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#F8FAFC' }}>
+                {quiz.title}
+              </h2>
+              <span
+                style={{
+                  background: '#1E293B',
+                  color: '#94A3B8',
+                  padding: '0.15rem 0.55rem',
+                  borderRadius: 6,
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  border: '1px solid #334155',
+                }}
+              >
+                Leaderboard (Admin View)
+              </span>
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>
-                  {quiz.title}
-                </h2>
-                <Pill color="#ffffff" bg="rgba(255, 255, 255, 0.2)">
-                  Official Leaderboard
-                </Pill>
-              </div>
-              <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#CBD5E1' }}>
-                {quiz.category ? `${quiz.category} • ` : ''}
-                Target: {quiz.passingPercentage || 60}% • Total Submissions: {attempts.length}
-              </p>
-            </div>
+            <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#94A3B8' }}>
+              Passing Threshold: {quiz.passingPercentage || 60}% • Total Submissions: {attempts.length}
+            </p>
           </div>
 
-          {/* Header Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {userRole !== 'student' && onToggleDeclareResults && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {onToggleDeclareResults && (
               <button
                 onClick={() => onToggleDeclareResults(quiz)}
-                title={
-                  quiz.resultsDeclared
-                    ? 'Click to withhold results from candidates'
-                    : 'Click to declare and release results and answers to all candidates'
-                }
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.35rem',
-                  background: quiz.resultsDeclared ? '#ECFDF5' : '#FFFBEB',
-                  color: quiz.resultsDeclared ? '#047857' : '#B45309',
-                  border: `1px solid ${quiz.resultsDeclared ? '#A7F3D0' : '#FDE68A'}`,
-                  borderRadius: 8,
-                  padding: '0.45rem 0.85rem',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
+                  background: quiz.resultsDeclared ? '#064E3B' : '#78350F',
+                  color: quiz.resultsDeclared ? '#A7F3D0' : '#FDE68A',
+                  border: `1px solid ${quiz.resultsDeclared ? '#059669' : '#B45309'}`,
+                  borderRadius: 6,
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 650,
                   cursor: 'pointer',
-                  transition: 'all 0.15s ease',
                 }}
               >
-                <Megaphone size={14} />
-                <span>{quiz.resultsDeclared ? 'Results: Live (Declared)' : '📢 Declare Results'}</span>
+                <Megaphone size={13} />
+                <span>{quiz.resultsDeclared ? 'Results: Live' : 'Declare Results'}</span>
               </button>
             )}
 
@@ -498,1337 +302,500 @@ export function QuizLeaderboardModal({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.35rem',
-                background: 'rgba(255, 255, 255, 0.15)',
-                color: '#ffffff',
-                border: '1px solid rgba(255, 255, 255, 0.25)',
-                borderRadius: 8,
-                padding: '0.45rem 0.85rem',
-                fontSize: '0.8rem',
+                background: '#1E293B',
+                color: '#F8FAFC',
+                border: '1px solid #334155',
+                borderRadius: 6,
+                padding: '0.4rem 0.75rem',
+                fontSize: '0.78rem',
                 fontWeight: 600,
                 cursor: rankedAttempts.length === 0 ? 'not-allowed' : 'pointer',
               }}
-              title="Download assessment gradebook as CSV"
             >
-              <Download size={14} />
+              <Download size={13} />
               <span>Export CSV</span>
             </button>
 
             <button
               onClick={onClose}
               style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                border: 'none',
-                borderRadius: 8,
-                padding: '0.45rem 0.65rem',
-                color: '#ffffff',
+                background: '#1E293B',
+                border: '1px solid #334155',
+                borderRadius: 6,
+                padding: '0.35rem 0.55rem',
+                color: '#94A3B8',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
               }}
-              title="Close Leaderboard"
+              title="Close"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         </div>
 
         {/* ── Scrollable Body ──────────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', background: '#F8FAFC' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', background: '#F8FAFC' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '3.5rem 0', color: T.txtSec }}>
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  border: '3px solid #E2E8F0',
-                  borderTopColor: T.primary,
-                  borderRadius: '50%',
-                  margin: '0 auto 1rem',
-                  animation: 'spin 0.8s linear infinite',
-                }}
-              />
-              <p style={{ fontWeight: 600, fontSize: '0.92rem' }}>Loading assessment submissions & rankings...</p>
+            <div style={{ textAlign: 'center', padding: '3rem 0', color: '#64748B', fontSize: '0.85rem' }}>
+              Loading assessment records...
             </div>
           ) : rankedAttempts.length === 0 ? (
             <div
               style={{
-                textAlign: 'center',
-                padding: '4rem 1rem',
                 background: '#ffffff',
-                borderRadius: 14,
                 border: '1px dashed #CBD5E1',
+                borderRadius: 8,
+                padding: '3rem 1.5rem',
+                textAlign: 'center',
+                color: '#64748B',
               }}
             >
-              <Users size={44} color="#94A3B8" style={{ marginBottom: '0.75rem' }} />
-              <h3 style={{ margin: '0 0 0.35rem', fontSize: '1.1rem', color: T.txtPri }}>No Submissions Yet</h3>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: T.txtSec }}>
-                Candidates who take and submit this assessment will appear here ranked by score and speed.
+              <Users size={36} color="#94A3B8" style={{ marginBottom: '0.5rem' }} />
+              <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#1E293B' }}>No Submissions Yet</h3>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
+                Submissions will appear here once candidates finalize their assessments.
               </p>
             </div>
           ) : (
             <>
-              {/* ── Top 3 Podium (When 2 or more attempts exist) ─────────────── */}
-              {top3.length >= 2 && (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: top3.length === 2 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-                    gap: '1rem',
-                    marginBottom: '1.25rem',
-                  }}
-                >
-                  {/* #2 Silver (Left) */}
-                  {top3[1] && (
-                    <div
-                      style={{
-                        background: '#ffffff',
-                        border: '1.5px solid #CBD5E1',
-                        borderRadius: 14,
-                        padding: '1rem',
-                        textAlign: 'center',
-                        position: 'relative',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: -12,
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          background: 'linear-gradient(135deg, #E2E8F0, #94A3B8)',
-                          color: '#0F172A',
-                          borderRadius: 20,
-                          padding: '0.15rem 0.65rem',
-                          fontSize: '0.72rem',
-                          fontWeight: 800,
-                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                        }}
-                      >
-                        🥈 2nd Place
-                      </div>
-                      <div style={{ marginTop: '0.5rem', fontWeight: 700, fontSize: '0.95rem', color: T.txtPri }}>
-                        {top3[1].studentName || top3[1].studentEmail.split('@')[0]}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: T.txtSec, marginBottom: '0.5rem' }}>
-                        {top3[1].department || 'General'}
-                      </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#334155' }}>
-                        {top3[1].score}/{top3[1].maxScore}{' '}
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748B' }}>
-                          ({top3[1].percentage}%)
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: T.txtMut, marginTop: '0.25rem' }}>
-                        ⏱️ {formatDuration(top3[1].timeSpentSeconds)} • 🛡️ {top3[1].calculatedIntegrity}% Clean
-                      </div>
-                    </div>
-                  )}
-
-                  {/* #1 Gold (Center, Elevated) */}
-                  {top3[0] && (
-                    <div
-                      style={{
-                        background: 'linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 100%)',
-                        border: '2px solid #F59E0B',
-                        borderRadius: 14,
-                        padding: '1.2rem 1rem',
-                        textAlign: 'center',
-                        position: 'relative',
-                        boxShadow: '0 8px 16px -2px rgba(245, 158, 11, 0.2)',
-                        transform: top3.length === 3 ? 'scale(1.02)' : 'none',
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: -14,
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          background: 'linear-gradient(135deg, #FDE68A, #F59E0B)',
-                          color: '#78350F',
-                          borderRadius: 20,
-                          padding: '0.2rem 0.85rem',
-                          fontSize: '0.76rem',
-                          fontWeight: 800,
-                          boxShadow: '0 2px 6px rgba(245, 158, 11, 0.4)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                        }}
-                      >
-                        <Crown size={13} /> 🥇 1st Place Champion
-                      </div>
-                      <div style={{ marginTop: '0.4rem', fontWeight: 800, fontSize: '1.05rem', color: '#78350F' }}>
-                        {top3[0].studentName || top3[0].studentEmail.split('@')[0]}
-                      </div>
-                      <div style={{ fontSize: '0.76rem', color: '#92400E', marginBottom: '0.5rem' }}>
-                        {top3[0].department || 'General'}
-                      </div>
-                      <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#B45309' }}>
-                        {top3[0].score}/{top3[0].maxScore}{' '}
-                        <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#D97706' }}>
-                          ({top3[0].percentage}%)
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.76rem', color: '#78350F', fontWeight: 600, marginTop: '0.25rem' }}>
-                        ⚡ {formatDuration(top3[0].timeSpentSeconds)} • 🛡️ {top3[0].calculatedIntegrity}% Integrity
-                      </div>
-                    </div>
-                  )}
-
-                  {/* #3 Bronze (Right) */}
-                  {top3[2] && (
-                    <div
-                      style={{
-                        background: '#ffffff',
-                        border: '1.5px solid #FED7AA',
-                        borderRadius: 14,
-                        padding: '1rem',
-                        textAlign: 'center',
-                        position: 'relative',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: -12,
-                          left: '50%',
-                          transform: 'translateX(-50%)',
-                          background: 'linear-gradient(135deg, #FED7AA, #D97706)',
-                          color: '#7C2D12',
-                          borderRadius: 20,
-                          padding: '0.15rem 0.65rem',
-                          fontSize: '0.72rem',
-                          fontWeight: 800,
-                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                        }}
-                      >
-                        🥉 3rd Place
-                      </div>
-                      <div style={{ marginTop: '0.5rem', fontWeight: 700, fontSize: '0.95rem', color: T.txtPri }}>
-                        {top3[2].studentName || top3[2].studentEmail.split('@')[0]}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: T.txtSec, marginBottom: '0.5rem' }}>
-                        {top3[2].department || 'General'}
-                      </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#9A3412' }}>
-                        {top3[2].score}/{top3[2].maxScore}{' '}
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#C2410C' }}>
-                          ({top3[2].percentage}%)
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: T.txtMut, marginTop: '0.25rem' }}>
-                        ⏱️ {formatDuration(top3[2].timeSpentSeconds)} • 🛡️ {top3[2].calculatedIntegrity}% Clean
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Cohort Summary Analytics Cards ──────────────────────────── */}
+              {/* ── Simple Metric Strip (Neutral Styling) ──────────────────── */}
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                  gap: '0.75rem',
-                  marginBottom: '1.25rem',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gap: '0.65rem',
+                  marginBottom: '1rem',
                 }}
               >
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: 10,
-                    padding: '0.75rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '0.72rem', color: T.txtMut, fontWeight: 700, textTransform: 'uppercase' }}>
-                    Candidates
-                  </div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: T.txtPri, marginTop: 2 }}>
-                    {stats.total}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: T.txtSec }}>100% submitted</div>
+                <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.65rem 0.85rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Total Submissions</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 750, color: '#0F172A', marginTop: 2 }}>{stats.total}</div>
                 </div>
 
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: 10,
-                    padding: '0.75rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '0.72rem', color: T.txtMut, fontWeight: 700, textTransform: 'uppercase' }}>
-                    Top Score
-                  </div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#047857', marginTop: 2 }}>
-                    {stats.high} pts
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: T.txtSec }}>Highest achieved</div>
+                <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.65rem 0.85rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Top Score</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 750, color: '#0F172A', marginTop: 2 }}>{stats.high} pts</div>
                 </div>
 
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: 10,
-                    padding: '0.75rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '0.72rem', color: T.txtMut, fontWeight: 700, textTransform: 'uppercase' }}>
-                    Cohort Average
-                  </div>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: T.primary, marginTop: 2 }}>
-                    {stats.avg}%
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: T.txtSec }}>Average grade</div>
+                <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.65rem 0.85rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Cohort Average</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 750, color: '#0F172A', marginTop: 2 }}>{stats.avg}%</div>
                 </div>
 
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: 10,
-                    padding: '0.75rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '0.72rem', color: T.txtMut, fontWeight: 700, textTransform: 'uppercase' }}>
-                    Pass Rate
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '1.3rem',
-                      fontWeight: 800,
-                      color: stats.passRate >= 60 ? '#047857' : '#DC2626',
-                      marginTop: 2,
-                    }}
-                  >
-                    {stats.passRate}%
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: T.txtSec }}>
-                    {stats.passed} of {stats.total} passed
-                  </div>
+                <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.65rem 0.85rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Pass Rate</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 750, color: '#0F172A', marginTop: 2 }}>{stats.passRate}%</div>
                 </div>
 
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: 10,
-                    padding: '0.75rem',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '0.72rem', color: T.txtMut, fontWeight: 700, textTransform: 'uppercase' }}>
-                    Avg Integrity
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '1.3rem',
-                      fontWeight: 800,
-                      color: stats.avgIntegrity >= 80 ? '#047857' : '#D97706',
-                      marginTop: 2,
-                    }}
-                  >
-                    {stats.avgIntegrity}%
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: T.txtSec }}>{stats.clean} clean test sessions</div>
+                <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.65rem 0.85rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Clean Sessions</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 750, color: '#0F172A', marginTop: 2 }}>{stats.clean} / {stats.total}</div>
                 </div>
               </div>
 
-              {/* ── Controls Bar: Filters, Search, Sort & View Toggle ───────── */}
+              {/* ── Search, Filter & Sort Controls ─────────────────────────── */}
               <div
                 style={{
                   background: '#ffffff',
                   border: '1px solid #E2E8F0',
-                  borderRadius: 12,
-                  padding: '0.85rem 1rem',
+                  borderRadius: 8,
+                  padding: '0.65rem 0.85rem',
                   marginBottom: '1rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   flexWrap: 'wrap',
-                  gap: '0.75rem',
+                  gap: '0.65rem',
                 }}
               >
                 {/* Search */}
-                <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 300 }}>
-                  <Search
-                    size={15}
-                    color="#94A3B8"
-                    style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
-                  />
+                <div style={{ position: 'relative', width: 260, maxWidth: '100%' }}>
+                  <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }} />
                   <input
                     type="text"
-                    placeholder="Search candidate, email, roll..."
+                    placeholder="Search candidate, roll, branch..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '0.45rem 0.65rem 0.45rem 2rem',
-                      borderRadius: 8,
+                      padding: '0.4rem 0.65rem 0.4rem 1.85rem',
+                      fontSize: '0.8rem',
+                      borderRadius: 6,
                       border: '1px solid #CBD5E1',
-                      fontSize: '0.82rem',
-                      color: T.txtPri,
-                      boxSizing: 'border-box',
+                      outline: 'none',
                     }}
                   />
                 </div>
 
-                {/* Filter Pills */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                  {(
-                    [
-                      { id: 'all', label: `All (${rankedAttempts.length})` },
-                      { id: 'passed', label: `Passed (${stats.passed})` },
-                      { id: 'retake', label: `Retake (${stats.retake})` },
-                      { id: 'flagged', label: `Flagged (${stats.flagged})` },
-                      { id: 'clean', label: `Clean (${stats.clean})` },
-                    ] as const
-                  ).map((f) => (
+                {/* Filters */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  {(['all', 'passed', 'failed', 'flagged'] as const).map((mode) => (
                     <button
-                      key={f.id}
-                      onClick={() => setFilterMode(f.id)}
+                      key={mode}
+                      onClick={() => setFilterMode(mode)}
                       style={{
-                        padding: '0.35rem 0.65rem',
-                        borderRadius: 6,
-                        border: filterMode === f.id ? `1.5px solid ${T.primary}` : '1px solid #E2E8F0',
-                        background: filterMode === f.id ? T.primary : '#F8FAFC',
-                        color: filterMode === f.id ? '#ffffff' : T.txtSec,
+                        padding: '0.3rem 0.65rem',
                         fontSize: '0.75rem',
                         fontWeight: 600,
+                        borderRadius: 6,
+                        border: '1px solid #CBD5E1',
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease',
+                        background: filterMode === mode ? '#0F172A' : '#ffffff',
+                        color: filterMode === mode ? '#ffffff' : '#475569',
                       }}
                     >
-                      {f.label}
+                      {mode === 'all' && `All (${rankedAttempts.length})`}
+                      {mode === 'passed' && `Passed (${stats.passed})`}
+                      {mode === 'failed' && `Failed (${stats.total - (stats.passed || 0)})`}
+                      {mode === 'flagged' && `Flagged (${rankedAttempts.filter((a) => a.violationCount > 0).length})`}
                     </button>
                   ))}
-                </div>
 
-                {/* Sort Selector & Layout Toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.75rem', color: T.txtMut, fontWeight: 600 }}>Sort:</span>
+                  {/* Sort */}
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    onChange={(e) => setSortBy(e.target.value as any)}
                     style={{
-                      padding: '0.35rem 0.5rem',
+                      padding: '0.35rem 0.65rem',
+                      fontSize: '0.75rem',
                       borderRadius: 6,
                       border: '1px solid #CBD5E1',
-                      fontSize: '0.78rem',
-                      fontWeight: 600,
-                      color: T.txtPri,
                       background: '#ffffff',
+                      color: '#334155',
+                      outline: 'none',
                     }}
                   >
-                    <option value="rank">Rank (Highest Score)</option>
-                    <option value="fastest">Fastest Completion</option>
-                    <option value="integrity">Cleanest Integrity</option>
-                    <option value="latest">Latest Submission</option>
-                    <option value="lowest">Lowest Score</option>
+                    <option value="rank">Sort by: Rank (Highest Score)</option>
+                    <option value="fastest">Sort by: Fastest Time</option>
+                    <option value="integrity">Sort by: Highest Integrity</option>
+                    <option value="latest">Sort by: Latest Submission</option>
                   </select>
-
-                  <div style={{ display: 'flex', border: '1px solid #E2E8F0', borderRadius: 6, overflow: 'hidden' }}>
-                    <button
-                      onClick={() => setViewLayout('table')}
-                      title="Leaderboard Table View"
-                      style={{
-                        padding: '0.35rem 0.55rem',
-                        background: viewLayout === 'table' ? '#E2E8F0' : '#ffffff',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        color: T.txtPri,
-                      }}
-                    >
-                      Table
-                    </button>
-                    <button
-                      onClick={() => setViewLayout('cards')}
-                      title="Cards View"
-                      style={{
-                        padding: '0.35rem 0.55rem',
-                        background: viewLayout === 'cards' ? '#E2E8F0' : '#ffffff',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        color: T.txtPri,
-                      }}
-                    >
-                      Cards
-                    </button>
-                  </div>
                 </div>
               </div>
 
-              {/* ── Leaderboard View: Structured Table ───────────────────────── */}
-              {viewLayout === 'table' ? (
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: 14,
-                    overflow: 'hidden',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-                  }}
-                >
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 780 }}>
-                      <thead>
-                        <tr
-                          style={{
-                            background: '#F1F5F9',
-                            borderBottom: '1.5px solid #CBD5E1',
-                            color: '#475569',
-                            fontSize: '0.72rem',
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                          }}
-                        >
-                          <th style={{ padding: '0.75rem 0.85rem', width: 60, textAlign: 'center' }}>Rank</th>
-                          <th style={{ padding: '0.75rem 0.85rem' }}>Candidate</th>
-                          <th style={{ padding: '0.75rem 0.85rem' }}>Score</th>
-                          <th style={{ padding: '0.75rem 0.85rem' }}>Accuracy</th>
-                          <th style={{ padding: '0.75rem 0.85rem' }}>Time</th>
-                          <th style={{ padding: '0.75rem 0.85rem' }}>Integrity</th>
-                          <th style={{ padding: '0.75rem 0.85rem' }}>Status</th>
-                          {userRole !== 'student' && <th style={{ padding: '0.75rem 0.85rem' }}>Drive Folder</th>}
-                          <th style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>Dossier</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredAndSorted.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={userRole !== 'student' ? 9 : 8}
-                              style={{ textAlign: 'center', padding: '2.5rem', color: T.txtMut, fontSize: '0.88rem' }}
-                            >
-                              No candidates match the selected filters.
+              {/* ── Simple Clean Table ─────────────────────────────────────── */}
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                }}
+              >
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontWeight: 650 }}>
+                      <th style={{ padding: '0.65rem 0.85rem', width: 60 }}>Rank</th>
+                      <th style={{ padding: '0.65rem 0.85rem' }}>Candidate</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Score</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Time</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Integrity</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Status</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAndSorted.map((attempt) => {
+                      const isExpanded = expandedAttemptId === attempt.id
+                      return (
+                        <Fragment key={attempt.id}>
+                          <tr
+                            style={{
+                              borderBottom: '1px solid #F1F5F9',
+                              background: isExpanded ? '#F8FAFC' : '#ffffff',
+                              transition: 'background 0.1s ease',
+                            }}
+                          >
+                            {/* Rank */}
+                            <td style={{ padding: '0.65rem 0.85rem', fontWeight: 750, color: '#0F172A' }}>
+                              #{attempt.rank}
                             </td>
-                          </tr>
-                        ) : (
-                          filteredAndSorted.map((att) => {
-                            const isSelf = currentUserEmail && att.studentEmail.toLowerCase() === currentUserEmail.toLowerCase()
-                            const isExpanded = expandedAttemptId === att.id
-                            const scoreColors = scoreBadgeColor(att.percentage)
 
-                            return (
-                              <Fragment key={att.id}>
-                                <tr
-                                  onClick={() => setExpandedAttemptId(isExpanded ? null : att.id)}
+                            {/* Candidate Details */}
+                            <td style={{ padding: '0.65rem 0.85rem' }}>
+                              <div style={{ fontWeight: 650, color: '#0F172A' }}>
+                                {attempt.studentName || attempt.studentEmail.split('@')[0]}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                                {attempt.studentEmail} {attempt.rollNumber ? `• ${attempt.rollNumber}` : ''}{' '}
+                                {attempt.department ? `(${attempt.department})` : ''}
+                              </div>
+                            </td>
+
+                            {/* Score */}
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                              <strong style={{ color: '#0F172A' }}>{attempt.score}</strong>
+                              <span style={{ color: '#64748B' }}>/{attempt.maxScore}</span>
+                              <div style={{ fontSize: '0.72rem', color: '#475569' }}>{attempt.percentage}%</div>
+                            </td>
+
+                            {/* Time */}
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', color: '#475569' }}>
+                              {formatDuration(attempt.timeSpentSeconds)}
+                            </td>
+
+                            {/* Integrity */}
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                              {attempt.violationCount > 0 ? (
+                                <span
                                   style={{
-                                    borderBottom: '1px solid #E2E8F0',
-                                    background: isSelf
-                                      ? '#EFF6FF'
-                                      : isExpanded
-                                      ? '#F8FAFC'
-                                      : 'transparent',
-                                    fontSize: '0.82rem',
-                                    color: T.txtPri,
-                                    cursor: 'pointer',
-                                    transition: 'background 0.1s ease',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 650,
+                                    color: '#B45309',
+                                    background: '#FEF3C7',
+                                    padding: '0.15rem 0.45rem',
+                                    borderRadius: 4,
+                                    border: '1px solid #FDE68A',
                                   }}
                                 >
-                                  {/* Rank */}
-                                  <td style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>
-                                    {renderRankMedal(att.rank)}
-                                  </td>
+                                  {attempt.calculatedIntegrity}% ({attempt.violationCount} flags)
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600 }}>
+                                  100% Clean
+                                </span>
+                              )}
+                            </td>
 
-                                  {/* Candidate */}
-                                  <td style={{ padding: '0.85rem 0.75rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                                      <span style={{ fontWeight: 700, color: T.txtPri }}>
-                                        {att.studentName || att.studentEmail.split('@')[0]}
-                                      </span>
-                                      {isSelf && <Pill color="#ffffff" bg={T.primary}>You</Pill>}
-                                      {att.isPublicCandidate && (
-                                        <Pill color="#2563EB" bg="#EFF6FF">
-                                          🌐 Public
-                                        </Pill>
-                                      )}
-                                      {att.rollNumber && (
-                                        <Pill color="#475569" bg="#F1F5F9">
-                                          Roll: {att.rollNumber}
-                                        </Pill>
-                                      )}
+                            {/* Status */}
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 650,
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: 4,
+                                  background: attempt.passed ? '#ECFDF5' : '#F1F5F9',
+                                  color: attempt.passed ? '#047857' : '#475569',
+                                  border: `1px solid ${attempt.passed ? '#A7F3D0' : '#E2E8F0'}`,
+                                }}
+                              >
+                                {attempt.passed ? 'Passed' : 'Failed'}
+                              </span>
+                            </td>
+
+                            {/* Actions */}
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                {attempt.driveEvidenceFolderLink && (
+                                  <a
+                                    href={attempt.driveEvidenceFolderLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      padding: '0.3rem 0.45rem',
+                                      fontSize: '0.74rem',
+                                      color: '#2563EB',
+                                      border: '1px solid #BFDBFE',
+                                      borderRadius: 6,
+                                      background: '#EFF6FF',
+                                      textDecoration: 'none',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3,
+                                    }}
+                                    title="Open Google Drive Evidence Directory"
+                                  >
+                                    <ExternalLink size={12} /> Drive
+                                  </a>
+                                )}
+
+                                <button
+                                  onClick={() =>
+                                    setExpandedAttemptId(isExpanded ? null : attempt.id)
+                                  }
+                                  style={{
+                                    padding: '0.3rem 0.55rem',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 600,
+                                    color: isExpanded ? '#ffffff' : '#334155',
+                                    background: isExpanded ? '#0F172A' : '#F1F5F9',
+                                    border: '1px solid #CBD5E1',
+                                    borderRadius: 6,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                  }}
+                                >
+                                  {isExpanded ? 'Hide' : 'Review'}
+                                  {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+
+                                {onResetAttempt && (
+                                  <button
+                                    onClick={() =>
+                                      onResetAttempt(
+                                        attempt.id,
+                                        attempt.studentName || attempt.studentEmail
+                                      )
+                                    }
+                                    style={{
+                                      padding: '0.3rem 0.45rem',
+                                      fontSize: '0.74rem',
+                                      color: '#DC2626',
+                                      border: '1px solid #FECACA',
+                                      borderRadius: 6,
+                                      background: '#FEF2F2',
+                                      cursor: 'pointer',
+                                    }}
+                                    title="Reset attempt and permit retake"
+                                  >
+                                    <RotateCcw size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* ── Expanded Audit Dossier Row ─────────────────── */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} style={{ padding: '1rem', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                  {/* Telemetry Summary */}
+                                  <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                                    <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '0.4rem 0.65rem', fontSize: '0.75rem' }}>
+                                      <span style={{ color: '#64748B' }}>Tab Switches: </span>
+                                      <strong>{attempt.tabSwitchesCount || 0}</strong>
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: T.txtMut, marginTop: 2 }}>
-                                      {att.studentEmail} • {att.department || 'Engineering'}
+                                    <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '0.4rem 0.65rem', fontSize: '0.75rem' }}>
+                                      <span style={{ color: '#64748B' }}>Face Absences: </span>
+                                      <strong>{attempt.faceMissingCount || 0}</strong>
                                     </div>
-                                  </td>
+                                    <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '0.4rem 0.65rem', fontSize: '0.75rem' }}>
+                                      <span style={{ color: '#64748B' }}>Phone Detections: </span>
+                                      <strong>{attempt.phoneCount || 0}</strong>
+                                    </div>
+                                    <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '0.4rem 0.65rem', fontSize: '0.75rem' }}>
+                                      <span style={{ color: '#64748B' }}>Total Away Time: </span>
+                                      <strong>{attempt.totalAwaySeconds || 0}s</strong>
+                                    </div>
+                                  </div>
 
-                                  {/* Score Points */}
-                                  <td style={{ padding: '0.85rem 0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>
-                                    {att.score} / {att.maxScore} pts
-                                  </td>
-
-                                  {/* Percentage */}
-                                  <td style={{ padding: '0.85rem 0.75rem' }}>
-                                    <span
-                                      style={{
-                                        padding: '0.2rem 0.55rem',
-                                        borderRadius: 6,
-                                        fontSize: '0.78rem',
-                                        fontWeight: 800,
-                                        background: scoreColors.bg,
-                                        color: scoreColors.text,
-                                        border: `1px solid ${scoreColors.border}`,
-                                      }}
-                                    >
-                                      {att.percentage}%
-                                    </span>
-                                  </td>
-
-                                  {/* Time Spent */}
-                                  <td style={{ padding: '0.85rem 0.75rem', color: T.txtSec, fontWeight: 600 }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                                      <Clock size={12} color="#64748B" />
-                                      {formatDuration(att.timeSpentSeconds)}
-                                    </span>
-                                  </td>
-
-                                  {/* Integrity */}
-                                  <td style={{ padding: '0.85rem 0.75rem' }}>
-                                    <span
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.25rem',
-                                        padding: '0.2rem 0.5rem',
-                                        borderRadius: 6,
-                                        fontSize: '0.72rem',
-                                        fontWeight: 700,
-                                        background: att.violationCount > 0 ? '#FEF2F2' : '#ECFDF5',
-                                        color: att.violationCount > 0 ? '#DC2626' : '#059669',
-                                        border: `1px solid ${att.violationCount > 0 ? '#FCA5A5' : '#A7F3D0'}`,
-                                      }}
-                                    >
-                                      {att.violationCount > 0 ? (
-                                        <>
-                                          <ShieldAlert size={12} />
-                                          {att.violationCount} Flag{att.violationCount > 1 ? 's' : ''} ({att.calculatedIntegrity}%)
-                                        </>
-                                      ) : (
-                                        <>
-                                          <ShieldCheck size={12} />
-                                          100% Clean
-                                        </>
-                                      )}
-                                    </span>
-                                  </td>
-
-                                  {/* Verdict Status */}
-                                  <td style={{ padding: '0.85rem 0.75rem' }}>
-                                    <span
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.25rem',
-                                        padding: '0.2rem 0.55rem',
-                                        borderRadius: 6,
-                                        fontSize: '0.74rem',
-                                        fontWeight: 700,
-                                        background: att.passed ? '#ECFDF5' : '#FEF2F2',
-                                        color: att.passed ? '#059669' : '#DC2626',
-                                      }}
-                                    >
-                                      {att.passed ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-                                      {att.passed ? 'Passed' : 'Needs Retake'}
-                                    </span>
-                                  </td>
-
-                                  {/* Drive Link (Admin/Faculty) */}
-                                  {userRole !== 'student' && (
-                                    <td style={{ padding: '0.85rem 0.75rem' }}>
-                                      {att.driveEvidenceFolderLink ? (
-                                        <a
-                                          href={att.driveEvidenceFolderLink}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.25rem',
-                                            padding: '0.25rem 0.55rem',
-                                            borderRadius: 6,
-                                            background: '#EFF6FF',
-                                            color: '#1D4ED8',
-                                            fontSize: '0.72rem',
-                                            fontWeight: 700,
-                                            textDecoration: 'none',
-                                            border: '1px solid #BFDBFE',
-                                          }}
-                                          title="Open student evidence folder in Google Drive"
-                                        >
-                                          📁 Drive <ExternalLink size={10} />
-                                        </a>
-                                      ) : (
-                                        <span style={{ fontSize: '0.72rem', color: T.txtMut }}>—</span>
-                                      )}
-                                    </td>
+                                  {/* Photographic Evidence Gallery */}
+                                  {attempt.photoEvidence.length > 0 && (
+                                    <div>
+                                      <div style={{ fontSize: '0.75rem', fontWeight: 650, color: '#334155', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Camera size={13} /> Photographic Snapshots ({attempt.photoEvidence.length}):
+                                      </div>
+                                      <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.35rem' }}>
+                                        {attempt.photoEvidence.map((ev, evIdx) => (
+                                          <div
+                                            key={evIdx}
+                                            onClick={() => ev.snapshot && setLightboxImage(ev.snapshot)}
+                                            style={{
+                                              width: 100,
+                                              height: 75,
+                                              borderRadius: 4,
+                                              overflow: 'hidden',
+                                              border: '1px solid #CBD5E1',
+                                              cursor: 'pointer',
+                                              flexShrink: 0,
+                                              position: 'relative',
+                                            }}
+                                            title={ev.detail}
+                                          >
+                                            <img
+                                              src={ev.snapshot}
+                                              alt="Evidence"
+                                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
                                   )}
 
-                                  {/* Expand Chevron */}
-                                  <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>
-                                    <button
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        color: T.txtSec,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                      }}
-                                    >
-                                      {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                    </button>
-                                  </td>
-                                </tr>
-
-                                {/* Expanded Audit Dossier */}
-                                {isExpanded && (
-                                  <tr>
-                                    <td
-                                      colSpan={userRole !== 'student' ? 9 : 8}
-                                      style={{
-                                        padding: '1.25rem',
-                                        background: '#F8FAFC',
-                                        borderBottom: '2px solid #E2E8F0',
-                                      }}
-                                    >
-                                      <AuditDossierView
-                                        quiz={quiz}
-                                        attempt={att}
-                                        userRole={userRole}
-                                        onResetAttempt={onResetAttempt}
-                                        onPreviewSnapshot={(src, caption) =>
-                                          setPreviewSnapshot({ src, caption })
-                                        }
-                                      />
-                                    </td>
-                                  </tr>
-                                )}
-                              </Fragment>
-                            )
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                /* ── Card Layout View ───────────────────────────────────────── */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {filteredAndSorted.map((att) => {
-                    const isSelf = currentUserEmail && att.studentEmail.toLowerCase() === currentUserEmail.toLowerCase()
-                    const isExpanded = expandedAttemptId === att.id
-
-                    return (
-                      <div
-                        key={att.id}
-                        style={{
-                          borderRadius: 12,
-                          border: isSelf ? `2px solid ${T.primary}` : '1px solid #E2E8F0',
-                          background: '#ffffff',
-                          overflow: 'hidden',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                        }}
-                      >
-                        <div
-                          onClick={() => setExpandedAttemptId(isExpanded ? null : att.id)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '1rem',
-                            cursor: 'pointer',
-                            gap: '0.75rem',
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                            {renderRankMedal(att.rank)}
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: T.txtPri }}>
-                                  {att.studentName || att.studentEmail.split('@')[0]}
-                                </span>
-                                {isSelf && <Pill color="#ffffff" bg={T.primary}>You</Pill>}
-                                {att.isPublicCandidate && <Pill color="#2563EB" bg="#EFF6FF">🌐 Public Link</Pill>}
-                                {att.rollNumber && <Pill color="#475569" bg="#F1F5F9">Roll: {att.rollNumber}</Pill>}
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: T.txtMut, marginTop: 2 }}>
-                                {att.studentEmail} • {att.department || 'General'} • {new Date(att.completedAt).toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                            <span
-                              style={{
-                                padding: '0.25rem 0.65rem',
-                                borderRadius: 6,
-                                fontSize: '0.8rem',
-                                fontWeight: 800,
-                                background: att.passed ? '#ECFDF5' : '#FEF2F2',
-                                color: att.passed ? '#059669' : '#DC2626',
-                              }}
-                            >
-                              {att.score}/{att.maxScore} ({att.percentage}%)
-                            </span>
-
-                            <span
-                              style={{
-                                padding: '0.25rem 0.55rem',
-                                borderRadius: 6,
-                                fontSize: '0.74rem',
-                                fontWeight: 700,
-                                background: att.violationCount > 0 ? '#FEF2F2' : '#ECFDF5',
-                                color: att.violationCount > 0 ? '#DC2626' : '#059669',
-                              }}
-                            >
-                              {att.violationCount > 0 ? `🚨 ${att.violationCount} Flags` : '🛡️ Clean'}
-                            </span>
-
-                            {isExpanded ? <ChevronUp size={18} color="#64748B" /> : <ChevronDown size={18} color="#64748B" />}
-                          </div>
-                        </div>
-
-                        {isExpanded && (
-                          <div style={{ padding: '1rem', borderTop: '1px solid #E2E8F0', background: '#F8FAFC' }}>
-                            <AuditDossierView
-                              quiz={quiz}
-                              attempt={att}
-                              userRole={userRole}
-                              onResetAttempt={onResetAttempt}
-                              onPreviewSnapshot={(src, caption) =>
-                                setPreviewSnapshot({ src, caption })
-                              }
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                                  {/* Question-by-Question Verification */}
+                                  <div>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 650, color: '#334155', marginBottom: '0.35rem' }}>
+                                      Question Review:
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 220, overflowY: 'auto' }}>
+                                      {quiz.questions.map((q, qIdx) => {
+                                        const candidateChoice = attempt.answers?.[q.id] ?? attempt.answers?.[String(qIdx)] ?? attempt.answers?.[qIdx]
+                                        const isCorrect = candidateChoice === q.correctIndex
+                                        return (
+                                          <div
+                                            key={q.id || qIdx}
+                                            style={{
+                                              padding: '0.4rem 0.65rem',
+                                              borderRadius: 4,
+                                              background: '#ffffff',
+                                              border: `1px solid ${isCorrect ? '#E2E8F0' : '#FECACA'}`,
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'space-between',
+                                              fontSize: '0.75rem',
+                                            }}
+                                          >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                              {isCorrect ? (
+                                                <CheckCircle2 size={13} color="#059669" />
+                                              ) : (
+                                                <XCircle size={13} color="#DC2626" />
+                                              )}
+                                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#1E293B' }}>
+                                                Q{qIdx + 1}. {q.question}
+                                              </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B', flexShrink: 0 }}>
+                                              Selected:{' '}
+                                              <strong>
+                                                {candidateChoice !== undefined && q.options[candidateChoice]
+                                                  ? q.options[candidateChoice]
+                                                  : 'Unanswered'}
+                                              </strong>
+                                              {!isCorrect && (
+                                                <span style={{ color: '#059669', marginLeft: 6 }}>
+                                                  (Correct: {q.options[q.correctIndex]})
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </div>
-
-        {/* ── Modal Footer ─────────────────────────────────────────────────── */}
-        <div
-          style={{
-            padding: '0.85rem 1.5rem',
-            background: '#ffffff',
-            borderTop: '1px solid #E2E8F0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '0.78rem',
-            color: T.txtSec,
-          }}
-        >
-          <div>
-            Showing <strong>{filteredAndSorted.length}</strong> of <strong>{rankedAttempts.length}</strong> ranked candidates
-          </div>
-
-          <button
-            onClick={onClose}
-            style={{
-              background: '#F1F5F9',
-              color: T.txtPri,
-              border: 'none',
-              borderRadius: 8,
-              padding: '0.45rem 1rem',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Close Leaderboard
-          </button>
-        </div>
       </div>
 
-      {/* ── Lightbox Preview Modal for Photographic Evidence ─────────────── */}
-      {previewSnapshot && (
+      {/* Lightbox for Evidence Images */}
+      {lightboxImage && (
         <div
-          onClick={() => setPreviewSnapshot(null)}
+          onClick={() => setLightboxImage(null)}
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(6px)',
+            zIndex: 10000,
+            background: 'rgba(0, 0, 0, 0.85)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 10001,
-            padding: '1.5rem',
+            padding: '2rem',
+            cursor: 'zoom-out',
           }}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#ffffff',
-              borderRadius: 14,
-              overflow: 'hidden',
-              maxWidth: 520,
-              width: '100%',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.75rem 1rem',
-                borderBottom: '1px solid #E2E8F0',
-                background: '#F8FAFC',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  fontWeight: 700,
-                  fontSize: '0.88rem',
-                  color: '#991B1B',
-                }}
-              >
-                <Camera size={16} color="#DC2626" />
-                <span>Forensic Evidence Snapshot</span>
-              </div>
-              <button
-                onClick={() => setPreviewSnapshot(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '0.2rem',
-                  color: T.txtSec,
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ padding: '1rem', background: '#0F172A', display: 'flex', justifyContent: 'center' }}>
-              <img
-                src={previewSnapshot.src}
-                alt="Enlarged forensic snapshot"
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: 380,
-                  borderRadius: 8,
-                  objectFit: 'contain',
-                }}
-              />
-            </div>
-
-            <div style={{ padding: '0.85rem 1rem', fontSize: '0.82rem', color: T.txtPri, background: '#ffffff', lineHeight: 1.4 }}>
-              <strong>Infraction Details:</strong>
-              <div style={{ color: '#DC2626', marginTop: 3 }}>{previewSnapshot.caption}</div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Expanded Candidate Audit Dossier Subcomponent ────────────────────────────
-function AuditDossierView({
-  quiz,
-  attempt,
-  userRole,
-  onResetAttempt,
-  onPreviewSnapshot,
-}: {
-  quiz: Quiz
-  attempt: RankedAttempt
-  userRole?: string
-  onResetAttempt?: (attemptId: string, candidateName?: string) => Promise<void> | void
-  onPreviewSnapshot: (src: string, caption: string) => void
-}) {
-  const [activeTab, setActiveTab] = useState<'telemetry' | 'answers'>('telemetry')
-
-  return (
-    <div>
-      {/* Sub-tab navigation */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.85rem' }}>
-        <button
-          onClick={() => setActiveTab('telemetry')}
-          style={{
-            padding: '0.35rem 0.75rem',
-            borderRadius: 6,
-            border: activeTab === 'telemetry' ? `1.5px solid ${T.primary}` : '1px solid #E2E8F0',
-            background: activeTab === 'telemetry' ? T.primary : '#ffffff',
-            color: activeTab === 'telemetry' ? '#ffffff' : T.txtSec,
-            fontSize: '0.76rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          🛡️ Proctoring & Evidence ({attempt.photoEvidence.length} Photos)
-        </button>
-        <button
-          onClick={() => setActiveTab('answers')}
-          style={{
-            padding: '0.35rem 0.75rem',
-            borderRadius: 6,
-            border: activeTab === 'answers' ? `1.5px solid ${T.primary}` : '1px solid #E2E8F0',
-            background: activeTab === 'answers' ? T.primary : '#ffffff',
-            color: activeTab === 'answers' ? '#ffffff' : T.txtSec,
-            fontSize: '0.76rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          📝 Answer Review ({attempt.score}/{attempt.maxScore} pts)
-        </button>
-
-        {attempt.driveEvidenceFolderLink && (
-          <a
-            href={attempt.driveEvidenceFolderLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              marginLeft: 'auto',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.3rem',
-              padding: '0.35rem 0.75rem',
-              borderRadius: 6,
-              background: '#EFF6FF',
-              color: '#1D4ED8',
-              fontSize: '0.76rem',
-              fontWeight: 700,
-              textDecoration: 'none',
-              border: '1px solid #BFDBFE',
-            }}
-          >
-            📁 View Google Drive Evidence Folder <ExternalLink size={11} />
-          </a>
-        )}
-      </div>
-
-      {activeTab === 'telemetry' ? (
-        <>
-          {/* Forensic Metrics Grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-              gap: '0.5rem',
-              marginBottom: '0.85rem',
-            }}
-          >
-            <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.6rem' }}>
-              <div style={{ fontSize: '0.68rem', color: T.txtMut, textTransform: 'uppercase', fontWeight: 700 }}>
-                Tab Switches
-              </div>
-              <div
-                style={{
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: (attempt.tabSwitchesCount || 0) > 0 ? '#DC2626' : '#047857',
-                }}
-              >
-                {attempt.tabSwitchesCount || 0}
-              </div>
-            </div>
-
-            <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.6rem' }}>
-              <div style={{ fontSize: '0.68rem', color: T.txtMut, textTransform: 'uppercase', fontWeight: 700 }}>
-                Fullscreen Exits
-              </div>
-              <div
-                style={{
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: (attempt.fullscreenViolationsCount || 0) > 0 ? '#DC2626' : '#047857',
-                }}
-              >
-                {attempt.fullscreenViolationsCount || 0}
-              </div>
-            </div>
-
-            <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.6rem' }}>
-              <div style={{ fontSize: '0.68rem', color: T.txtMut, textTransform: 'uppercase', fontWeight: 700 }}>
-                Mobile Phones
-              </div>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: attempt.phoneCount > 0 ? '#DC2626' : '#047857' }}>
-                {attempt.phoneCount}
-              </div>
-            </div>
-
-            <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.6rem' }}>
-              <div style={{ fontSize: '0.68rem', color: T.txtMut, textTransform: 'uppercase', fontWeight: 700 }}>
-                Face Missing
-              </div>
-              <div
-                style={{
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: (attempt.faceMissingCount || 0) > 0 ? '#DC2626' : '#047857',
-                }}
-              >
-                {attempt.faceMissingCount || 0}
-              </div>
-            </div>
-
-            <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.6rem' }}>
-              <div style={{ fontSize: '0.68rem', color: T.txtMut, textTransform: 'uppercase', fontWeight: 700 }}>
-                Multiple People
-              </div>
-              <div
-                style={{
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: (attempt.multipleFacesCount || 0) > 0 ? '#DC2626' : '#047857',
-                }}
-              >
-                {attempt.multipleFacesCount || 0}
-              </div>
-            </div>
-
-            <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0.6rem' }}>
-              <div style={{ fontSize: '0.68rem', color: T.txtMut, textTransform: 'uppercase', fontWeight: 700 }}>
-                Audio Anomalies
-              </div>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: attempt.audioCount > 0 ? '#DC2626' : '#047857' }}>
-                {attempt.audioCount}
-              </div>
-            </div>
-          </div>
-
-          {/* Photographic Evidence Gallery */}
-          <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 10, padding: '0.85rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.82rem', color: T.txtPri }}>
-                📸 Forensic Photo Evidence Gallery ({attempt.photoEvidence.length} Snapshots Saved)
-              </div>
-              {attempt.driveEvidenceFolderLink && (
-                <span style={{ fontSize: '0.72rem', color: '#047857', fontWeight: 600 }}>
-                  ✓ Synced to Google Drive
-                </span>
-              )}
-            </div>
-
-            {attempt.photoEvidence.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '1.5rem', color: '#047857', fontSize: '0.82rem' }}>
-                🛡️ 100% Clean Session: No infractions detected, zero suspicious snapshots captured.
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-                  gap: '0.6rem',
-                }}
-              >
-                {attempt.photoEvidence.map((flag, snapIdx) => (
-                  <div
-                    key={snapIdx}
-                    onClick={() =>
-                      onPreviewSnapshot(
-                        flag.snapshot!,
-                        `${flag.detail || flag.type} at ${flag.timestamp}`
-                      )
-                    }
-                    style={{
-                      borderRadius: 8,
-                      border: '1.5px solid #FCA5A5',
-                      background: '#000000',
-                      overflow: 'hidden',
-                      cursor: 'pointer',
-                      transition: 'transform 0.15s ease',
-                      position: 'relative',
-                    }}
-                  >
-                    <img
-                      src={flag.snapshot}
-                      alt={`Infraction ${snapIdx + 1}`}
-                      style={{
-                        width: '100%',
-                        height: 95,
-                        objectFit: 'cover',
-                        display: 'block',
-                      }}
-                    />
-                    <div
-                      style={{
-                        padding: '0.25rem 0.4rem',
-                        background: '#FEF2F2',
-                        fontSize: '0.68rem',
-                        color: '#991B1B',
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        borderTop: '1px solid #FECACA',
-                      }}
-                    >
-                      {flag.detail || flag.type}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Admin/Faculty Action: Allow Retake */}
-          {userRole !== 'student' && onResetAttempt && (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                marginTop: '0.75rem',
-                paddingTop: '0.65rem',
-                borderTop: '1px solid #E2E8F0',
-              }}
-            >
-              <button
-                onClick={() =>
-                  onResetAttempt(
-                    attempt.id,
-                    attempt.studentName || attempt.studentEmail.split('@')[0]
-                  )
-                }
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  background: '#FFFBEB',
-                  color: '#B45309',
-                  border: '1px solid #FDE68A',
-                  borderRadius: 6,
-                  padding: '0.35rem 0.75rem',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-                title="Reset this attempt record so the student can re-take the assessment"
-              >
-                <RotateCcw size={13} /> Allow Candidate Retake
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        /* Answer Review Tab */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-          {quiz.questions.map((q, qIdx) => {
-            const chosenAns =
-              attempt.answers?.[q.id] ?? attempt.answers?.[String(qIdx)] ?? attempt.answers?.[qIdx]
-            const isCorrect = chosenAns === q.correctIndex
-            const isAnswered = chosenAns !== undefined && chosenAns !== null
-
-            return (
-              <div
-                key={q.id || qIdx}
-                style={{
-                  background: '#ffffff',
-                  border: `1px solid ${isCorrect ? '#A7F3D0' : '#FECACA'}`,
-                  borderRadius: 10,
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.82rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <div style={{ fontWeight: 700, color: T.txtPri }}>
-                    Q{qIdx + 1}. {q.question}
-                  </div>
-                  <span
-                    style={{
-                      padding: '0.15rem 0.45rem',
-                      borderRadius: 4,
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      background: isCorrect ? '#ECFDF5' : '#FEF2F2',
-                      color: isCorrect ? '#047857' : '#DC2626',
-                    }}
-                  >
-                    {isCorrect ? `+${q.points || 1} pt` : '0 pts'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.4rem', marginTop: '0.5rem' }}>
-                  {q.options.map((opt, optIdx) => {
-                    const isCandidateChoice = chosenAns === optIdx
-                    const isActualCorrect = q.correctIndex === optIdx
-
-                    let optBg = '#F8FAFC'
-                    let optColor = T.txtSec
-                    let optBorder = '#E2E8F0'
-
-                    if (isActualCorrect) {
-                      optBg = '#ECFDF5'
-                      optColor = '#047857'
-                      optBorder = '#6EE7B7'
-                    } else if (isCandidateChoice && !isCorrect) {
-                      optBg = '#FEF2F2'
-                      optColor = '#DC2626'
-                      optBorder = '#FCA5A5'
-                    }
-
-                    return (
-                      <div
-                        key={optIdx}
-                        style={{
-                          padding: '0.4rem 0.6rem',
-                          borderRadius: 6,
-                          background: optBg,
-                          color: optColor,
-                          border: `1px solid ${optBorder}`,
-                          fontSize: '0.76rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <span>
-                          <strong>{String.fromCharCode(65 + optIdx)}.</strong> {opt}
-                        </span>
-                        {isCandidateChoice && (
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, marginLeft: 4 }}>
-                            (Chosen)
-                          </span>
-                        )}
-                        {isActualCorrect && (
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, marginLeft: 4 }}>
-                            ✓ Correct
-                          </span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {!isAnswered && (
-                  <div style={{ marginTop: '0.4rem', fontSize: '0.72rem', color: '#D97706', fontWeight: 600 }}>
-                    ⚠️ Not answered by candidate
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          <img
+            src={lightboxImage}
+            alt="Enlarged Evidence"
+            style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: 8, boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)' }}
+          />
         </div>
       )}
     </div>
