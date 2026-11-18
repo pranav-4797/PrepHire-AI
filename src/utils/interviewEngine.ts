@@ -1,9 +1,6 @@
 // ── PrepHire-AI Resilience Orchestrator & Fallback State Machine ───────────
-import {
-  getQuestionsForSession,
-  type QuestionNode,
-  type InterviewDomain,
-} from '../data/questionBank'
+import type { QuestionNode, InterviewDomain } from '../data/questionBank'
+import { getSessionQuestions } from '../services/questionBank.service'
 import type { ResumeProfile } from './resume'
 
 export type EngineMode = 'cloud' | 'offline'
@@ -132,7 +129,7 @@ export async function orchestrateNextQuestion(
 
   // ── AUTONOMOUS OFFLINE FALLBACK ──────────────────────────────────────────
   const resumeSkills = context.resumeProfile?.skills || []
-  const availableQuestions = getQuestionsForSession(
+  const availableQuestions = getSessionQuestions(
     context.domain as InterviewDomain,
     context.department,
     context.level,

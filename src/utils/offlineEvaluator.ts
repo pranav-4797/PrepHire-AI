@@ -1,6 +1,7 @@
 // ── PrepHire-AI Offline Heuristic & Rubric Evaluation Engine ────────────────
 import type { SpeechDeliveryMetrics } from './speechAnalytics'
-import { QUESTION_BANK, type QuestionNode } from '../data/questionBank'
+import type { QuestionNode } from '../data/questionBank'
+import { findQuestionByQuestionText } from '../services/questionBank.service'
 
 export interface QA {
   q: string
@@ -96,9 +97,7 @@ export function evaluateOfflineSession(
     }
 
     // Try finding matching node from question bank
-    const matchedNode: QuestionNode | undefined = QUESTION_BANK.find(
-      (node) => item.q.toLowerCase().includes(node.question.toLowerCase().slice(0, 30))
-    )
+    const matchedNode: QuestionNode | undefined = findQuestionByQuestionText(item.q)
 
     const expected = matchedNode?.expectedKeywords || TECHNICAL_CORE_TERMS
     const matchedInQ = expected.filter((kw) => text.includes(kw.toLowerCase())).length

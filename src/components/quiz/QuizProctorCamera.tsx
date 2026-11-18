@@ -17,6 +17,7 @@ interface QuizProctorCameraProps {
   compact?: boolean
   stealthMode?: boolean // If true (default true), never reveals flags or warnings to the candidate
   onRegisterCapture?: (fn: () => string | undefined) => void
+  onRegisterMediaStream?: (stream: MediaStream | null) => void
 }
 
 export function QuizProctorCamera({
@@ -26,6 +27,7 @@ export function QuizProctorCamera({
   compact = false,
   stealthMode = true,
   onRegisterCapture,
+  onRegisterMediaStream,
 }: QuizProctorCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -117,6 +119,7 @@ export function QuizProctorCamera({
     }
 
     streamRef.current = stream
+    onRegisterMediaStream?.(stream)
     if (videoRef.current) {
       videoRef.current.srcObject = stream
       videoRef.current.play().catch(() => {})
@@ -176,9 +179,10 @@ export function QuizProctorCamera({
         console.warn('Audio proctor analyzer setup failed:', e)
       }
     }
-  }, [captureSnapshot, triggerViolation])
+  }, [captureSnapshot, triggerViolation, onRegisterMediaStream])
 
   const stopCamera = useCallback(() => {
+    onRegisterMediaStream?.(null)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
@@ -197,7 +201,7 @@ export function QuizProctorCamera({
       audioCtxRef.current = null
     }
     setCamStatus('idle')
-  }, [])
+  }, [onRegisterMediaStream])
 
   useEffect(() => {
     if (active) {

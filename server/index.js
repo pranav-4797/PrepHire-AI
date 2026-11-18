@@ -21,6 +21,7 @@ import { registerCodingRoutes } from './coding/routes.js'
 import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
 import { callGemini, streamGemini, isRateLimited } from './gemini.js'
 import { initDriveQueue } from './driveQueue.js'
+import { initProctorWebSocket } from './proctorSocket.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -712,8 +713,10 @@ process.on('unhandledRejection', (reason) => {
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 PrepHire Upload Server running on http://localhost:${PORT}`)
   console.log(`   Drive folder: ${FOLDER_ID || '(mock mode — Drive not configured)'}`)
   console.log(`   CORS origin:  ${CORS_ORIGIN}`)
 })
+
+initProctorWebSocket(server)

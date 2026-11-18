@@ -116,6 +116,8 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Candidate Retake Reset & Administrative Audit Dossier**: Integrated candidate attempt reset button directly within the leaderboard, telemetry audit dossier, forensic snapshot gallery with lightbox preview, question-by-question candidate answer reviews, and Drive links.
 - **1-Click Gradebook CSV Export**: Direct batch export of formatted assessment gradebooks to CSV format for faculty and administrators.
 - **Student Cohort Access & Security**: Students can view the cohort leaderboard from `StudentQuizHub.tsx` and `QuizResultModal.tsx` once results are declared. Updated `firestore.rules` to allow authenticated students read access to cohort attempts.
+- **Live Invigilation Cockpit & WebRTC P2P Video Streaming**: Built zero-database-cost WebSocket gateway (`server/proctorSocket.js` on `/ws/proctor`) and admin surveillance interface (`AdminLiveInvigilationModal.tsx`) with 1-click live camera peer streaming, audio synthesized chime alerts, candidate telemetry grid, and administrative warning messaging.
+- **Anti-Cheating Deterministic Question & Option Shuffling**: Built Mulberry32 PRNG engine (`quizShuffle.ts`) randomizing questions and option keys uniquely per candidate to neutralize college computer lab peer-copying, while mapping answers back to master keys for transparent scoring.
 
 ## Gotchas
 

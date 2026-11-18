@@ -26,6 +26,27 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🧠 **Faculty & Admin Interview Question Bank (Firestore-Backed CRUD)**: Faculty and administrators can now author, curate, and retire interview questions directly from their portals instead of relying solely on the built-in static bank. Live questions are stored in a new `interview_questions` Firestore collection and layered over the curated 26-question `QUESTION_BANK`, which remains the offline seed and fallback.
+  - **Full CRUD Studio (`QuestionBankManager.tsx`)**: Create, edit, duplicate-on-edit, activate/deactivate, and delete questions across all four interview domains (`technical`, `hr`, `aptitude`, `group-discussion`), all nine MIT AoE branches (plus `All`), and beginner/intermediate/advanced levels — with expected keywords, key concepts, probing/advanced follow-ups, and sample strong answers.
+  - **Synchronous Engine Integration Without Latency**: `questionBank.service.ts` exposes an in-memory hydrated cache (`getActiveBankQuestions()` / `getSessionQuestions()`), so `interviewEngine` and `offlineEvaluator` stay fully synchronous — interview sessions never wait on a Firestore round-trip, and lookups by question text resolve against the live bank first, then the static seed.
+  - **One-Click Seed & AI Question Generation**: A "Seed Starter Bank" action bulk-imports the curated library into Firestore, while an AI Generate panel drafts new questions from a topic prompt (via `/api/ai/generate`) with domain, level, and branch pre-selection plus a template-based fallback when the AI endpoint is unavailable.
+  - **Search, Filters & Live KPIs**: Real-time text search plus domain/level/branch/status filters and KPI cards for total, active, AI-generated, and custom questions.
+  - **Deep Routing & Governance**: New `questions` tab wired into both faculty and admin portals with sidebar entries and browser-history deep links (`/faculty/questions`, `/admin/questions`, `/admin/question-bank`). Firestore rules allow authenticated reads and restrict writes to `Admin`/`Faculty` — **run `firebase deploy --only firestore:rules` to activate the new rule.**
+
+### Live Invigilation Cockpit & Anti-Cheating Shuffling (2026-11-18)
+
+- 🔴 **Live Invigilation Cockpit & 1-Click Live WebRTC Video Feed (`/ws/proctor`)**:
+  - **Zero-Database-Cost WebSocket Gateway**: Built a high-performance in-memory WebSocket server (`server/proctorSocket.js` on path `/ws/proctor`) maintaining live exam rooms for candidate telemetry, instant infraction alerts, and WebRTC P2P signaling with zero Firestore reads/writes.
+  - **1-Click Live WebRTC Video Feed (P2P)**: Invigilators can click `▶ Live Camera` on any candidate card to open a direct peer-to-peer HD camera feed powered by public Google STUN servers. Video streams bypass Node.js and Firestore entirely, consuming 0MB of server RAM and avoiding browser overload.
+  - **Real-Time Infraction Chime & Alert Ticker**: Immediate audio synthesized chime alert (`Web Audio API`) and live ticker feed whenever a candidate commits an infraction (cell phone detected, secondary person, facial absence, or tab switch).
+  - **Direct Administrative Warning Messaging**: Invigilators can transmit official warning notices directly to a specific candidate's screen, displaying an unmissable red modal notice requiring acknowledgement.
+  - **Candidate Progress & Live Thumbnail Grid**: Displays active students with dynamic status indicators (`🟢 Active`, `🟡 Warning`, `🔴 High Risk`, `⚫ Disconnected`), progress step counters, forensic integrity indices, and recent photographic snapshots.
+
+- 🔀 **Anti-Cheating Deterministic Question & Option Shuffling (Lab Peer-Copy Shield)**:
+  - **Mulberry32 PRNG Algorithm**: Deterministic pseudo-random generation (`quizShuffle.ts`) keyed by `studentUid + quizId` that randomizes both question ordering and option positions (A, B, C, D) uniquely per candidate.
+  - **Lab Peer-Copy Immunity**: Students seated adjacent in college computer labs see completely different question sequences and option layouts, neutralizing screen copying.
+  - **Master Key Resolution Engine**: The evaluator seamlessly maps displayed option selections back to master question keys upon submission, ensuring 100% scoring precision and transparent question reviews.
+
 - 📥 **Unified Google Drive Upload Queue & Rate-Limiting Protection (`driveQueue.js`)**:
   - **Free-Tier 512MB RAM Shield via Serialized Video Transcoding**: Integrated an in-memory priority queue (`DriveUploadQueue`) that serializes heavy ffmpeg video transcoding and streaming (`MAX_CONCURRENT_VIDEO = 1`), preventing multiple concurrent video uploads from exhausting Render's 512MB RAM and triggering OOM crashes during peak interview sessions.
   - **Throttled Assessment Snapshot Ingestion**: Replaced unbuffered `Promise.all` bursts with serialized snapshot streaming (`MAX_CONCURRENT_EVIDENCE = 1`) and a 40ms inter-snapshot delay, eliminating Google Drive API `403 rateLimitExceeded` and `429 Too Many Requests` when 30+ students submit assessments concurrently.

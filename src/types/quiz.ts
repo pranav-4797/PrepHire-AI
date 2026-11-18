@@ -36,6 +36,39 @@ export interface Quiz {
   published: boolean
   allowRetake?: boolean // Whether students can retake the quiz (default: true)
   resultsDeclared?: boolean // Whether assessment results & correct answers are released to students (default: false)
+  shuffleQuestions?: boolean // Randomize question order per student (default: true)
+  shuffleOptions?: boolean // Randomize option positions (A,B,C,D) per question (default: true)
+}
+
+export interface LiveCandidateSession {
+  studentUid: string
+  studentName: string
+  studentEmail?: string
+  department?: string
+  rollNumber?: string
+  quizId: string
+  currentQuestionIndex: number
+  totalQuestions: number
+  answeredCount: number
+  elapsedSeconds: number
+  status: 'active' | 'warning' | 'critical' | 'disconnected'
+  lastFlag?: SuspiciousFlag
+  recentSnapshot?: string
+  integrityScore: number
+  joinedAt: string
+  lastSeenAt: string
+}
+
+export interface ProctorRealtimeAlert {
+  id: string
+  quizId: string
+  studentUid: string
+  studentName: string
+  type: SuspiciousFlag['type']
+  detail: string
+  snapshot?: string
+  timestamp: string
+  severity: 'low' | 'medium' | 'high'
 }
 
 export interface SuspiciousFlag {

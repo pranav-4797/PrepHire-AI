@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   Clock,
@@ -22,6 +22,8 @@ import {
 import { QuizResultModal } from './QuizResultModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { QuizProctorCamera } from './QuizProctorCamera'
+import { generateShuffledQuiz, convertDisplayedAnswersToMaster } from '../../utils/quizShuffle'
+import { useStudentProctorSocket } from '../../services/proctorSocket.service'
 
 function GlassCard({
   children,
@@ -104,9 +106,34 @@ export function QuizPlayer({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startTimeRef = useRef<number>(Date.now())
   const hasMountedRef = useRef(false)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const [invigilatorWarning, setInvigilatorWarning] = useState<string | null>(null)
 
-  const totalQuestions = quiz.questions.length
-  const currentQ = quiz.questions[currentIdx]
+  // ── Anti-Cheating Deterministic Question & Option Shuffling ────────────────
+  const { shuffledQuestions, questionMap } = useMemo(() => {
+    return generateShuffledQuiz(quiz.questions, `${user.uid}_${quiz.id}`, {
+      shuffleQuestions: quiz.shuffleQuestions !== false,
+      shuffleOptions: quiz.shuffleOptions !== false,
+    })
+  }, [quiz.questions, quiz.id, quiz.shuffleQuestions, quiz.shuffleOptions, user.uid])
+
+  const totalQuestions = shuffledQuestions.length
+  const currentQ = shuffledQuestions[currentIdx]
+
+  // ── Real-Time Proctoring WebSocket & WebRTC P2P Streamer ───────────────────
+  const { sendPulse, sendFlag } = useStudentProctorSocket({
+    quizId: quiz.id,
+    studentUid: user.uid,
+    studentName: user.name || user.email.split('@')[0],
+    studentEmail: user.email,
+    department: user.department,
+    rollNumber: user.rollNumber,
+    totalQuestions,
+    mediaStreamRef,
+    onWarningMessage: (msg) => {
+      setInvigilatorWarning(msg)
+    },
+  })
 
   // Track window resize for responsive layout
   useEffect(() => {
@@ -376,11 +403,29 @@ export function QuizPlayer({
       suspiciousFlagsRef.current.push(newFlag)
       setSuspiciousFlags((prev) => [...prev, newFlag])
 
+      // Real-time broadcast to Admin Invigilation Cockpit via WebSocket
+      sendFlag({
+        flagType,
+        detail: reason,
+        snapshot: snap,
+      })
+
       // Stealth Mode: Candidate is NOT alerted or given toasts,
       // ensuring natural behavior while complete forensic evidence is preserved.
     },
-    []
+    [sendFlag]
   )
+
+  // Real-time progress pulse to Admin Invigilation Cockpit
+  useEffect(() => {
+    if (completedAttempt) return
+    sendPulse({
+      currentQuestionIndex: currentIdx + 1,
+      answeredCount: Object.keys(answers).length,
+      elapsedSeconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
+      status: 'active',
+    })
+  }, [currentIdx, answers, completedAttempt, sendPulse])
 
   // ── Keyboard Shortcuts (A/B/C/D, 1/2/3/4, Arrows, M, C, DevTools Trap) ────
   useEffect(() => {
@@ -480,7 +525,7 @@ export function QuizPlayer({
       let score = 0
       let maxScore = 0
 
-      quiz.questions.forEach((q, idx) => {
+      shuffledQuestions.forEach((q, idx) => {
         const qPoints = q.points || 1
         maxScore += qPoints
         const ans = answers[q.id] ?? answers[String(idx)] ?? answers[idx]
@@ -491,6 +536,9 @@ export function QuizPlayer({
 
       const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
       const passed = percentage >= (quiz.passingPercentage || 60)
+
+      // Convert displayed option selections back to master question keys for clean Firestore records
+      const masterAnswers = convertDisplayedAnswersToMaster(answers, questionMap)
 
       // Calculate Forensic Integrity Score (0..100)
       let integrityScore = 100
@@ -525,7 +573,7 @@ export function QuizPlayer({
         maxScore,
         percentage,
         passed,
-        answers,
+        answers: masterAnswers,
         timeSpentSeconds,
         completedAt: new Date().toISOString(),
         suspiciousFlags: persistedFlags,
@@ -851,8 +899,56 @@ export function QuizPlayer({
             onRegisterCapture={(fn) => {
               snapshotCaptureRef.current = fn
             }}
+            onRegisterMediaStream={(s) => {
+              mediaStreamRef.current = s
+            }}
           />
         </GlassCard>
+      )}
+
+      {/* Invigilator Live Warning Banner */}
+      {invigilatorWarning && (
+        <div
+          style={{
+            background: '#FEF2F2',
+            border: '2px solid #EF4444',
+            borderRadius: 12,
+            padding: '1rem 1.25rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            color: '#991B1B',
+            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.18)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <AlertTriangle size={24} color="#DC2626" style={{ flexShrink: 0 }} />
+            <div>
+              <strong style={{ fontSize: '0.92rem', display: 'block' }}>⚠️ Official Notice from Assessment Invigilator:</strong>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', fontWeight: 550, color: '#B91C1C' }}>
+                {invigilatorWarning}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setInvigilatorWarning(null)}
+            style={{
+              background: '#DC2626',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '0.45rem 1rem',
+              fontSize: '0.8rem',
+              fontWeight: 650,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            I Acknowledge
+          </button>
+        </div>
       )}
 
       {/* Main Grid: Question Card on Left, Palette & Proctoring on Right */}
@@ -1143,6 +1239,9 @@ export function QuizPlayer({
                 onFlag={handleProctorFlag}
                 onRegisterCapture={(fn) => {
                   snapshotCaptureRef.current = fn
+                }}
+                onRegisterMediaStream={(s) => {
+                  mediaStreamRef.current = s
                 }}
               />
             )}
