@@ -694,19 +694,8 @@ export function QuizPlayer({
   const unansweredCount = totalQuestions - answeredCount
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem',
-        userSelect: 'none',
-        paddingBottom: isMobile ? '5rem' : '1rem',
-        filter: !isFullscreen && !completedAttempt ? 'blur(8px)' : 'none',
-        pointerEvents: !isFullscreen && !completedAttempt ? 'none' : 'auto',
-        transition: 'filter 0.2s ease',
-      }}
-    >
-      {/* ── Mandatory Fullscreen Lockdown Overlay ───────────────────────── */}
+    <>
+      {/* ── Mandatory Fullscreen Lockdown Overlay (Outside blur container so it stays 100% crisp) ── */}
       {!isFullscreen && !completedAttempt && (
         <div
           style={{
@@ -854,6 +843,20 @@ export function QuizPlayer({
           </div>
         </div>
       )}
+
+      {/* ── Main Assessment Container (Blurred only when out of fullscreen) ── */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          userSelect: 'none',
+          paddingBottom: isMobile ? '5rem' : '1rem',
+          filter: !isFullscreen && !completedAttempt ? 'blur(10px)' : 'none',
+          pointerEvents: !isFullscreen && !completedAttempt ? 'none' : 'auto',
+          transition: 'filter 0.2s ease',
+        }}
+      >
       {/* Top Cockpit Header */}
       <GlassCard
         style={{
@@ -1792,6 +1795,8 @@ export function QuizPlayer({
         </div>
       )}
 
+      </div>
+
       {/* Result Modal */}
       {completedAttempt && (
         <QuizResultModal
@@ -1819,6 +1824,6 @@ export function QuizPlayer({
           }}
         />
       )}
-    </div>
+    </>
   )
 }
