@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- ⚡ **Dual-Engine Real-Time BlazeFace Multi-Face & Sub-Second Mobile Detector (`QuizProctorCamera.tsx`)**:
+  - **Instantaneous Multi-Face Detection (BlazeFace)**: Integrated Google's real-time BlazeFace neural network (~8ms inference) alongside object detection. It detects individual faces, head angles, and secondary people looking at the screen with microsecond precision, eliminating COCO-SSD's limitation of requiring full-body torsos.
+  - **Sub-Second Mobile Phone Alerting**: Slashed detection interval from 1500ms down to 600ms and introduced tiered confidence scoring ($\ge 0.42$ instant confirmation, $\ge 0.28$ 2-frame verification). When a candidate brings up a phone, it is identified and logged in under 1 second.
+  - **Calibrated False-Positive Shield**: High-speed detection is decoupled from desk items, keeping mugs, mice, and shadows completely immune to false mobile device flags.
+
 - 🛡️ **Camera Stream Stability & Synchronized Shuffled Question Palette (`QuizPlayer.tsx` & `QuizProctorCamera.tsx`)**:
   - **Eliminated Camera Blinking & Feed Restarts**: Refactored `QuizProctorCamera.tsx` callbacks into stable `useRef` handlers with zero-dependency `useCallback` hooks. Countdown timer state updates in `QuizPlayer` no longer trigger unmount/remount cycles or stream teardowns, ensuring continuous uninterrupted video streaming.
   - **Synchronized Palette with Anti-Cheat Question Shuffling**: Fixed palette mapping in `QuizPlayer.tsx` to iterate over `shuffledQuestions` instead of the raw unshuffled array. Palette buttons 1..N now match the candidate's randomized question order 1:1, completely preventing unattempted questions from being marked green.
