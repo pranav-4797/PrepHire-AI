@@ -112,6 +112,13 @@ export function QuizPlayer({
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const [invigilatorWarning, setInvigilatorWarning] = useState<string | null>(null)
 
+  const handleRegisterCapture = useCallback((fn: () => string | undefined) => {
+    snapshotCaptureRef.current = fn
+  }, [])
+  const handleRegisterMediaStream = useCallback((s: MediaStream | null) => {
+    mediaStreamRef.current = s
+  }, [])
+
   // ── Anti-Cheating Deterministic Question & Option Shuffling ────────────────
   const { shuffledQuestions, questionMap } = useMemo(() => {
     return generateShuffledQuiz(quiz.questions, `${user.uid}_${quiz.id}`, {
@@ -378,7 +385,6 @@ export function QuizPlayer({
     setAnswers((prev) => ({
       ...prev,
       [qKey]: optIdx,
-      [String(currentIdx)]: optIdx,
     }))
   }, [currentQ, currentIdx, completedAttempt])
 
@@ -510,12 +516,11 @@ export function QuizPlayer({
         handleToggleReview()
       } else if (key === 'delete' || key === 'backspace') {
         const qKey = currentQ?.id || `q-${currentIdx}`
-        if (answers[qKey] !== undefined || answers[String(currentIdx)] !== undefined) {
+        if (answers[qKey] !== undefined) {
           e.preventDefault()
           setAnswers((prev) => {
             const copy = { ...prev }
             delete copy[qKey]
-            delete copy[String(currentIdx)]
             return copy
           })
         }
@@ -553,7 +558,7 @@ export function QuizPlayer({
       shuffledQuestions.forEach((q, idx) => {
         const qPoints = q.points || 1
         maxScore += qPoints
-        const ans = answers[q.id] ?? answers[String(idx)] ?? answers[idx]
+        const ans = (q.id && answers[q.id] !== undefined) ? answers[q.id] : answers[`q-${idx}`]
         if (ans === q.correctIndex) {
           score += qPoints
         }
@@ -679,11 +684,13 @@ export function QuizPlayer({
   const isUrgent = secondsLeft < 120 // < 2 mins
 
   // Palette metrics
-  const answeredCount = quiz.questions.filter((q, idx) => {
-    const ans = answers[q.id] ?? answers[String(idx)] ?? answers[idx]
+  const answeredCount = shuffledQuestions.filter((q, idx) => {
+    const ans = (q.id && answers[q.id] !== undefined) ? answers[q.id] : answers[`q-${idx}`]
     return ans !== undefined && ans !== null
   }).length
-  const reviewCount = Object.values(markedForReview).filter(Boolean).length
+  const reviewCount = shuffledQuestions.filter((q, idx) => {
+    return !!((q.id && markedForReview[q.id]) || markedForReview[`q-${idx}`])
+  }).length
   const unansweredCount = totalQuestions - answeredCount
 
   return (
@@ -1076,12 +1083,8 @@ export function QuizPlayer({
             compact={true}
             stealthMode={true}
             onFlag={handleProctorFlag}
-            onRegisterCapture={(fn) => {
-              snapshotCaptureRef.current = fn
-            }}
-            onRegisterMediaStream={(s) => {
-              mediaStreamRef.current = s
-            }}
+            onRegisterCapture={handleRegisterCapture}
+            onRegisterMediaStream={handleRegisterMediaStream}
           />
         </GlassCard>
       )}
@@ -1169,12 +1172,13 @@ export function QuizPlayer({
                 +{currentQ?.points || 1} pt
               </span>
 
-              {answers[currentQ?.id] !== undefined && (
+              {((currentQ?.id && answers[currentQ.id] !== undefined) || answers[`q-${currentIdx}`] !== undefined) && (
                 <button
                   onClick={() => {
                     setAnswers((prev) => {
                       const copy = { ...prev }
-                      delete copy[currentQ?.id]
+                      if (currentQ?.id) delete copy[currentQ.id]
+                      delete copy[`q-${currentIdx}`]
                       return copy
                     })
                   }}
@@ -1254,10 +1258,9 @@ export function QuizPlayer({
             {currentQ?.options.map((opt, optIdx) => {
               const letter = String.fromCharCode(65 + optIdx)
               const selectedVal =
-                (currentQ.id ? answers[currentQ.id] : undefined) ??
-                answers[`q-${currentIdx}`] ??
-                answers[String(currentIdx)] ??
-                answers[currentIdx]
+                (currentQ.id && answers[currentQ.id] !== undefined)
+                  ? answers[currentQ.id]
+                  : answers[`q-${currentIdx}`]
               const isSelected = selectedVal === optIdx
 
               return (
@@ -1417,12 +1420,8 @@ export function QuizPlayer({
                 active={!completedAttempt}
                 stealthMode={true}
                 onFlag={handleProctorFlag}
-                onRegisterCapture={(fn) => {
-                  snapshotCaptureRef.current = fn
-                }}
-                onRegisterMediaStream={(s) => {
-                  mediaStreamRef.current = s
-                }}
+                onRegisterCapture={handleRegisterCapture}
+                onRegisterMediaStream={handleRegisterMediaStream}
               />
             )}
 
@@ -1486,10 +1485,10 @@ export function QuizPlayer({
 
               {/* Grid of 1..N */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.45rem', marginBottom: '1rem' }}>
-                {quiz.questions.map((q, idx) => {
+                {shuffledQuestions.map((q, idx) => {
                   const isCurrent = idx === currentIdx
-                  const isAnswered = answers[q.id] !== undefined || answers[String(idx)] !== undefined
-                  const isReview = !!markedForReview[q.id] || !!markedForReview[String(idx)]
+                  const isAnswered = (q.id && answers[q.id] !== undefined) || answers[`q-${idx}`] !== undefined
+                  const isReview = !!((q.id && markedForReview[q.id]) || markedForReview[`q-${idx}`])
 
                   // Apply filter
                   if (paletteFilter === 'answered' && !isAnswered) return null

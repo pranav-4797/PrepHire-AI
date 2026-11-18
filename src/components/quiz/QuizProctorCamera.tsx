@@ -42,6 +42,18 @@ export function QuizProctorCamera({
   const lastFaceSeenRef = useRef<number>(0)
   const lastWarnTimesRef = useRef<Record<string, number>>({})
 
+  const onFlagRef = useRef(onFlag)
+  const onFaceStatusChangeRef = useRef(onFaceStatusChange)
+  const onRegisterCaptureRef = useRef(onRegisterCapture)
+  const onRegisterMediaStreamRef = useRef(onRegisterMediaStream)
+
+  useEffect(() => {
+    onFlagRef.current = onFlag
+    onFaceStatusChangeRef.current = onFaceStatusChange
+    onRegisterCaptureRef.current = onRegisterCapture
+    onRegisterMediaStreamRef.current = onRegisterMediaStream
+  })
+
   const [camStatus, setCamStatus] = useState<'idle' | 'requesting' | 'active' | 'error'>('idle')
   const [faceStatus, setFaceStatus] = useState<'verified' | 'missing' | 'multiple' | 'phone' | 'detecting'>('detecting')
   const [violationCount, setViolationCount] = useState(0)
@@ -74,19 +86,17 @@ export function QuizProctorCamera({
 
   // Register snapshot capture method for parent (e.g. on tab switch or window blur)
   useEffect(() => {
-    if (onRegisterCapture) {
-      onRegisterCapture(captureSnapshot)
-    }
-  }, [onRegisterCapture, captureSnapshot])
+    onRegisterCaptureRef.current?.(captureSnapshot)
+  }, [captureSnapshot])
 
   const triggerViolation = useCallback(
     (reason: string, type: SuspiciousFlag['type'] = 'other', customSnapshot?: string) => {
       setViolationCount((c) => c + 1)
       setLastWarning(reason)
       const snap = customSnapshot || captureSnapshot()
-      onFlag(reason, type, snap)
+      onFlagRef.current(reason, type, snap)
     },
-    [onFlag, captureSnapshot]
+    [captureSnapshot]
   )
 
   // Initialize camera & microphone stream
@@ -121,7 +131,7 @@ export function QuizProctorCamera({
     }
 
     streamRef.current = stream
-    onRegisterMediaStream?.(stream)
+    onRegisterMediaStreamRef.current?.(stream)
     if (videoRef.current) {
       videoRef.current.srcObject = stream
       videoRef.current.play().catch(() => {})
@@ -182,10 +192,10 @@ export function QuizProctorCamera({
         console.warn('Audio proctor analyzer setup failed:', e)
       }
     }
-  }, [captureSnapshot, triggerViolation, onRegisterMediaStream])
+  }, [captureSnapshot, triggerViolation])
 
   const stopCamera = useCallback(() => {
-    onRegisterMediaStream?.(null)
+    onRegisterMediaStreamRef.current?.(null)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
@@ -204,7 +214,7 @@ export function QuizProctorCamera({
       audioCtxRef.current = null
     }
     setCamStatus('idle')
-  }, [onRegisterMediaStream])
+  }, [])
 
   useEffect(() => {
     if (active) {
@@ -280,7 +290,7 @@ export function QuizProctorCamera({
         const phoneConfirmed = phoneStreakRef.current >= 2
         if (phoneConfirmed) {
           setFaceStatus('phone')
-          onFaceStatusChange?.('phone')
+          onFaceStatusChangeRef.current?.('phone')
           if (now - (lastWarnTimesRef.current['phone'] || 0) > 15000) {
             lastWarnTimesRef.current['phone'] = now
             const snap = captureSnapshot()
@@ -299,7 +309,7 @@ export function QuizProctorCamera({
         if (multipleConfirmed) {
           if (!phoneConfirmed) {
             setFaceStatus('multiple')
-            onFaceStatusChange?.('multiple')
+            onFaceStatusChangeRef.current?.('multiple')
           }
           lastFaceSeenRef.current = now
           if (now - (lastWarnTimesRef.current['multiple'] || 0) > 15000) {
@@ -310,13 +320,13 @@ export function QuizProctorCamera({
         } else if (personCount >= 1) {
           if (!phoneConfirmed) {
             setFaceStatus('verified')
-            onFaceStatusChange?.('verified')
+            onFaceStatusChangeRef.current?.('verified')
           }
           lastFaceSeenRef.current = now
         } else if (personCount === 0) {
           if (!phoneConfirmed) {
             setFaceStatus('missing')
-            onFaceStatusChange?.('missing')
+            onFaceStatusChangeRef.current?.('missing')
           }
           // Candidate Absence: Only trigger if continuously missing for > 7 seconds (prevents false flags on normal reading/glances)
           if (now - lastFaceSeenRef.current > 7000) {
@@ -340,7 +350,7 @@ export function QuizProctorCamera({
     return () => {
       if (ivRef.current) clearInterval(ivRef.current)
     }
-  }, [active, camStatus, onFaceStatusChange, triggerViolation, captureSnapshot])
+  }, [active, camStatus, triggerViolation, captureSnapshot])
 
   const statusConfig = {
     verified: {

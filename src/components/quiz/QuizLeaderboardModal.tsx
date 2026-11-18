@@ -490,7 +490,8 @@ export function QuizLeaderboardModal({
                       <th style={{ padding: '0.65rem 0.85rem', width: 60 }}>Rank</th>
                       <th style={{ padding: '0.65rem 0.85rem' }}>Candidate</th>
                       <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Score</th>
-                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Time</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Duration</th>
+                      <th style={{ padding: '0.65rem 0.85rem' }}>Submitted At</th>
                       <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Integrity</th>
                       <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Status</th>
                       <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Actions</th>
@@ -531,9 +532,32 @@ export function QuizLeaderboardModal({
                               <div style={{ fontSize: '0.72rem', color: '#475569' }}>{attempt.percentage}%</div>
                             </td>
 
-                            {/* Time */}
+                            {/* Duration */}
                             <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', color: '#475569' }}>
                               {formatDuration(attempt.timeSpentSeconds)}
+                            </td>
+
+                            {/* Submitted At */}
+                            <td style={{ padding: '0.65rem 0.85rem' }}>
+                              <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '0.78rem' }}>
+                                {attempt.completedAt
+                                  ? new Date(attempt.completedAt).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      second: '2-digit',
+                                      hour12: true,
+                                    })
+                                  : '—'}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                {attempt.completedAt
+                                  ? new Date(attempt.completedAt).toLocaleDateString([], {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                    })
+                                  : ''}
+                              </div>
                             </td>
 
                             {/* Integrity */}
@@ -653,10 +677,26 @@ export function QuizLeaderboardModal({
                           {/* ── Expanded Audit Dossier Row ─────────────────── */}
                           {isExpanded && (
                             <tr>
-                              <td colSpan={7} style={{ padding: '1rem', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                              <td colSpan={8} style={{ padding: '1rem', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                                   {/* Telemetry Summary */}
                                   <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                                    <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '0.4rem 0.65rem', fontSize: '0.75rem' }}>
+                                      <span style={{ color: '#64748B' }}>Submitted: </span>
+                                      <strong>
+                                        {attempt.completedAt
+                                          ? new Date(attempt.completedAt).toLocaleString([], {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              year: 'numeric',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                              second: '2-digit',
+                                              hour12: true,
+                                            })
+                                          : '—'}
+                                      </strong>
+                                    </div>
                                     <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '0.4rem 0.65rem', fontSize: '0.75rem' }}>
                                       <span style={{ color: '#64748B' }}>Tab Switches: </span>
                                       <strong>{attempt.tabSwitchesCount || 0}</strong>
