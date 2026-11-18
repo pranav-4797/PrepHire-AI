@@ -26,6 +26,14 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🖥️ **Mandatory Continuous Fullscreen Lockdown & Anti-Tamper Shield (`QuizPlayer.tsx`)**:
+  - **Zero-Bypass Fullscreen Mandate**: All student and public candidate assessments must remain in continuous, un-interrupted fullscreen mode throughout the test.
+  - **Eager Launch Integration**: Starting a quiz from `StudentQuizHub.tsx` or `PublicQuizTake.tsx` triggers browser fullscreen immediately on candidate click.
+  - **Hard Lockdown Blur & Interaction Freeze**: If a candidate attempts to exit fullscreen (via `Esc`, window minimize, or multi-tasking), the exam content is instantly obscured with a strong `blur(8px)` visual filter, all keyboard and mouse interactions on the quiz are disabled, and a prominent lockdown modal blocks the viewport.
+  - **Forensic Infraction Tracking**: Every fullscreen exit event is captured as an integrity violation with timestamped photographic evidence, deducted from the candidate's integrity score, and relayed in real time to the invigilator's cockpit via WebSockets.
+  - **1-Click Seamless Fullscreen Resume**: Candidates can click "Return to Fullscreen & Resume" to re-engage fullscreen via a direct user gesture and continue the test.
+  - **Clean Post-Exam Release**: Fullscreen is automatically exited upon test submission, allowing candidates to comfortably review declared results and answer keys.
+
 - 🧠 **Faculty & Admin Interview Question Bank (Firestore-Backed CRUD)**: Faculty and administrators can now author, curate, and retire interview questions directly from their portals instead of relying solely on the built-in static bank. Live questions are stored in a new `interview_questions` Firestore collection and layered over the curated 26-question `QUESTION_BANK`, which remains the offline seed and fallback.
   - **Full CRUD Studio (`QuestionBankManager.tsx`)**: Create, edit, duplicate-on-edit, activate/deactivate, and delete questions across all four interview domains (`technical`, `hr`, `aptitude`, `group-discussion`), all nine MIT AoE branches (plus `All`), and beginner/intermediate/advanced levels — with expected keywords, key concepts, probing/advanced follow-ups, and sample strong answers.
   - **Synchronous Engine Integration Without Latency**: `questionBank.service.ts` exposes an in-memory hydrated cache (`getActiveBankQuestions()` / `getSessionQuestions()`), so `interviewEngine` and `offlineEvaluator` stay fully synchronous — interview sessions never wait on a Firestore round-trip, and lookups by question text resolve against the live bank first, then the static seed.
