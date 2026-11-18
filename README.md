@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🛡️ **Camera Stream Stability & Synchronized Shuffled Question Palette (`QuizPlayer.tsx` & `QuizProctorCamera.tsx`)**:
+  - **Eliminated Camera Blinking & Feed Restarts**: Refactored `QuizProctorCamera.tsx` callbacks into stable `useRef` handlers with zero-dependency `useCallback` hooks. Countdown timer state updates in `QuizPlayer` no longer trigger unmount/remount cycles or stream teardowns, ensuring continuous uninterrupted video streaming.
+  - **Synchronized Palette with Anti-Cheat Question Shuffling**: Fixed palette mapping in `QuizPlayer.tsx` to iterate over `shuffledQuestions` instead of the raw unshuffled array. Palette buttons 1..N now match the candidate's randomized question order 1:1, completely preventing unattempted questions from being marked green.
+  - **Admin Leaderboard Submission Timestamp**: Integrated a dedicated `Submitted At` column in `QuizLeaderboardModal.tsx` displaying exact 12-hour submission timestamps (hours, minutes, seconds) and formatted dates, with expanded audit dossier telemetry chips.
+
 - 🖥️ **Mandatory Continuous Fullscreen Lockdown & Anti-Tamper Shield (`QuizPlayer.tsx`)**:
   - **Zero-Bypass Fullscreen Mandate**: All student and public candidate assessments must remain in continuous, un-interrupted fullscreen mode throughout the test.
   - **Eager Launch Integration**: Starting a quiz from `StudentQuizHub.tsx` or `PublicQuizTake.tsx` triggers browser fullscreen immediately on candidate click.
