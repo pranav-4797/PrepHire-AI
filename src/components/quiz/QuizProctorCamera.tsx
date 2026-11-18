@@ -32,6 +32,7 @@ export function QuizProctorCamera({
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const modelRef = useRef<any>(null)
+  const faceModelRef = useRef<any>(null)
   const ivRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioIvRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -241,10 +242,21 @@ export function QuizProctorCamera({
 
       const tf = (window as any).tf
       const cocoSsd = (window as any).cocoSsd
+      const blazeface = (window as any).blazeface
 
-      if (!tf || !cocoSsd) return
+      if (!tf) return
 
-      if (!modelRef.current) {
+      // Load BlazeFace for ultra-fast multi-face detection (Google SOTA, ~8ms per frame)
+      if (blazeface && !faceModelRef.current) {
+        try {
+          faceModelRef.current = await blazeface.load()
+        } catch (e) {
+          console.warn('BlazeFace model loading deferred:', e)
+        }
+      }
+
+      // Load object detection model for mobile phone & device detection
+      if (cocoSsd && !modelRef.current) {
         try {
           await tf.ready()
           try {
@@ -254,83 +266,104 @@ export function QuizProctorCamera({
           }
           modelRef.current = await cocoSsd.load()
         } catch (e) {
-          console.warn('COCO-SSD model initialization deferred:', e)
+          console.warn('Object detector initialization deferred:', e)
           return
         }
       }
 
+      if (!modelRef.current && !faceModelRef.current) return
+
       isBusy = true
       try {
-        // Continuously refresh the cached frame so any instant blur/tab-switch has a valid snapshot
         captureSnapshot()
 
-        // Balanced inference: minScore 0.35 to filter out phantom detections while reliably detecting persons and phones
-        const predictions = await modelRef.current.detect(videoRef.current, 20, 0.35)
-        let personCount = 0
-        let rawPhoneDetected = false
-
-        predictions.forEach((p: { class: string; score: number }) => {
-          if (p.class === 'person' && p.score >= 0.40) personCount++
-          // High-confidence mobile phone detection (avoid classifying remote/mice/dark mugs as phones)
-          if (p.class === 'cell phone' && p.score >= 0.52) {
-            rawPhoneDetected = true
+        // ── 1. High-Precision Multi-Face & Absence Inference via BlazeFace ─
+        let blazeFaceCount = -1
+        if (faceModelRef.current) {
+          try {
+            const faces = await faceModelRef.current.estimateFaces(videoRef.current, false)
+            blazeFaceCount = Array.isArray(faces) ? faces.length : 0
+          } catch {
+            blazeFaceCount = -1
           }
-        })
+        }
+
+        // ── 2. Real-Time Object & Mobile Device Inference ──────────────────
+        let personCount = 0
+        let maxPhoneScore = 0
+
+        if (modelRef.current) {
+          const predictions = await modelRef.current.detect(videoRef.current, 20, 0.28)
+          predictions.forEach((p: { class: string; score: number }) => {
+            if (p.class === 'person' && p.score >= 0.35) personCount++
+            if (p.class === 'cell phone' && p.score > maxPhoneScore) {
+              maxPhoneScore = p.score
+            }
+          })
+        }
 
         const now = Date.now()
         const timestamp = new Date().toLocaleTimeString()
 
-        // 1. Phone Detection with Multi-Frame Streak Confirmation (>= 2 cycles = ~3s)
-        if (rawPhoneDetected) {
+        // ── 3. Ultra-Fast Mobile Phone Detection ───────────────────────────
+        // Instant trigger on clear detection (>= 0.42), or 2 fast frames (~1.2s) on score >= 0.28
+        let phoneConfirmed = false
+        if (maxPhoneScore >= 0.42) {
+          phoneStreakRef.current = 2
+          phoneConfirmed = true
+        } else if (maxPhoneScore >= 0.28) {
           phoneStreakRef.current += 1
+          phoneConfirmed = phoneStreakRef.current >= 2
         } else {
-          phoneStreakRef.current = 0
+          phoneStreakRef.current = Math.max(0, phoneStreakRef.current - 1)
         }
 
-        const phoneConfirmed = phoneStreakRef.current >= 2
         if (phoneConfirmed) {
           setFaceStatus('phone')
           onFaceStatusChangeRef.current?.('phone')
-          if (now - (lastWarnTimesRef.current['phone'] || 0) > 15000) {
+          if (now - (lastWarnTimesRef.current['phone'] || 0) > 8000) {
             lastWarnTimesRef.current['phone'] = now
             const snap = captureSnapshot()
             triggerViolation(`Mobile phone detected in camera at ${timestamp}`, 'cell_phone', snap)
           }
         }
 
-        // 2. Multiple Persons Detection with Streak Confirmation (>= 2 cycles = ~3s)
-        if (personCount > 1) {
+        // ── 4. Instant Multi-Face & Secondary Person Detection ─────────────
+        const effectiveFaces = blazeFaceCount >= 0 ? blazeFaceCount : personCount
+
+        if (effectiveFaces > 1) {
           multiplePersonsStreakRef.current += 1
         } else {
           multiplePersonsStreakRef.current = 0
         }
 
-        const multipleConfirmed = multiplePersonsStreakRef.current >= 2
+        // BlazeFace multi-face confirmation (immediate or 1 fast cycle)
+        const multipleConfirmed = multiplePersonsStreakRef.current >= 1
         if (multipleConfirmed) {
           if (!phoneConfirmed) {
             setFaceStatus('multiple')
             onFaceStatusChangeRef.current?.('multiple')
           }
           lastFaceSeenRef.current = now
-          if (now - (lastWarnTimesRef.current['multiple'] || 0) > 15000) {
+          if (now - (lastWarnTimesRef.current['multiple'] || 0) > 8000) {
             lastWarnTimesRef.current['multiple'] = now
             const snap = captureSnapshot()
-            triggerViolation(`Multiple people (${personCount}) detected in camera at ${timestamp}`, 'multiple_faces', snap)
+            triggerViolation(`Multiple people (${effectiveFaces} faces) detected in camera at ${timestamp}`, 'multiple_faces', snap)
           }
-        } else if (personCount >= 1) {
+        } else if (effectiveFaces === 1) {
           if (!phoneConfirmed) {
             setFaceStatus('verified')
             onFaceStatusChangeRef.current?.('verified')
           }
           lastFaceSeenRef.current = now
-        } else if (personCount === 0) {
+        } else if (effectiveFaces === 0) {
           if (!phoneConfirmed) {
             setFaceStatus('missing')
             onFaceStatusChangeRef.current?.('missing')
           }
-          // Candidate Absence: Only trigger if continuously missing for > 7 seconds (prevents false flags on normal reading/glances)
-          if (now - lastFaceSeenRef.current > 7000) {
-            if (now - (lastWarnTimesRef.current['missing'] || 0) > 15000) {
+          // Candidate Absence: Trigger if continuously missing for > 5 seconds
+          if (now - lastFaceSeenRef.current > 5000) {
+            if (now - (lastWarnTimesRef.current['missing'] || 0) > 10000) {
               lastWarnTimesRef.current['missing'] = now
               const snap = captureSnapshot()
               triggerViolation(`No face detected in camera (candidate absent) at ${timestamp}`, 'face_missing', snap)
@@ -345,7 +378,7 @@ export function QuizProctorCamera({
     }
 
     lastFaceSeenRef.current = Date.now()
-    ivRef.current = setInterval(detect, 1500)
+    ivRef.current = setInterval(detect, 600)
 
     return () => {
       if (ivRef.current) clearInterval(ivRef.current)
