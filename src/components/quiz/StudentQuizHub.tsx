@@ -71,6 +71,20 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
     onActiveQuizChange?.(!!activeQuiz)
   }, [activeQuiz, onActiveQuizChange])
 
+  const handleStartQuiz = (q: Quiz) => {
+    try {
+      const el = document.documentElement as any
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {})
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen().catch(() => {})
+      }
+    } catch {
+      // Ignored
+    }
+    setActiveQuiz(q)
+  }
+
   // Filters
   const [search, setSearch] = useState('')
   const [branchOnly, setBranchOnly] = useState(false)
@@ -642,7 +656,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                     </button>
                   ) : (
                     <button
-                      onClick={() => setActiveQuiz(q)}
+                      onClick={() => handleStartQuiz(q)}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -685,7 +699,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
           onRetake={() => {
             const q = reviewAttempt.quiz
             setReviewAttempt(null)
-            setActiveQuiz(q)
+            handleStartQuiz(q)
           }}
         />
       )}

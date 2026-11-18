@@ -142,6 +142,18 @@ export function PublicQuizTake({
     setCandidateUid(
       auth.currentUser?.uid || `guest-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
     )
+
+    try {
+      const el = document.documentElement as any
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {})
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen().catch(() => {})
+      }
+    } catch {
+      // Ignored
+    }
+
     setStarted(true)
   }
 

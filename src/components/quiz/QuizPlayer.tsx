@@ -82,7 +82,10 @@ export function QuizPlayer({
   const [completedAttempt, setCompletedAttempt] = useState<QuizAttempt | null>(null)
 
   // ── Anti-Cheat & Persistent Forensic Telemetry State ───────────────────────
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(() => {
+    if (typeof document === 'undefined') return false
+    return !!(document.fullscreenElement || (document as any).webkitFullscreenElement)
+  })
   const [, setSuspiciousFlags] = useState<SuspiciousFlag[]>([])
 
   // Persistent telemetry refs to guarantee 100% data capture fidelity without React closure staleness
@@ -144,19 +147,31 @@ export function QuizPlayer({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // ── Fullscreen Request & Listener (Silent Forensic Tracking) ─────────────
+  // ── Fullscreen Request & Listener (Continuous Lockdown & Forensic Tracking) ──
   const enterFullscreen = useCallback(async () => {
     try {
-      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
-        await document.documentElement.requestFullscreen()
+      const el = document.documentElement as any
+      if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
         setIsFullscreen(true)
+        return
       }
+      if (el.requestFullscreen) {
+        await el.requestFullscreen()
+      } else if (el.webkitRequestFullscreen) {
+        await el.webkitRequestFullscreen()
+      } else if (el.msRequestFullscreen) {
+        await el.msRequestFullscreen()
+      }
+      setIsFullscreen(true)
     } catch (err) {
       console.warn('Fullscreen request was declined or blocked:', err)
     }
   }, [])
 
   useEffect(() => {
+    const isFsNow = () => !!(document.fullscreenElement || (document as any).webkitFullscreenElement)
+    setIsFullscreen(isFsNow())
+
     // Prompt fullscreen on initial mount
     if (!hasMountedRef.current) {
       hasMountedRef.current = true
@@ -164,7 +179,7 @@ export function QuizPlayer({
     }
 
     function handleFsChange() {
-      const isFs = !!document.fullscreenElement
+      const isFs = isFsNow()
       setIsFullscreen(isFs)
 
       if (!isFs && !completedAttempt) {
@@ -174,22 +189,32 @@ export function QuizPlayer({
         const flag: SuspiciousFlag = {
           timestamp,
           type: 'fullscreen_exit',
-          detail: `Fullscreen mode exited by candidate at ${timestamp}`,
+          detail: `Fullscreen mode exited by candidate (Infraction #${fullscreenViolationsCountRef.current}) at ${timestamp}`,
           snapshot: snap,
         }
         suspiciousFlagsRef.current.push(flag)
         setSuspiciousFlags((prev) => [...prev, flag])
+
+        // Live notification to invigilation cockpit
+        sendFlag({
+          flagType: 'fullscreen_exit',
+          detail: flag.detail,
+          snapshot: snap,
+        })
       }
     }
 
     document.addEventListener('fullscreenchange', handleFsChange)
+    document.addEventListener('webkitfullscreenchange', handleFsChange)
     return () => {
       document.removeEventListener('fullscreenchange', handleFsChange)
-      if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {})
+      document.removeEventListener('webkitfullscreenchange', handleFsChange)
+      const doc = document as any
+      if ((doc.fullscreenElement || doc.webkitFullscreenElement) && doc.exitFullscreen) {
+        doc.exitFullscreen().catch(() => {})
       }
     }
-  }, [completedAttempt, enterFullscreen])
+  }, [completedAttempt, enterFullscreen, sendFlag])
 
   // ── Tab Switch & Focus Loss Listener (Stealth Duration Tracking) ───────────
   useEffect(() => {
@@ -595,6 +620,12 @@ export function QuizPlayer({
       setCompletedAttempt(fullAttempt)
       setShowConfirmModal(false)
 
+      // Exit fullscreen mode on completion so candidate can view report comfortably
+      const doc = document as any
+      if ((doc.fullscreenElement || doc.webkitFullscreenElement) && doc.exitFullscreen) {
+        doc.exitFullscreen().catch(() => {})
+      }
+
       if (isAuto) {
         showToast('Assessment submitted automatically.', 'info')
       } else {
@@ -663,8 +694,159 @@ export function QuizPlayer({
         gap: '1rem',
         userSelect: 'none',
         paddingBottom: isMobile ? '5rem' : '1rem',
+        filter: !isFullscreen && !completedAttempt ? 'blur(8px)' : 'none',
+        pointerEvents: !isFullscreen && !completedAttempt ? 'none' : 'auto',
+        transition: 'filter 0.2s ease',
       }}
     >
+      {/* ── Mandatory Fullscreen Lockdown Overlay ───────────────────────── */}
+      {!isFullscreen && !completedAttempt && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999999,
+            background: 'rgba(15, 23, 42, 0.94)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.5rem',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 500,
+              width: '100%',
+              background: '#ffffff',
+              borderRadius: 16,
+              padding: '2.5rem 2rem',
+              textAlign: 'center',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
+              border: '1px solid #E2E8F0',
+            }}
+          >
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
+                background: fullscreenViolationsCountRef.current > 0 ? '#FEF2F2' : '#EFF6FF',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1.25rem',
+                border: fullscreenViolationsCountRef.current > 0 ? '2px solid #FCA5A5' : '2px solid #BFDBFE',
+              }}
+            >
+              {fullscreenViolationsCountRef.current > 0 ? (
+                <AlertTriangle size={32} color="#DC2626" />
+              ) : (
+                <Maximize size={32} color="#2563EB" />
+              )}
+            </div>
+
+            <h2
+              style={{
+                fontSize: '1.35rem',
+                fontWeight: 800,
+                color: '#0F172A',
+                margin: '0 0 0.5rem',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {fullscreenViolationsCountRef.current > 0
+                ? 'Assessment Paused: Fullscreen Exited'
+                : 'Fullscreen Mode Required'}
+            </h2>
+
+            <p
+              style={{
+                fontSize: '0.88rem',
+                color: '#475569',
+                lineHeight: 1.55,
+                margin: '0 0 1.25rem',
+              }}
+            >
+              {fullscreenViolationsCountRef.current > 0
+                ? 'You have exited fullscreen mode. All questions and choices are frozen and obscured until you return to fullscreen. This infraction has been logged in your proctoring dossier.'
+                : 'PrepHire AI requires all proctored assessments to remain in continuous fullscreen mode. Questions and answers are obscured in windowed mode to preserve academic integrity.'}
+            </p>
+
+            {fullscreenViolationsCountRef.current > 0 && (
+              <div
+                style={{
+                  background: '#FFF1F2',
+                  border: '1px solid #FECDD3',
+                  borderRadius: 8,
+                  padding: '0.65rem 0.85rem',
+                  marginBottom: '1.25rem',
+                  fontSize: '0.78rem',
+                  color: '#9F1239',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                }}
+              >
+                <AlertTriangle size={14} color="#E11D48" />
+                <span>
+                  Infraction #{fullscreenViolationsCountRef.current} recorded · Timer continues running
+                </span>
+              </div>
+            )}
+
+            <button
+              onClick={enterFullscreen}
+              style={{
+                width: '100%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                background: '#2563EB',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 10,
+                padding: '0.85rem 1.5rem',
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.28)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#1D4ED8'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#2563EB'
+                e.currentTarget.style.transform = 'translateY(0)'
+              }}
+            >
+              <Maximize size={18} />
+              <span>
+                {fullscreenViolationsCountRef.current > 0
+                  ? 'Return to Fullscreen & Resume'
+                  : 'Enter Fullscreen & Begin Assessment'}
+              </span>
+            </button>
+
+            <div
+              style={{
+                marginTop: '1rem',
+                fontSize: '0.72rem',
+                color: '#94A3B8',
+              }}
+            >
+              Continuous fullscreen is mandated for this proctored evaluation.
+            </div>
+          </div>
+        </div>
+      )}
       {/* Top Cockpit Header */}
       <GlassCard
         style={{
@@ -763,27 +945,25 @@ export function QuizPlayer({
             <span>Proctored Session</span>
           </div>
 
-          {/* Fullscreen Button */}
-          {!isFullscreen && (
-            <button
-              onClick={enterFullscreen}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                background: '#EFF6FF',
-                color: '#2563EB',
-                border: '1px solid #BFDBFE',
-                borderRadius: 8,
-                padding: '0.35rem 0.65rem',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <Maximize size={12} /> Fullscreen
-            </button>
-          )}
+          {/* Fullscreen Status Pill */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              background: isFullscreen ? '#F0FDF4' : '#FEF2F2',
+              color: isFullscreen ? '#166534' : '#991B1B',
+              border: isFullscreen ? '1px solid #BBF7D0' : '1px solid #FECACA',
+              borderRadius: 8,
+              padding: '0.35rem 0.65rem',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+            }}
+            title={isFullscreen ? 'Assessment locked in full screen' : 'Fullscreen required'}
+          >
+            <Maximize size={12} color={isFullscreen ? '#166534' : '#DC2626'} />
+            <span>{isFullscreen ? 'Fullscreen Active' : 'Windowed Mode'}</span>
+          </div>
 
           {/* Timer Display */}
           <div
