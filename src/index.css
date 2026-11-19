@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
 :root {
   /* Surface colors */
   --color-bg:                    #f7f9fb;
@@ -47,7 +49,12 @@
   --radius-md:  12px;
   --radius-lg:  16px;
 
-  font-family: system-ui, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  /* Typography: Archivo Black (display) + Space Grotesk (UI) */
+  --font-display: 'Archivo Black', 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+  --font-sans:    'Space Grotesk', system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  font-family: var(--font-sans);
+  font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -75,10 +82,17 @@ body {
 
 h1, h2, h3, h4 {
   margin: 0;
+  font-family: var(--font-display);
   font-size: var(--text-heading-size);
-  font-weight: var(--text-heading-weight);
+  font-weight: 400;
   color: var(--color-primary);
+  letter-spacing: -0.03em;
+  line-height: 1.06;
 }
+h1 { letter-spacing: -0.04em; line-height: 1.0; }
+h2 { letter-spacing: -0.035em; line-height: 1.02; }
+h3 { letter-spacing: -0.03em; }
+h4 { letter-spacing: -0.02em; }
 
 p {
   margin: 0;
@@ -90,9 +104,12 @@ p {
 
 /* ── Typography utilities ─────────────────────────────────── */
 .text-heading {
+  font-family: var(--font-display);
   font-size: var(--text-heading-size);
-  font-weight: var(--text-heading-weight);
+  font-weight: 400;
   color: var(--text-heading-color);
+  letter-spacing: -0.03em;
+  line-height: 1.06;
 }
 .text-body {
   font-size: var(--text-body-size);

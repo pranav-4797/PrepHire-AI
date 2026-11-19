@@ -59,7 +59,7 @@ export class ErrorBoundary extends Component<Props, State> {
             justifyContent: 'center',
             background: 'linear-gradient(135deg, #071327 0%, #0A2540 50%, #061122 100%)',
             padding: '24px',
-            fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+            fontFamily: "'Space Grotesk', system-ui, -apple-system, sans-serif",
           }}
         >
           <div

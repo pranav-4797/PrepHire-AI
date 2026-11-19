@@ -3922,7 +3922,6 @@ function AdminDashboard({
                             border: '1px solid #BFDBFE',
                             fontSize: 12,
                             color: T.primary,
-                            fontStyle: 'italic',
                           }}
                         >
                           💬 {log.detail}
@@ -6829,7 +6828,6 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                           padding: '6px 12px',
                           background: 'rgba(0, 30, 64, 0.03)',
                           borderRadius: 8,
-                          fontStyle: 'italic',
                         }}
                       >
                         {m.text}

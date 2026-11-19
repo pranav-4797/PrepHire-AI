@@ -42,4 +42,10 @@ export const T = {
   info:       '#2563eb',
   infoBg:     '#eff6ff',
   infoBorder: '#bfdbfe',
+
+  // Type: bold editorial display + modern grotesque UI
+  display:    "'Archivo Black', 'Arial Black', 'Helvetica Neue', Arial, sans-serif",
+  sans:       "'Space Grotesk', system-ui, 'Segoe UI', Roboto, sans-serif",
+  trackHeading: '-0.03em',
+  trackLabel:   '0.08em',
 }

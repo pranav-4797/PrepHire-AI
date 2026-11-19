@@ -629,7 +629,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                       )}
                     </div>
                   ) : (
-                    <span style={{ fontSize: '0.78rem', color: T.txtSec, fontStyle: 'italic' }}>
+                    <span style={{ fontSize: '0.78rem', color: T.txtSec }}>
                       Not attempted yet
                     </span>
                   )}
