@@ -224,7 +224,7 @@ export function QuizLeaderboardModal({
         style={{
           background: '#ffffff',
           borderRadius: 12,
-          maxWidth: 1060,
+          maxWidth: 'min(1180px, 98vw)',
           width: '100%',
           maxHeight: '92vh',
           display: 'flex',
@@ -481,20 +481,22 @@ export function QuizLeaderboardModal({
                   background: '#ffffff',
                   border: '1px solid #E2E8F0',
                   borderRadius: 8,
-                  overflow: 'hidden',
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  maxWidth: '100%',
                 }}
               >
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
+                <table style={{ width: '100%', minWidth: 840, borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
                   <thead>
                     <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontWeight: 650 }}>
-                      <th style={{ padding: '0.65rem 0.85rem', width: 60 }}>Rank</th>
-                      <th style={{ padding: '0.65rem 0.85rem' }}>Candidate</th>
-                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Score</th>
-                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Duration</th>
-                      <th style={{ padding: '0.65rem 0.85rem' }}>Submitted At</th>
-                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Integrity</th>
-                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Status</th>
-                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Actions</th>
+                      <th style={{ padding: '0.65rem 0.85rem', width: 50, textAlign: 'center' }}>Rank</th>
+                      <th style={{ padding: '0.65rem 0.85rem', minWidth: 200 }}>Candidate</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', width: 75 }}>Score</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', width: 75 }}>Duration</th>
+                      <th style={{ padding: '0.65rem 0.85rem', minWidth: 105 }}>Submitted At</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', minWidth: 125 }}>Integrity</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center', width: 75 }}>Status</th>
+                      <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right', minWidth: 120 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -510,18 +512,32 @@ export function QuizLeaderboardModal({
                             }}
                           >
                             {/* Rank */}
-                            <td style={{ padding: '0.65rem 0.85rem', fontWeight: 750, color: '#0F172A' }}>
+                            <td style={{ padding: '0.65rem 0.85rem', fontWeight: 750, color: '#0F172A', textAlign: 'center' }}>
                               #{attempt.rank}
                             </td>
 
                             {/* Candidate Details */}
-                            <td style={{ padding: '0.65rem 0.85rem' }}>
-                              <div style={{ fontWeight: 650, color: '#0F172A' }}>
+                            <td style={{ padding: '0.65rem 0.85rem', maxWidth: 280 }}>
+                              <div
+                                style={{
+                                  fontWeight: 650,
+                                  color: '#0F172A',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title={attempt.studentName || attempt.studentEmail}
+                              >
                                 {attempt.studentName || attempt.studentEmail.split('@')[0]}
                               </div>
-                              <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                                {attempt.studentEmail} {attempt.rollNumber ? `• ${attempt.rollNumber}` : ''}{' '}
-                                {attempt.department ? `(${attempt.department})` : ''}
+                              <div style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: 1.35, marginTop: 2, wordBreak: 'break-word' }}>
+                                <span>{attempt.studentEmail}</span>
+                                {(attempt.department || attempt.rollNumber) && (
+                                  <span style={{ display: 'block', color: '#64748B', fontSize: '0.7rem' }}>
+                                    {attempt.rollNumber ? `${attempt.rollNumber} • ` : ''}
+                                    {attempt.department ? `(${attempt.department})` : ''}
+                                  </span>
+                                )}
                               </div>
                             </td>
 
@@ -533,12 +549,12 @@ export function QuizLeaderboardModal({
                             </td>
 
                             {/* Duration */}
-                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', color: '#475569' }}>
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', color: '#475569', whiteSpace: 'nowrap' }}>
                               {formatDuration(attempt.timeSpentSeconds)}
                             </td>
 
                             {/* Submitted At */}
-                            <td style={{ padding: '0.65rem 0.85rem' }}>
+                            <td style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                               <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '0.78rem' }}>
                                 {attempt.completedAt
                                   ? new Date(attempt.completedAt).toLocaleTimeString([], {
@@ -561,17 +577,18 @@ export function QuizLeaderboardModal({
                             </td>
 
                             {/* Integrity */}
-                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                               {attempt.violationCount > 0 ? (
                                 <span
                                   style={{
                                     fontSize: '0.72rem',
                                     fontWeight: 650,
-                                    color: '#B45309',
-                                    background: '#FEF3C7',
-                                    padding: '0.15rem 0.45rem',
+                                    color: attempt.calculatedIntegrity >= 80 ? '#047857' : attempt.calculatedIntegrity >= 50 ? '#B45309' : '#DC2626',
+                                    background: attempt.calculatedIntegrity >= 80 ? '#ECFDF5' : attempt.calculatedIntegrity >= 50 ? '#FEF3C7' : '#FEF2F2',
+                                    padding: '0.18rem 0.45rem',
                                     borderRadius: 4,
-                                    border: '1px solid #FDE68A',
+                                    border: `1px solid ${attempt.calculatedIntegrity >= 80 ? '#A7F3D0' : attempt.calculatedIntegrity >= 50 ? '#FDE68A' : '#FECACA'}`,
+                                    display: 'inline-block',
                                   }}
                                 >
                                   {attempt.calculatedIntegrity}% ({attempt.violationCount} flags)
@@ -594,6 +611,8 @@ export function QuizLeaderboardModal({
                                   background: attempt.passed ? '#ECFDF5' : '#F1F5F9',
                                   color: attempt.passed ? '#047857' : '#475569',
                                   border: `1px solid ${attempt.passed ? '#A7F3D0' : '#E2E8F0'}`,
+                                  display: 'inline-block',
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
                                 {attempt.passed ? 'Passed' : 'Failed'}
@@ -601,8 +620,8 @@ export function QuizLeaderboardModal({
                             </td>
 
                             {/* Actions */}
-                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.35rem', flexWrap: 'nowrap' }}>
                                 {attempt.driveEvidenceFolderLink && (
                                   <a
                                     href={attempt.driveEvidenceFolderLink}
@@ -677,8 +696,8 @@ export function QuizLeaderboardModal({
                           {/* ── Expanded Audit Dossier Row ─────────────────── */}
                           {isExpanded && (
                             <tr>
-                              <td colSpan={8} style={{ padding: '1rem', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                              <td colSpan={8} style={{ padding: '1rem', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', maxWidth: 0 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', width: '100%', minWidth: 0, overflow: 'hidden' }}>
                                   {/* Telemetry Summary */}
                                   <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
                                     <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: 6, padding: '0.4rem 0.65rem', fontSize: '0.75rem' }}>
@@ -717,11 +736,21 @@ export function QuizLeaderboardModal({
 
                                   {/* Photographic Evidence Gallery */}
                                   {attempt.photoEvidence.length > 0 && (
-                                    <div>
+                                    <div style={{ width: '100%', minWidth: 0 }}>
                                       <div style={{ fontSize: '0.75rem', fontWeight: 650, color: '#334155', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <Camera size={13} /> Photographic Snapshots ({attempt.photoEvidence.length}):
                                       </div>
-                                      <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.35rem' }}>
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          gap: '0.5rem',
+                                          overflowX: 'auto',
+                                          WebkitOverflowScrolling: 'touch',
+                                          paddingBottom: '0.5rem',
+                                          maxWidth: '100%',
+                                          width: '100%',
+                                        }}
+                                      >
                                         {attempt.photoEvidence.map((ev, evIdx) => (
                                           <div
                                             key={evIdx}
@@ -750,11 +779,11 @@ export function QuizLeaderboardModal({
                                   )}
 
                                   {/* Question-by-Question Verification */}
-                                  <div>
+                                  <div style={{ width: '100%', minWidth: 0 }}>
                                     <div style={{ fontSize: '0.75rem', fontWeight: 650, color: '#334155', marginBottom: '0.35rem' }}>
                                       Question Review:
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 220, overflowY: 'auto' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 240, overflowY: 'auto' }}>
                                       {quiz.questions.map((q, qIdx) => {
                                         const candidateChoice = attempt.answers?.[q.id] ?? attempt.answers?.[`q-${qIdx}`] ?? attempt.answers?.[String(qIdx)] ?? attempt.answers?.[qIdx]
                                         const isCorrect = candidateChoice === q.correctIndex
@@ -762,35 +791,37 @@ export function QuizLeaderboardModal({
                                           <div
                                             key={q.id || qIdx}
                                             style={{
-                                              padding: '0.4rem 0.65rem',
-                                              borderRadius: 4,
+                                              padding: '0.5rem 0.75rem',
+                                              borderRadius: 6,
                                               background: '#ffffff',
                                               border: `1px solid ${isCorrect ? '#E2E8F0' : '#FECACA'}`,
                                               display: 'flex',
                                               alignItems: 'center',
                                               justifyContent: 'space-between',
+                                              flexWrap: 'wrap',
+                                              gap: '0.5rem',
                                               fontSize: '0.75rem',
                                             }}
                                           >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 200, flex: 1 }}>
                                               {isCorrect ? (
-                                                <CheckCircle2 size={13} color="#059669" />
+                                                <CheckCircle2 size={13} color="#059669" style={{ flexShrink: 0 }} />
                                               ) : (
-                                                <XCircle size={13} color="#DC2626" />
+                                                <XCircle size={13} color="#DC2626" style={{ flexShrink: 0 }} />
                                               )}
-                                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#1E293B' }}>
+                                              <span style={{ color: '#1E293B', fontWeight: 550, lineHeight: 1.35 }}>
                                                 Q{qIdx + 1}. {q.question}
                                               </span>
                                             </div>
-                                            <div style={{ fontSize: '0.72rem', color: '#64748B', flexShrink: 0 }}>
-                                              Selected:{' '}
-                                              <strong>
+                                            <div style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: 'auto', textAlign: 'right', flexShrink: 0, lineHeight: 1.35 }}>
+                                              <span>Selected: </span>
+                                              <strong style={{ color: isCorrect ? '#059669' : '#DC2626' }}>
                                                 {candidateChoice !== undefined && q.options[candidateChoice]
                                                   ? q.options[candidateChoice]
                                                   : 'Unanswered'}
                                               </strong>
                                               {!isCorrect && typeof q.correctIndex === 'number' && q.options[q.correctIndex] && (
-                                                <span style={{ color: '#059669', marginLeft: 6 }}>
+                                                <span style={{ color: '#059669', marginLeft: 6, fontWeight: 600 }}>
                                                   (Correct: {q.options[q.correctIndex]})
                                                 </span>
                                               )}
