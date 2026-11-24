@@ -6120,24 +6120,67 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <Pill color={T.green} bg={T.greenBg}>{resumeFileName || 'Resume loaded'}</Pill>
-                          {resumeProfile.techStacks.slice(0, 4).map((s, i) => (
+                          {resumeProfile.techStacks.slice(0, 5).map((s, i) => (
                             <Pill key={`t${i}`}>{s}</Pill>
-                          ))}
-                          {resumeProfile.skills.slice(0, 4).map((s, i) => (
-                            <Pill key={`s${i}`}>{s}</Pill>
                           ))}
                           <Btn variant="ghost" size="sm" onClick={handleResumeRemove} style={{ marginLeft: 'auto' }}>
                             <Trash2 size={12} /> Remove
                           </Btn>
                         </div>
-                        {resumeProfile.projects.length > 0 && (
+
+                        {resumeProfile.education && (
                           <div style={{ marginTop: 12, fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>
-                            <span style={{ fontWeight: 700, color: T.txtPri }}>Projects:</span> {resumeProfile.projects.join(' · ')}
+                            <span style={{ fontWeight: 700, color: T.txtPri }}>🎓 Education:</span> {resumeProfile.education}
                           </div>
                         )}
+
+                        {resumeProfile.skills.length > 0 && (
+                          <div style={{ marginTop: 10 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: T.txtPri, marginBottom: 5 }}>
+                              ⚡ Skills & Tools ({resumeProfile.skills.length}):
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                              {resumeProfile.skills.map((s, i) => (
+                                <span
+                                  key={`sk_${i}`}
+                                  style={{
+                                    fontSize: 11,
+                                    padding: '2px 8px',
+                                    borderRadius: 6,
+                                    background: T.bg,
+                                    border: `1px solid ${T.border}`,
+                                    color: T.txtPri,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {resumeProfile.projects.length > 0 && (
+                          <div style={{ marginTop: 10, fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>
+                            <span style={{ fontWeight: 700, color: T.txtPri }}>💼 Projects:</span> {resumeProfile.projects.join(' · ')}
+                          </div>
+                        )}
+
+                        {resumeProfile.achievements && resumeProfile.achievements.length > 0 && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>
+                            <span style={{ fontWeight: 700, color: T.txtPri }}>🏆 Achievements:</span> {resumeProfile.achievements.join(' · ')}
+                          </div>
+                        )}
+
                         {resumeProfile.certifications.length > 0 && (
-                          <div style={{ marginTop: 6, fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>
-                            <span style={{ fontWeight: 700, color: T.txtPri }}>Certifications:</span> {resumeProfile.certifications.join(' · ')}
+                          <div style={{ marginTop: 8, fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>
+                            <span style={{ fontWeight: 700, color: T.txtPri }}>📜 Certifications:</span> {resumeProfile.certifications.join(' · ')}
+                          </div>
+                        )}
+
+                        {resumeProfile.experience && !resumeProfile.experience.includes('Fresher') && (
+                          <div style={{ marginTop: 8, fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>
+                            <span style={{ fontWeight: 700, color: T.txtPri }}>🏢 Experience:</span> {resumeProfile.experience}
                           </div>
                         )}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>

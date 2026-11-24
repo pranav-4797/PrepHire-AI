@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📄 **High-Fidelity Structured Resume Parser & Comprehensive Profile Showcase (`resume.ts` & `App.tsx`)**:
+  - **Spatial Multi-Line PDF Reconstitution**: Upgraded `extractResumeText` with Y-coordinate change tracking and `hasEOL` detection, preserving line and paragraph breaks across all pages.
+  - **Section-Isolated Extraction & Heading Disambiguation**: Restructured `offlineParseResume` to match section headings at line beginnings, preventing mid-sentence keywords from capturing unintended prose.
+  - **Zero-Drop Resume Profile Display**: Added education credentials (degree, institute, CGPA), all detected skills & tools, real project titles (stripping capstone fallbacks), certifications, and hackathon achievements directly to the Student Profile resume dossier.
+
 - 🎓 **Admin Course Approval Persistence & Instant Catalog Sync (`firestore.service.ts` & `App.tsx`)**:
   - **Firestore Status Persistence Fix**: Fixed a bug where `updateCourse` unconditionally reset course status to `pending`, preventing Admin approvals from persisting to Firestore.
   - **Optimistic Approval & Rejection UX**: Admin course cards immediately switch badge states and action buttons upon clicking Approve/Reject, with immediate propagation to student course catalogs.
