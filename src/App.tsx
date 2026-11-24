@@ -2087,9 +2087,17 @@ const addResource = (chapterIndex: number) => {
 
   const handleSubmitCourse = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!courseForm.name.trim()) {
+      showToast('Please enter a course name.', 'error')
+      return
+    }
     try {
-      const payload = {
-        ...courseForm,
+      const payload: Omit<Course, 'id'> = {
+        name: courseForm.name.trim(),
+        description: courseForm.description.trim(),
+        hours: Number(courseForm.hours) || 0,
+        chapters: courseType === 'build' ? courseForm.chapters : [],
+        externalUrl: courseType === 'import' ? courseForm.externalUrl?.trim() : undefined,
         status: 'pending' as const
       }
       if (editingCourseId) {
