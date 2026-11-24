@@ -19,6 +19,7 @@ import { T } from '../../theme'
 import type { Quiz } from '../../types/quiz'
 import { getQuizById } from '../../services/quiz.service'
 import { QuizPlayer } from './QuizPlayer'
+import { prewarmProctorModels } from '../../utils/proctorPrewarm'
 import { BRANCHES } from '../../constants/branches'
 import { auth } from '../../firebase/firebase'
 
@@ -92,6 +93,7 @@ export function PublicQuizTake({
 
   // Load Quiz Data
   useEffect(() => {
+    prewarmProctorModels().catch(() => {})
     async function fetchQuiz() {
       setLoading(true)
       try {

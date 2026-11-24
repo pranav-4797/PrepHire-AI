@@ -823,19 +823,127 @@ export function QuizLeaderboardModal({
             position: 'fixed',
             inset: 0,
             zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.85)',
+            background: 'rgba(11, 27, 51, 0.75)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '2rem',
-            cursor: 'zoom-out',
+            padding: '1.25rem',
           }}
         >
-          <img
-            src={lightboxImage}
-            alt="Enlarged Evidence"
-            style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: 8, boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)' }}
-          />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 480,
+              width: '100%',
+              background: '#ffffff',
+              border: '2px solid #0b1b33',
+              borderRadius: 14,
+              boxShadow: '6px 6px 0 0 #0b1b33',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'modalSlideIn 0.15s ease-out',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.85rem 1.15rem',
+                borderBottom: '2px solid #0b1b33',
+                background: '#F8FAFC',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Camera size={18} color="#2563EB" />
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#0b1b33' }}>
+                    Forensic Photographic Snapshot
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748B' }}>
+                    Automated proctor capture recorded during active exam
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '1.15rem',
+                  fontWeight: 800,
+                  color: '#64748B',
+                  cursor: 'pointer',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: 6,
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Image Preview Viewport */}
+            <div
+              style={{
+                background: '#0B132B',
+                padding: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <img
+                src={lightboxImage}
+                alt="Enlarged Forensic Evidence"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: 320,
+                  aspectRatio: '4 / 3',
+                  objectFit: 'contain',
+                  borderRadius: 8,
+                  border: '1px solid #1E293B',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                }}
+              />
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '0.75rem 1.15rem',
+                background: '#ffffff',
+                borderTop: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.75rem',
+                color: '#64748B',
+              }}
+            >
+              <span>📷 Evidence preserved for academic integrity audit</span>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                style={{
+                  background: '#0b2545',
+                  color: '#ffffff',
+                  border: '1px solid #0b1b33',
+                  borderRadius: 6,
+                  padding: '0.35rem 0.85rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -21,6 +21,7 @@ import { initCleanup } from './cleanupService.js'
 import { registerCodingRoutes } from './coding/routes.js'
 import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
 import { callGemini, streamGemini, isRateLimited } from './gemini.js'
+import { callNvidia } from './nvidia.js'
 import { initDriveQueue } from './driveQueue.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
@@ -311,11 +312,27 @@ app.post('/api/ai/generate', requireAuth(), async (req, res) => {
     const text = await callGemini(prompt, sys, null, images)
     res.json({ text })
   } catch (err) {
+    // If Gemini fails and request has no heavy images, attempt NVIDIA NIM fallback
+    if (!images || images.length === 0) {
+      try {
+        console.warn('⚠️ Gemini failed, attempting NVIDIA NIM fallback...')
+        const nvidiaText = await callNvidia(prompt, sys, {
+          model: process.env.NVIDIA_MODEL || 'meta/llama-3.1-8b-instruct',
+        })
+        if (nvidiaText) {
+          console.log('✅ NVIDIA NIM fallback succeeded for /api/ai/generate')
+          return res.json({ text: nvidiaText, fallback: 'nvidia' })
+        }
+      } catch (nvidiaErr) {
+        console.warn('⚠️ NVIDIA fallback also failed:', nvidiaErr.message)
+      }
+    }
+
     const status = err.status || 502
     if (status === 500) {
       return res.status(500).json({ error: err.message })
     }
-    console.error('❌ Gemini proxy call failed:', err.message || err)
+    console.error('❌ AI proxy call failed:', err.message || err)
     res.status(status).json({ error: status === 502 ? 'AI generation service unavailable.' : err.message })
   }
 })

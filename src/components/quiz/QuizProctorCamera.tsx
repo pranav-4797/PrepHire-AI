@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Camera, AlertTriangle, ShieldCheck, UserX, Users, Smartphone, Mic } from 'lucide-react'
 import type { SuspiciousFlag } from '../../types/quiz'
+import { getCachedProctorModels, setCachedProctorModels } from '../../utils/proctorPrewarm'
 
 interface QuizProctorCameraProps {
   active: boolean
@@ -31,8 +32,9 @@ export function QuizProctorCamera({
 }: QuizProctorCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const modelRef = useRef<any>(null)
-  const faceModelRef = useRef<any>(null)
+  const initialModels = getCachedProctorModels()
+  const modelRef = useRef<any>(initialModels.cocoSsd)
+  const faceModelRef = useRef<any>(initialModels.blazeface)
   const ivRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioIvRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -248,26 +250,38 @@ export function QuizProctorCamera({
 
       // Load BlazeFace for ultra-fast multi-face detection (Google SOTA, ~8ms per frame)
       if (blazeface && !faceModelRef.current) {
-        try {
-          faceModelRef.current = await blazeface.load()
-        } catch (e) {
-          console.warn('BlazeFace model loading deferred:', e)
+        const cached = getCachedProctorModels()
+        if (cached.blazeface) {
+          faceModelRef.current = cached.blazeface
+        } else {
+          try {
+            faceModelRef.current = await blazeface.load()
+            setCachedProctorModels({ blazeface: faceModelRef.current })
+          } catch (e) {
+            console.warn('BlazeFace model loading deferred:', e)
+          }
         }
       }
 
       // Load object detection model for mobile phone & device detection
       if (cocoSsd && !modelRef.current) {
-        try {
-          await tf.ready()
+        const cached = getCachedProctorModels()
+        if (cached.cocoSsd) {
+          modelRef.current = cached.cocoSsd
+        } else {
           try {
-            await tf.setBackend('webgl')
-          } catch {
-            // WebGL acceleration fallback
+            await tf.ready()
+            try {
+              await tf.setBackend('webgl')
+            } catch {
+              // WebGL acceleration fallback
+            }
+            modelRef.current = await cocoSsd.load()
+            setCachedProctorModels({ cocoSsd: modelRef.current })
+          } catch (e) {
+            console.warn('Object detector initialization deferred:', e)
+            return
           }
-          modelRef.current = await cocoSsd.load()
-        } catch (e) {
-          console.warn('Object detector initialization deferred:', e)
-          return
         }
       }
 

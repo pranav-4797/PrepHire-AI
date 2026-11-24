@@ -20,6 +20,7 @@ import {
 } from '../../services/quiz.service'
 import { QuizPlayer } from './QuizPlayer'
 import { QuizResultModal } from './QuizResultModal'
+import { prewarmProctorModels } from '../../utils/proctorPrewarm'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 
 function GlassCard({
@@ -140,6 +141,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
 
   useEffect(() => {
     loadData()
+    prewarmProctorModels().catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.uid])
 
