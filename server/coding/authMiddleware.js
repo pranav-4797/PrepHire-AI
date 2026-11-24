@@ -33,6 +33,8 @@ function insecureDevAuth() {
 
 let warnedDev = false
 
+let warnedRoleError = false
+
 async function lookupProfile(uid) {
   if (!uid) return { role: 'Student', disabled: false }
   const cached = roleCache.get(uid)
@@ -52,8 +54,13 @@ async function lookupProfile(uid) {
     roleCache.set(uid, entry)
     return entry
   } catch (e) {
-    console.error('⚠️ Failed to resolve user role from Firestore (failing closed to Student):', e.message)
-    return { role: 'Student', disabled: false } // not cached
+    if (!warnedRoleError) {
+      console.warn('⚠️ Failed to resolve user role from Firestore Admin SDK (failing closed to Student):', e.message)
+      warnedRoleError = true
+    }
+    const fallback = { role: 'Student', disabled: false, expiresAt: Date.now() + 30_000 }
+    roleCache.set(uid, fallback)
+    return fallback
   }
 }
 
@@ -72,11 +79,14 @@ export async function resolveAuthUser(req) {
     try {
       const decoded = await auth.verifyIdToken(token)
       const profile = await lookupProfile(decoded.uid)
+      const effectiveRole = (profile.role === 'Student' && (decoded.role || (decoded.admin ? 'Admin' : null)))
+        ? (decoded.role || 'Admin')
+        : profile.role
       return {
         uid: decoded.uid,
         email: String(decoded.email || '').toLowerCase(),
         name: decoded.name || '',
-        role: profile.role,
+        role: effectiveRole,
         disabled: profile.disabled,
         verified: true,
       }

@@ -15,13 +15,13 @@
 
 const AI_RATE_LIMIT = 12
 const AI_RATE_WINDOW_MS = 60_000
-const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest'
 const MODEL_CANDIDATES = [
   DEFAULT_GEMINI_MODEL,
-  'gemini-2.5-flash',
-  'gemini-1.5-flash',
-  'gemini-3.1-flash-lite-preview',
-  'gemini-1.5-pro',
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash-lite',
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
 ]
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 const REQUEST_TIMEOUT_MS = 60_000
