@@ -95,6 +95,7 @@ export function QuizPlayer({
   const phoneDetectedCountRef = useRef(0)
   const audioAnomaliesCountRef = useRef(0)
   const tamperAttemptsCountRef = useRef(0)
+  const cameraBlockedCountRef = useRef(0)
   const totalAwaySecondsRef = useRef(0)
   const blurStartRef = useRef<number | null>(null)
   const snapshotCaptureRef = useRef<(() => string | undefined) | null>(null)
@@ -108,6 +109,10 @@ export function QuizPlayer({
   const startTimeRef = useRef<number>(Date.now())
   const hasMountedRef = useRef(false)
   const mediaStreamRef = useRef<MediaStream | null>(null)
+  const answersRef = useRef(answers)
+  useEffect(() => {
+    answersRef.current = answers
+  }, [answers])
 
   const handleRegisterCapture = useCallback((fn: () => string | undefined) => {
     snapshotCaptureRef.current = fn
@@ -345,7 +350,6 @@ export function QuizPlayer({
       setSecondsLeft((prev) => {
         if (prev <= 1) {
           if (timerRef.current) clearInterval(timerRef.current)
-          handleFinalSubmit(true)
           return 0
         }
         return prev - 1
@@ -355,8 +359,14 @@ export function QuizPlayer({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [completedAttempt])
+
+  useEffect(() => {
+    if (secondsLeft === 0 && !completedAttempt && !submitting) {
+      void handleFinalSubmit(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondsLeft, completedAttempt])
 
   // ── Option Selection ──────────────────────────────────────────────────────
   const handleSelectOption = useCallback((optIdx: number) => {
@@ -391,6 +401,8 @@ export function QuizPlayer({
           ? 'cell_phone'
           : reason.includes('audio') || reason.includes('voice')
           ? 'audio_anomaly'
+          : reason.includes('Camera') || reason.includes('camera')
+          ? 'camera_blocked'
           : 'other')
 
       if (flagType === 'face_missing') {
@@ -401,6 +413,8 @@ export function QuizPlayer({
         phoneDetectedCountRef.current += 1
       } else if (flagType === 'audio_anomaly') {
         audioAnomaliesCountRef.current += 1
+      } else if (flagType === 'camera_blocked') {
+        cameraBlockedCountRef.current += 1
       }
 
       const timestamp = new Date().toLocaleTimeString()
@@ -503,7 +517,7 @@ export function QuizPlayer({
   ])
 
   // ── Submission Handler (Transfers Complete Telemetry & Snapshots) ─────────
-  async function handleFinalSubmit(isAuto = false) {
+  async function handleFinalSubmit(isAuto = false, autoCloseMessage?: string) {
     if (submitting || completedAttempt) return
     setSubmitting(true)
     if (timerRef.current) clearInterval(timerRef.current)
@@ -515,7 +529,7 @@ export function QuizPlayer({
       )
 
       // Convert displayed option selections back to master question keys for clean Firestore records
-      const masterAnswers = convertDisplayedAnswersToMaster(answers, questionMap)
+      const masterAnswers = convertDisplayedAnswersToMaster(answersRef.current, questionMap)
 
       // Cryptographically evaluate submission without exposing answers prior to submission
       const { score, maxScore, percentage, passed } = await evaluateQuizSubmission(
@@ -531,6 +545,7 @@ export function QuizPlayer({
       integrityScore -= phoneDetectedCountRef.current * 30
       integrityScore -= audioAnomaliesCountRef.current * 15
       integrityScore -= tamperAttemptsCountRef.current * 15
+      integrityScore -= cameraBlockedCountRef.current * 35
       integrityScore -= Math.min(25, Math.floor(totalAwaySecondsRef.current / 5) * 5)
       integrityScore = Math.max(0, Math.min(100, integrityScore))
 
@@ -585,7 +600,7 @@ export function QuizPlayer({
       }
 
       if (isAuto) {
-        showToast('Assessment submitted automatically.', 'info')
+        showToast(autoCloseMessage || 'Assessment submitted automatically.', autoCloseMessage ? 'error' : 'info')
       } else {
         showToast('Assessment submitted successfully!', 'success')
       }
@@ -1031,7 +1046,7 @@ export function QuizPlayer({
           <div
             style={{
               height: '100%',
-              width: `${Math.round((answeredCount / totalQuestions) * 100)}%`,
+              width: `${totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0}%`,
               background: 'linear-gradient(90deg, #2563EB, #10B981)',
               transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
@@ -1055,6 +1070,12 @@ export function QuizPlayer({
             compact={true}
             stealthMode={true}
             onFlag={handleProctorFlag}
+            onCameraBlockedTimeout={(reason) =>
+              handleFinalSubmit(
+                true,
+                `Assessment closed: ${reason} for 10 seconds.`
+              )
+            }
             onRegisterCapture={handleRegisterCapture}
             onRegisterMediaStream={handleRegisterMediaStream}
           />
@@ -1130,9 +1151,9 @@ export function QuizPlayer({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.35rem',
-                  background: markedForReview[currentQ?.id] ? '#FEF3C7' : '#F3F4F6',
-                  color: markedForReview[currentQ?.id] ? '#B45309' : T.txtSec,
-                  border: markedForReview[currentQ?.id] ? '1px solid #FDE68A' : 'none',
+                  background: markedForReview[currentQ?.id || `q-${currentIdx}`] ? '#FEF3C7' : '#F3F4F6',
+                  color: markedForReview[currentQ?.id || `q-${currentIdx}`] ? '#B45309' : T.txtSec,
+                  border: markedForReview[currentQ?.id || `q-${currentIdx}`] ? '1px solid #FDE68A' : 'none',
                   borderRadius: 6,
                   padding: '0.35rem 0.65rem',
                   fontSize: '0.78rem',
@@ -1142,8 +1163,8 @@ export function QuizPlayer({
                 }}
                 title="Mark for review (Hot-key: M)"
               >
-                <Bookmark size={13} fill={markedForReview[currentQ?.id] ? '#B45309' : 'none'} />
-                {markedForReview[currentQ?.id] ? 'Marked' : 'Mark Review'}
+                <Bookmark size={13} fill={markedForReview[currentQ?.id || `q-${currentIdx}`] ? '#B45309' : 'none'} />
+                {markedForReview[currentQ?.id || `q-${currentIdx}`] ? 'Marked' : 'Mark Review'}
               </button>
             </div>
           </div>
@@ -1347,6 +1368,12 @@ export function QuizPlayer({
                 active={!completedAttempt}
                 stealthMode={true}
                 onFlag={handleProctorFlag}
+                onCameraBlockedTimeout={(reason) =>
+                  handleFinalSubmit(
+                    true,
+                    `Assessment closed: ${reason} for 10 seconds.`
+                  )
+                }
                 onRegisterCapture={handleRegisterCapture}
                 onRegisterMediaStream={handleRegisterMediaStream}
               />
@@ -1742,6 +1769,7 @@ export function QuizPlayer({
             phoneDetectedCountRef.current = 0
             audioAnomaliesCountRef.current = 0
             tamperAttemptsCountRef.current = 0
+            cameraBlockedCountRef.current = 0
             totalAwaySecondsRef.current = 0
             blurStartRef.current = null
             startTimeRef.current = Date.now()

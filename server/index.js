@@ -424,13 +424,18 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
   }
 
   // Build the file name from metadata or fallback
-  const userIdentifier = req.authUser?.email?.split('@')[0] || req.authUser?.uid || 'user'
-  const studentName = (req.body.studentName || userIdentifier).replace(/[^a-zA-Z0-9_-]/g, '-')
-  const domain = (req.body.domain || 'General').replace(/[^a-zA-Z0-9_-]/g, '-')
-  const level = (req.body.level || 'Intermediate').replace(/[^a-zA-Z0-9_-]/g, '-')
-  const rawSessionId = typeof req.body.sessionId === 'string' ? req.body.sessionId : ''
+  const userIdentifier = String(req.authUser?.email?.split('@')[0] || req.authUser?.uid || 'user')
+  const studentName = String(req.body?.studentName || userIdentifier).replace(/[^a-zA-Z0-9_-]/g, '-')
+  const domain = String(req.body?.domain || 'General').replace(/[^a-zA-Z0-9_-]/g, '-')
+  const level = String(req.body?.level || 'Intermediate').replace(/[^a-zA-Z0-9_-]/g, '-')
+  const rawSessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : ''
   const sessionId = SESSION_ID_RE.test(rawSessionId) ? rawSessionId : Date.now().toString(36)
   const date = new Date().toISOString().split('T')[0]
+
+  if (driveQueue.getQueueStats().videoQueued >= 10) {
+    try { fs.unlinkSync(file.path) } catch {}
+    return res.status(503).json({ error: 'Video upload queue is busy. Please retry shortly.' })
+  }
 
   const container = sniffVideoContainer(file.path)
   if (!container) {
@@ -455,6 +460,7 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
 
     return res.json(result)
   } catch (err) {
+    try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path) } catch {}
     console.error('❌ Drive upload failed:', err.message || err)
 
     // Provide actionable error messages
@@ -474,7 +480,7 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
 })
 
 // ── Google Drive Upload Queue Health & Diagnostics Endpoint ──────────────────
-app.get('/api/drive/queue-status', (_req, res) => {
+app.get('/api/drive/queue-status', requireAdmin(), (_req, res) => {
   res.json({
     success: true,
     ...driveQueue.getQueueStats(),
@@ -518,11 +524,14 @@ async function decryptAnswerServer(cipherToken, quizId) {
   return null
 }
 
-app.post('/api/quiz/evaluate', express.json(), async (req, res) => {
+app.post('/api/quiz/evaluate', aiLimiter, async (req, res) => {
   try {
-    const { quizId, answers = {} } = req.body
-    if (!quizId) {
-      return res.status(400).json({ error: 'quizId is required' })
+    const { quizId, answers = {} } = req.body || {}
+    if (typeof quizId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(quizId)) {
+      return res.status(400).json({ error: 'Valid quizId is required' })
+    }
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return res.status(400).json({ error: 'answers must be an object' })
     }
 
     if (!db) {
@@ -535,6 +544,9 @@ app.post('/api/quiz/evaluate', express.json(), async (req, res) => {
     }
 
     const quizData = quizDoc.data()
+    if (!quizData?.published) {
+      return res.status(403).json({ error: 'Quiz is not published for evaluation' })
+    }
     const questions = quizData.questions || []
 
     let score = 0
@@ -593,7 +605,9 @@ function readCoursesFromFile() {
 }
 function writeCoursesToFile(courses) {
   try {
-    fs.writeFileSync(coursesFile, JSON.stringify(courses, null, 2))
+    const tmp = `${coursesFile}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(courses, null, 2))
+    fs.renameSync(tmp, coursesFile)
   } catch (e) {
     console.warn('⚠️ Failed to write courses JSON backup:', e.message)
   }
@@ -637,13 +651,19 @@ async function deleteCourseFromDb(id) {
 
 app.get('/api/courses', requireAuth(), async (req, res) => {
   const courses = await getCoursesList()
-  res.json(courses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)))
+  const isStaff = req.authUser?.role === 'Admin' || req.authUser?.role === 'Faculty'
+  const visible = isStaff ? courses : courses.filter((c) => c.status === 'approved')
+  res.json(visible.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)))
 })
 
 app.get('/api/courses/:id', requireAuth(), async (req, res) => {
   const courses = await getCoursesList()
   const course = courses.find(c => c.id === req.params.id)
   if (!course) return res.status(404).json({ error: 'Course not found' })
+  const isStaff = req.authUser?.role === 'Admin' || req.authUser?.role === 'Faculty'
+  if (!isStaff && course.status !== 'approved') {
+    return res.status(403).json({ error: 'Course is not approved yet' })
+  }
   res.json(course)
 })
 

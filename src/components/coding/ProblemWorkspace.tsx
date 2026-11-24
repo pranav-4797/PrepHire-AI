@@ -67,11 +67,21 @@ function Btn({
 // ── Copy-to-clipboard button ─────────────────────────────────────────────
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true)
+        if (timerRef.current) clearTimeout(timerRef.current)
+        timerRef.current = setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => {})
   }, [text])
   return (
     <button
@@ -229,6 +239,7 @@ export function ProblemWorkspace({
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problemId])
@@ -337,7 +348,7 @@ export function ProblemWorkspace({
         totalCount: 0,
         runtimeMs: 0,
         memoryKb: 0,
-        testResults: [{ passed: false, stderr: (err as Error).message, hidden: false }],
+        testResults: [{ passed: false, stderr: sanitizeErrorMessage(err, 'Execution failed. Please try again.'), hidden: false }],
       })
     } finally {
       setRunning(false)
@@ -387,7 +398,7 @@ export function ProblemWorkspace({
         runtimeMs: 0,
         memoryKb: 0,
         submittedAt: new Date().toISOString(),
-        testResults: [{ passed: false, stderr: (err as Error).message, hidden: false }],
+        testResults: [{ passed: false, stderr: sanitizeErrorMessage(err, 'Execution failed. Please try again.'), hidden: false }],
       })
     } finally {
       setSubmitting(false)

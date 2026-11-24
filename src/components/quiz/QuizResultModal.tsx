@@ -31,7 +31,7 @@ export function QuizResultModal({
 
   quiz.questions.forEach((q, idx) => {
     const ans = attempt.answers?.[q.id] ?? attempt.answers?.[`q-${idx}`] ?? attempt.answers?.[String(idx)] ?? attempt.answers?.[idx]
-    if (ans === q.correctIndex) {
+    if (typeof q.correctIndex === 'number' && ans === q.correctIndex) {
       correctCount++
     }
   })

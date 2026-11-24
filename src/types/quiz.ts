@@ -82,6 +82,7 @@ export interface SuspiciousFlag {
     | 'face_missing'
     | 'multiple_faces'
     | 'cell_phone'
+    | 'camera_blocked'
     | 'focus_loss'
     | 'audio_anomaly'
     | 'tamper_attempt'

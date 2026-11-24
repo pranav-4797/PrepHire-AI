@@ -26,6 +26,15 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🛡️ **Camera Tamper & Black-Frame Auto-Close Proctoring (`cameraMonitor.ts`, `QuizProctorCamera.tsx` & `App.tsx`)**:
+  - **Continuous Camera Health Detection**: Detects black frames, covered/obstructed lenses, muted/ended video tracks, and permission revocation across both **Mock Interviews** and **Quizzes**.
+  - **Immediate Flagging & 10-Second Warning Countdown**: Logs a `camera_blocked` proctoring flag immediately and displays a live 10-second countdown warning; if the camera is not restored within 10 seconds, the interview or quiz automatically closes and submits with a warning.
+
+- 🔒 **Platform-Wide Security, Auth & Stability Hardening (`firestore.rules`, `server/`, `QuizPlayer.tsx`, `AuthContext.tsx`, `App.tsx`)**:
+  - **Firestore & API Hardening**: Restricted unpublished quiz reads and course self-approval in `firestore.rules`, added rate limiting, input validation, and published checks on `/api/quiz/evaluate`, secured `/api/drive/queue-status` for Admins, and fixed `isRateLimited()` sliding-window tracking.
+  - **Quiz & Interview Reliability**: Fixed stale-closure answer loss on quiz timer expiration, `handleTimeUp` Q5 evaluation, `MediaRecorder` stream handoff across `intro` → `interview`, `ProctoredCamera` tab-blur reporting, and `AuthContext` disabled-account enforcement.
+  - **Resource & Export Safety**: Added PDF/ImageBitmap disposal in `quizDocParser.ts` and `resume.ts`, CSV formula-injection neutralization in `QuizLeaderboardModal.tsx`, and timer/clipboard cleanup in `ProblemWorkspace.tsx`.
+
 - 📑 **Institutional Word Document (.docx) Gradebook Export (`quizDocxExport.ts` & `QuizLeaderboardModal.tsx`)**:
   - **Formatted Word Gradebook Generation**: Added a 1-click **Export DOCX** button in the Quiz Leaderboard alongside CSV export.
   - **Comprehensive Tabular Breakdown**: Generates an executive examination report with executive statistics banner, institutional table styling, candidate full names, branch & roll numbers, questions attempted count, questions correct count, total marks/percentage, and proctoring integrity scores.
