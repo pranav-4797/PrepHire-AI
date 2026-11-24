@@ -1,51 +1,69 @@
 // ── SHARED THEME TOKENS ──────────────────────────────────────────────────────
 // Extracted so new features (e.g. the Coding Platform) can reuse the exact
 // same design system as the rest of the app instead of re-declaring colors.
+//
+// 2026-11-24: neo-brutalist editorial pass — paper + navy ink + gold, square
+// geometry, 2px borders and hard offset shadows. Colour names are unchanged so
+// every existing screen inherits the new palette without code changes.
 export const T = {
-  bg:         '#f7f9fb',
-  bgWhite:    '#ffffff',
-  bgLow:      '#f2f4f6',
-  bgMid:      '#eceef0',
-  bgHigh:     '#e6e8ea',
-  glass:      'rgba(255,255,255,0.82)',
-  glassBord:  'rgba(195,198,209,0.80)',
+  // Surfaces — warm paper instead of cool blue-grey
+  bg:         '#f4f1e9',
+  bgWhite:    '#fffdf7',
+  bgLow:      '#ece7da',
+  bgMid:      '#e2dcca',
+  bgHigh:     '#d7cfba',
+  glass:      'rgba(255,253,247,0.88)',
+  glassBord:  'rgba(11,27,51,0.9)',
 
-  txtPri:     '#191c1e',
-  txtSec:     '#43474f',
-  txtMut:     '#737780',
+  // Text — navy ink
+  txtPri:     '#0b1b33',
+  txtSec:     '#3c4657',
+  txtMut:     '#6c6455',
 
-  primary:    '#001e40',
-  primaryFix: '#d5e3ff',
-  primaryFixD:'#a7c8ff',
-  onPrimFx:   '#001b3c',
-  onPrimFxV:  '#1f477b',
+  // Primary — deep navy
+  primary:    '#0b2545',
+  primaryFix: '#ffe3ad',
+  primaryFixD:'#f6c96e',
+  onPrimFx:   '#1d1503',
+  onPrimFxV:  '#241a05',
 
+  // Secondary — placement gold
   gold:       '#fea619',
-  goldFixed:  '#ffddb8',
-  goldFixedD: '#ffb95f',
-  onGold:     '#684000',
+  goldFixed:  '#ffe3ad',
+  goldFixedD: '#f6c96e',
+  onGold:     '#241600',
 
-  border:     'rgba(195,198,209,0.8)',
-  outlineVar: '#c3c6d1',
-  outline:    '#737780',
+  // Hard edges
+  ink:        '#0b1b33',
+  paper:      '#f4f1e9',
+  border:     '#0b1b33',
+  outlineVar: '#b9ae95',
+  outline:    '#5f5747',
 
-  error:      '#ba1a1a',
+  // Status
+  error:      '#b3261e',
   errCont:    '#ffdad6',
-  errorBg:    '#fef2f2',
-  errorBorder:'#f87171',
-  green:      '#166534',
-  greenBg:    '#dcfce7',
-  amber:      '#92400e',
-  amberBg:    '#fef3c7',
-  teal:       '#0f766e',
-  purple:     '#7c3aed',
-  info:       '#2563eb',
-  infoBg:     '#eff6ff',
-  infoBorder: '#bfdbfe',
+  errorBg:    '#fdecea',
+  errorBorder:'#c0392b',
+  green:      '#0f6b3f',
+  greenBg:    '#e2f2e6',
+  amber:      '#8a5300',
+  amberBg:    '#fff0cf',
+  teal:       '#0f5f66',
+  purple:     '#6d28d9',
+  info:       '#1d4ed8',
+  infoBg:     '#e8eefc',
+  infoBorder: '#9fb4e8',
 
   // Type: bold editorial display + modern grotesque UI
   display:    "'Archivo Black', 'Arial Black', 'Helvetica Neue', Arial, sans-serif",
   sans:       "'Space Grotesk', system-ui, 'Segoe UI', Roboto, sans-serif",
   trackHeading: '-0.03em',
-  trackLabel:   '0.08em',
+  trackLabel:   '0.12em',
+
+  // Hard shadows (offset, never blurred)
+  shadow:     '5px 5px 0 0 #0b1b33',
+  shadowGold: '5px 5px 0 0 #fea619',
+  shadowSm:   '3px 3px 0 0 #0b1b33',
+  shadowLg:   '8px 8px 0 0 #fea619',
 }

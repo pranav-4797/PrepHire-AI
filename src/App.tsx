@@ -444,10 +444,10 @@ function GlassCard({
   return (
     <div
       onClick={onClick}
+      className="brutal-card"
       style={{
         background: '#ffffff',
-        border: '1px solid #E5E7EB',
-        borderRadius: 12,
+        border: '2px solid #0b1b33',
         padding: '1.25rem',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'box-shadow 0.2s',
@@ -470,8 +470,7 @@ function SolidCard({
     <div
       style={{
         background: '#ffffff',
-        border: '1px solid #E5E7EB',
-        borderRadius: 12,
+        border: '2px solid #0b1b33',
         padding: '1.25rem',
         ...style,
       }}
