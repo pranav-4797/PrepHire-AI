@@ -37,7 +37,7 @@ export function ErrorAlert({
         fontSize: 13,
         lineHeight: 1.45,
         color: '#991B1B',
-        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.08)',
+        boxShadow: '3px 3px 0 #001e40',
         animation: 'slideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         ...style,
       }}

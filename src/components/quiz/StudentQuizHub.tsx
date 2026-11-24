@@ -189,7 +189,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
           color: '#ffffff',
           borderRadius: 16,
           padding: '1.85rem 2rem',
-          boxShadow: '0 10px 30px -5px rgba(10, 25, 47, 0.35)',
+          boxShadow: '3px 3px 0 #001e40',
           border: '1px solid rgba(255, 255, 255, 0.12)',
           position: 'relative',
           overflow: 'hidden',
@@ -284,7 +284,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
               WebkitBackdropFilter: 'blur(16px)',
               padding: '0.9rem 1.4rem',
               borderRadius: 14,
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+              boxShadow: '3px 3px 0 #001e40',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

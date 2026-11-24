@@ -107,13 +107,13 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
             zIndex: 9999,
             width: '92%',
             maxWidth: '820px',
-            background: 'rgba(15, 23, 42, 0.95)',
-            border: '1px solid rgba(255, 255, 255, 0.14)',
-            borderRadius: '16px',
+            background: '#ffffff',
+            border: '2px solid #001e40',
+            borderRadius: '6px',
             padding: '20px 24px',
-            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.45)',
+            boxShadow: '8px 8px 0 #001e40',
             backdropFilter: 'blur(16px)',
-            color: '#FFFFFF',
+            color: '#001e40',
             animation: 'fadeIn 0.3s ease-out',
             boxSizing: 'border-box',
           }}
@@ -124,19 +124,19 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 width: '40px',
                 height: '40px',
                 borderRadius: '10px',
-                background: 'rgba(59, 130, 246, 0.2)',
+                background: '#d5e3ff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}
             >
-              <Cookie size={22} style={{ color: '#FCD34D' }} />
+              <Cookie size={22} style={{ color: '#001e40' }} />
             </div>
 
             <div style={{ flex: 1, minWidth: '260px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#FFFFFF' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#001e40' }}>
                   Privacy & Cookie Preferences
                 </h3>
                 <span
@@ -144,8 +144,8 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                     fontSize: '10px',
                     fontWeight: 700,
                     textTransform: 'uppercase',
-                    background: 'rgba(59, 130, 246, 0.2)',
-                    color: '#60A5FA',
+                    background: '#d5e3ff',
+                    color: '#001e40',
                     padding: '2px 8px',
                     borderRadius: '12px',
                   }}
@@ -153,7 +153,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                   GDPR / CCPA
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.6', color: '#CBD5E1' }}>
+              <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.6', color: '#2b3340' }}>
                 PrepHire-AI uses strictly necessary cookies for session security and anti-cheating proctoring, along with optional functional, performance, and campus placement cookies to personalize your AI interview practice.
               </p>
             </div>
@@ -164,11 +164,12 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 style={{
                   padding: '9px 16px',
                   borderRadius: '10px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  color: '#F8FAFC',
-                  border: '1px solid rgba(255, 255, 255, 0.16)',
+                  background: '#ffffff',
+                  color: '#001e40',
+                  border: '2px solid #001e40',
                   fontSize: '12px',
-                  fontWeight: 600,
+                  fontWeight: 700,
+                  boxShadow: '3px 3px 0 #001e40',
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -184,10 +185,11 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                   padding: '9px 16px',
                   borderRadius: '10px',
                   background: 'transparent',
-                  color: '#94A3B8',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#2b3340',
+                  border: '2px solid #001e40',
                   fontSize: '12px',
-                  fontWeight: 600,
+                  fontWeight: 700,
+                  boxShadow: '3px 3px 0 #001e40',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}
@@ -199,9 +201,9 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 style={{
                   padding: '9px 18px',
                   borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
-                  color: '#FFFFFF',
-                  border: 'none',
+                  background: '#fea619',
+                  color: '#001e40',
+                  border: '2px solid #001e40',
                   fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -209,7 +211,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                   alignItems: 'center',
                   gap: '6px',
                   fontFamily: 'inherit',
-                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
+                  boxShadow: '3px 3px 0 #001e40',
                 }}
               >
                 <Check size={14} /> Accept All
@@ -228,7 +230,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
             position: 'fixed',
             inset: 0,
             zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.75)',
+            background: 'rgba(0, 30, 64, 0.65)',
             backdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
@@ -241,16 +243,16 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#0F172A',
-              color: '#F8FAFC',
-              borderRadius: '20px',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
+              background: '#ffffff',
+              color: '#001e40',
+              borderRadius: '6px',
+              border: '2px solid #001e40',
               maxWidth: '680px',
               width: '100%',
               maxHeight: '85vh',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6)',
+              boxShadow: '8px 8px 0 #001e40',
               overflow: 'hidden',
             }}
           >
@@ -258,7 +260,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
             <div
               style={{
                 padding: '20px 24px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                borderBottom: '2px solid #001e40',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -270,19 +272,19 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                     width: '36px',
                     height: '36px',
                     borderRadius: '10px',
-                    background: 'rgba(59, 130, 246, 0.2)',
+                    background: '#d5e3ff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <ShieldCheck size={20} style={{ color: '#60A5FA' }} />
+                  <ShieldCheck size={20} style={{ color: '#001e40' }} />
                 </div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#FFFFFF' }}>
+                  <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#001e40' }}>
                     Cookie Preferences Center
                   </h2>
-                  <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                  <span style={{ fontSize: '12px', color: '#2b3340' }}>
                     Configure how PrepHire-AI uses cookies and storage on your device
                   </span>
                 </div>
@@ -292,7 +294,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94A3B8',
+                  color: '#2b3340',
                   cursor: 'pointer',
                   padding: '6px',
                   borderRadius: '8px',
@@ -315,8 +317,8 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
               {/* Category: Necessary */}
               <div
                 style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: '#f7f9fb',
+                  border: '2px solid #001e40',
                   borderRadius: '12px',
                   padding: '16px',
                 }}
@@ -324,15 +326,15 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <Lock size={14} style={{ color: '#10B981' }} />
-                      <strong style={{ fontSize: '14px', color: '#FFFFFF' }}>{COOKIE_REGISTRY.necessary.title}</strong>
+                      <Lock size={14} style={{ color: '#065F46' }} />
+                      <strong style={{ fontSize: '14px', color: '#001e40' }}>{COOKIE_REGISTRY.necessary.title}</strong>
                       <span
                         style={{
                           fontSize: '10px',
                           fontWeight: 700,
                           textTransform: 'uppercase',
-                          background: 'rgba(16, 185, 129, 0.2)',
-                          color: '#34D399',
+                          background: '#BBF7D0',
+                          color: '#065F46',
                           padding: '2px 8px',
                           borderRadius: '10px',
                         }}
@@ -340,7 +342,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                         Always Active
                       </span>
                     </div>
-                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#94A3B8' }}>
+                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#2b3340' }}>
                       {COOKIE_REGISTRY.necessary.description}
                     </p>
                     <button
@@ -348,7 +350,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: '#60A5FA',
+                        color: '#001e40',
                         fontSize: '11px',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -365,12 +367,12 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 </div>
 
                 {expandedCategory === 'necessary' && (
-                  <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
+                  <div style={{ marginTop: '12px', borderTop: '2px solid #001e40', paddingTop: '10px' }}>
                     {COOKIE_REGISTRY.necessary.cookies.map((c) => (
-                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#CBD5E1' }}>
-                        <code style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '4px', color: '#93C5FD' }}>{c.name}</code>
-                        <span style={{ color: '#64748B' }}> · {c.duration}</span>
-                        <div style={{ color: '#94A3B8', marginTop: '2px' }}>{c.purpose}</div>
+                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#2b3340' }}>
+                        <code style={{ background: '#ffddb8', padding: '2px 6px', borderRadius: '4px', color: '#001e40' }}>{c.name}</code>
+                        <span style={{ color: '#4a5565' }}> · {c.duration}</span>
+                        <div style={{ color: '#2b3340', marginTop: '2px' }}>{c.purpose}</div>
                       </div>
                     ))}
                   </div>
@@ -380,8 +382,8 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
               {/* Category: Preferences */}
               <div
                 style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: '#f7f9fb',
+                  border: '2px solid #001e40',
                   borderRadius: '12px',
                   padding: '16px',
                 }}
@@ -389,9 +391,9 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <strong style={{ fontSize: '14px', color: '#FFFFFF' }}>{COOKIE_REGISTRY.preferences.title}</strong>
+                      <strong style={{ fontSize: '14px', color: '#001e40' }}>{COOKIE_REGISTRY.preferences.title}</strong>
                     </div>
-                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#94A3B8' }}>
+                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#2b3340' }}>
                       {COOKIE_REGISTRY.preferences.description}
                     </p>
                     <button
@@ -399,7 +401,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: '#60A5FA',
+                        color: '#001e40',
                         fontSize: '11px',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -422,19 +424,19 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                         width: '18px',
                         height: '18px',
                         cursor: 'pointer',
-                        accentColor: '#2563EB',
+                        accentColor: '#001e40',
                       }}
                     />
                   </label>
                 </div>
 
                 {expandedCategory === 'preferences' && (
-                  <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
+                  <div style={{ marginTop: '12px', borderTop: '2px solid #001e40', paddingTop: '10px' }}>
                     {COOKIE_REGISTRY.preferences.cookies.map((c) => (
-                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#CBD5E1' }}>
-                        <code style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '4px', color: '#93C5FD' }}>{c.name}</code>
-                        <span style={{ color: '#64748B' }}> · {c.duration}</span>
-                        <div style={{ color: '#94A3B8', marginTop: '2px' }}>{c.purpose}</div>
+                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#2b3340' }}>
+                        <code style={{ background: '#ffddb8', padding: '2px 6px', borderRadius: '4px', color: '#001e40' }}>{c.name}</code>
+                        <span style={{ color: '#4a5565' }}> · {c.duration}</span>
+                        <div style={{ color: '#2b3340', marginTop: '2px' }}>{c.purpose}</div>
                       </div>
                     ))}
                   </div>
@@ -444,8 +446,8 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
               {/* Category: Analytics */}
               <div
                 style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: '#f7f9fb',
+                  border: '2px solid #001e40',
                   borderRadius: '12px',
                   padding: '16px',
                 }}
@@ -453,9 +455,9 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <strong style={{ fontSize: '14px', color: '#FFFFFF' }}>{COOKIE_REGISTRY.analytics.title}</strong>
+                      <strong style={{ fontSize: '14px', color: '#001e40' }}>{COOKIE_REGISTRY.analytics.title}</strong>
                     </div>
-                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#94A3B8' }}>
+                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#2b3340' }}>
                       {COOKIE_REGISTRY.analytics.description}
                     </p>
                     <button
@@ -463,7 +465,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: '#60A5FA',
+                        color: '#001e40',
                         fontSize: '11px',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -486,19 +488,19 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                         width: '18px',
                         height: '18px',
                         cursor: 'pointer',
-                        accentColor: '#2563EB',
+                        accentColor: '#001e40',
                       }}
                     />
                   </label>
                 </div>
 
                 {expandedCategory === 'analytics' && (
-                  <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
+                  <div style={{ marginTop: '12px', borderTop: '2px solid #001e40', paddingTop: '10px' }}>
                     {COOKIE_REGISTRY.analytics.cookies.map((c) => (
-                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#CBD5E1' }}>
-                        <code style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '4px', color: '#93C5FD' }}>{c.name}</code>
-                        <span style={{ color: '#64748B' }}> · {c.duration}</span>
-                        <div style={{ color: '#94A3B8', marginTop: '2px' }}>{c.purpose}</div>
+                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#2b3340' }}>
+                        <code style={{ background: '#ffddb8', padding: '2px 6px', borderRadius: '4px', color: '#001e40' }}>{c.name}</code>
+                        <span style={{ color: '#4a5565' }}> · {c.duration}</span>
+                        <div style={{ color: '#2b3340', marginTop: '2px' }}>{c.purpose}</div>
                       </div>
                     ))}
                   </div>
@@ -508,8 +510,8 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
               {/* Category: Marketing / Placement */}
               <div
                 style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  background: '#f7f9fb',
+                  border: '2px solid #001e40',
                   borderRadius: '12px',
                   padding: '16px',
                 }}
@@ -517,9 +519,9 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <strong style={{ fontSize: '14px', color: '#FFFFFF' }}>{COOKIE_REGISTRY.marketing.title}</strong>
+                      <strong style={{ fontSize: '14px', color: '#001e40' }}>{COOKIE_REGISTRY.marketing.title}</strong>
                     </div>
-                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#94A3B8' }}>
+                    <p style={{ margin: '0 0 10px', fontSize: '12px', lineHeight: '1.5', color: '#2b3340' }}>
                       {COOKIE_REGISTRY.marketing.description}
                     </p>
                     <button
@@ -527,7 +529,7 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: '#60A5FA',
+                        color: '#001e40',
                         fontSize: '11px',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -550,19 +552,19 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                         width: '18px',
                         height: '18px',
                         cursor: 'pointer',
-                        accentColor: '#2563EB',
+                        accentColor: '#001e40',
                       }}
                     />
                   </label>
                 </div>
 
                 {expandedCategory === 'marketing' && (
-                  <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
+                  <div style={{ marginTop: '12px', borderTop: '2px solid #001e40', paddingTop: '10px' }}>
                     {COOKIE_REGISTRY.marketing.cookies.map((c) => (
-                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#CBD5E1' }}>
-                        <code style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '4px', color: '#93C5FD' }}>{c.name}</code>
-                        <span style={{ color: '#64748B' }}> · {c.duration}</span>
-                        <div style={{ color: '#94A3B8', marginTop: '2px' }}>{c.purpose}</div>
+                      <div key={c.name} style={{ fontSize: '11px', marginBottom: '8px', color: '#2b3340' }}>
+                        <code style={{ background: '#ffddb8', padding: '2px 6px', borderRadius: '4px', color: '#001e40' }}>{c.name}</code>
+                        <span style={{ color: '#4a5565' }}> · {c.duration}</span>
+                        <div style={{ color: '#2b3340', marginTop: '2px' }}>{c.purpose}</div>
                       </div>
                     ))}
                   </div>
@@ -574,16 +576,16 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
             <div
               style={{
                 padding: '16px 24px',
-                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                borderTop: '2px solid #001e40',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 flexWrap: 'wrap',
                 gap: '10px',
-                background: 'rgba(0, 0, 0, 0.25)',
+                background: '#d5e3ff',
               }}
             >
-              <span style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '11px', color: '#4a5565', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 PrepHire-AI Privacy Standards <ExternalLink size={11} />
               </span>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -592,11 +594,12 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                   style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    background: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#94A3B8',
+                    background: '#ffffff',
+                    border: '2px solid #001e40',
+                    boxShadow: '3px 3px 0 #001e40',
+                    color: '#001e40',
                     fontSize: '12px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: 'pointer',
                   }}
                 >
@@ -607,11 +610,12 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                   style={{
                     padding: '8px 16px',
                     borderRadius: '8px',
-                    background: 'rgba(59, 130, 246, 0.2)',
-                    border: '1px solid rgba(59, 130, 246, 0.4)',
-                    color: '#93C5FD',
+                    background: '#ffffff',
+                    border: '2px solid #001e40',
+                    boxShadow: '3px 3px 0 #001e40',
+                    color: '#001e40',
                     fontSize: '12px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: 'pointer',
                   }}
                 >
@@ -622,9 +626,10 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onConsentChange }) =
                   style={{
                     padding: '8px 18px',
                     borderRadius: '8px',
-                    background: '#2563EB',
-                    border: 'none',
-                    color: '#FFFFFF',
+                    background: '#fea619',
+                    border: '2px solid #001e40',
+                    boxShadow: '3px 3px 0 #001e40',
+                    color: '#001e40',
                     fontSize: '12px',
                     fontWeight: 700,
                     cursor: 'pointer',

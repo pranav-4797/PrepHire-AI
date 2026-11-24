@@ -87,7 +87,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 20px auto',
-                boxShadow: '0 8px 24px rgba(239, 68, 68, 0.2)',
+                boxShadow: '3px 3px 0 #001e40',
               }}
             >
               <AlertOctagon size={36} color="#DC2626" />
@@ -133,7 +133,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   fontSize: 14,
                   fontWeight: 700,
                   cursor: 'pointer',
-                  boxShadow: '0 4px 16px rgba(10, 37, 64, 0.25)',
+                  boxShadow: '3px 3px 0 #001e40',
                   transition: 'all 0.18s ease',
                   fontFamily: 'inherit',
                 }}

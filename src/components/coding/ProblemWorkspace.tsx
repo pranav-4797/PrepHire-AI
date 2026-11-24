@@ -728,7 +728,7 @@ export function ProblemWorkspace({
             <div style={{
               background: T.bgWhite, border: `1px solid ${T.border}`, borderRadius: 10, padding: 16,
               display: 'flex', flexDirection: 'column', gap: 10,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+              boxShadow: '3px 3px 0 #001e40',
             }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>Reset Code Template</div>
               <div style={{ fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>

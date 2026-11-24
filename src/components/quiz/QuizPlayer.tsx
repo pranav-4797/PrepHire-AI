@@ -720,7 +720,7 @@ export function QuizPlayer({
               borderRadius: 16,
               padding: '2.5rem 2rem',
               textAlign: 'center',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
+              boxShadow: '8px 8px 0 #001e40',
               border: '1px solid #E2E8F0',
             }}
           >
@@ -811,7 +811,7 @@ export function QuizPlayer({
                 fontSize: '0.95rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.28)',
+                boxShadow: '3px 3px 0 #001e40',
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
@@ -869,7 +869,7 @@ export function QuizPlayer({
           position: 'sticky',
           top: 0,
           zIndex: 40,
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+          boxShadow: '3px 3px 0 #001e40',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -1039,7 +1039,7 @@ export function QuizPlayer({
                 fontSize: '0.85rem',
                 fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
+                boxShadow: '3px 3px 0 #001e40',
               }}
             >
               <Send size={15} /> Submit Assessment
@@ -1106,7 +1106,7 @@ export function QuizPlayer({
             justifyContent: 'space-between',
             gap: '1rem',
             color: '#991B1B',
-            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.18)',
+            boxShadow: '3px 3px 0 #001e40',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1383,7 +1383,7 @@ export function QuizPlayer({
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(0, 30, 64, 0.2)',
+                    boxShadow: '3px 3px 0 #001e40',
                   }}
                   title="Next question (Hot-key: →)"
                 >
@@ -1404,7 +1404,7 @@ export function QuizPlayer({
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(5, 150, 105, 0.25)',
+                    boxShadow: '3px 3px 0 #001e40',
                   }}
                 >
                   Review & Submit <Send size={15} />
@@ -1600,7 +1600,7 @@ export function QuizPlayer({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.4rem',
-                  boxShadow: '0 2px 6px rgba(0, 30, 64, 0.2)',
+                  boxShadow: '3px 3px 0 #001e40',
                 }}
               >
                 <Send size={14} /> Submit Assessment
@@ -1719,7 +1719,7 @@ export function QuizPlayer({
               padding: '1.5rem',
               maxWidth: 420,
               width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: '8px 8px 0 #001e40',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>

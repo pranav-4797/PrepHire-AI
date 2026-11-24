@@ -207,7 +207,7 @@ export function PublicQuizTake({
             borderRadius: 16,
             padding: '2.5rem 2rem',
             textAlign: 'center',
-            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+            boxShadow: '3px 3px 0 #001e40',
             border: '1px solid #E2E8F0',
           }}
         >
@@ -299,7 +299,7 @@ export function PublicQuizTake({
           color: '#ffffff',
           borderRadius: 16,
           padding: '2rem',
-          boxShadow: '0 10px 30px -5px rgba(10, 25, 47, 0.35)',
+          boxShadow: '3px 3px 0 #001e40',
           border: '1px solid rgba(255, 255, 255, 0.12)',
           position: 'relative',
           overflow: 'hidden',
@@ -415,7 +415,7 @@ export function PublicQuizTake({
           background: '#ffffff',
           borderRadius: 16,
           padding: '1.75rem 2rem',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+          boxShadow: '3px 3px 0 #001e40',
           border: '1px solid #E2E8F0',
           display: 'flex',
           flexDirection: 'column',
@@ -684,7 +684,7 @@ export function PublicQuizTake({
             fontSize: '1rem',
             fontWeight: 800,
             cursor: !consentAgreed || !name.trim() || !email.trim() ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+            boxShadow: '3px 3px 0 #001e40',
             transition: 'all 0.15s ease',
           }}
         >

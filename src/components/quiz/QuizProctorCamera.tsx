@@ -464,7 +464,7 @@ export function QuizProctorCamera({
           borderRadius: 10,
           overflow: 'hidden',
           border: '2px solid #10B981',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          boxShadow: '3px 3px 0 #001e40',
         }}
       >
         <video

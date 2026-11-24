@@ -69,7 +69,7 @@ export function QuizResultModal({
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: '8px 8px 0 #001e40',
           overflow: 'hidden',
         }}
       >
@@ -524,7 +524,7 @@ export function QuizResultModal({
                 fontSize: '0.85rem',
                 fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
+                boxShadow: '3px 3px 0 #001e40',
               }}
             >
               Done & Return to Hub

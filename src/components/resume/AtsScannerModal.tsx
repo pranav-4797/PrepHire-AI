@@ -76,7 +76,7 @@ export const AtsScannerModal: React.FC<AtsScannerModalProps> = ({
           maxHeight: '90vh',
           background: T.bgWhite,
           borderRadius: 16,
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: '8px 8px 0 #001e40',
           border: `1px solid ${T.border}`,
           overflow: 'hidden',
           display: 'flex',

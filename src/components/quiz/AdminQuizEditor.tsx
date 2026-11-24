@@ -461,7 +461,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: parsingDoc ? 'not-allowed' : 'pointer',
-              boxShadow: '0 1px 3px rgba(22, 101, 52, 0.1)',
+              boxShadow: '3px 3px 0 #001e40',
             }}
           >
             <UploadCloud size={15} />
@@ -483,7 +483,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(124, 58, 237, 0.25)',
+              boxShadow: '3px 3px 0 #001e40',
             }}
           >
             <Sparkles size={15} /> AI Question Generator
@@ -526,7 +526,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: saving ? 'not-allowed' : 'pointer',
-              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
+              boxShadow: '3px 3px 0 #001e40',
             }}
           >
             <CheckCircle2 size={15} /> Publish Assessment
@@ -815,7 +815,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
             fontSize: '0.82rem',
             fontWeight: 600,
             cursor: parsingDoc ? 'not-allowed' : 'pointer',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            boxShadow: '3px 3px 0 #001e40',
           }}
         >
           <UploadCloud size={14} /> {parsingDoc ? 'Processing OCR...' : 'Upload Doc / OCR'}
@@ -1039,7 +1039,7 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
               padding: '1.5rem',
               maxWidth: 480,
               width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: '8px 8px 0 #001e40',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>

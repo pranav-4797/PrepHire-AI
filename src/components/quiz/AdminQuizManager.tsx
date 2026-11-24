@@ -323,7 +323,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: importingDoc ? 'not-allowed' : 'pointer',
-              boxShadow: '0 1px 3px rgba(22, 101, 52, 0.1)',
+              boxShadow: '3px 3px 0 #001e40',
             }}
           >
             <UploadCloud size={16} />
@@ -349,7 +349,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
+              boxShadow: '3px 3px 0 #001e40',
             }}
           >
             <Plus size={16} /> Create Assessment

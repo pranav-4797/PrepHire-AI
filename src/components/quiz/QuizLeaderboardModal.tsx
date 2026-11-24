@@ -229,7 +229,7 @@ export function QuizLeaderboardModal({
           maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.3)',
+          boxShadow: '8px 8px 0 #001e40',
           overflow: 'hidden',
           border: '1px solid #CBD5E1',
         }}
@@ -834,7 +834,7 @@ export function QuizLeaderboardModal({
           <img
             src={lightboxImage}
             alt="Enlarged Evidence"
-            style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: 8, boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)' }}
+            style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: 8, boxShadow: '3px 3px 0 #001e40' }}
           />
         </div>
       )}

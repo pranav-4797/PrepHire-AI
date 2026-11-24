@@ -43,6 +43,7 @@ import { exportReportToPdf, exportSessionsToCsv } from './utils/reportExport'
 import { analyzeResume, buildResumeContext, extractResumeText } from './utils/resume'
 import type { ResumeProfile } from './utils/resume'
 import { T } from './theme'
+import { useSidebar } from './hooks/useSidebar'
 import { BRANCHES } from './constants/branches'
 import { orchestrateNextQuestion, type EngineMode } from './utils/interviewEngine'
 import { evaluateOfflineSession } from './utils/offlineEvaluator'
@@ -52,6 +53,7 @@ import { SentenceBoundarySpeaker } from './utils/streamingVoice'
 import { sanitizeErrorMessage } from './utils/errorSanitizer'
 import { ErrorAlert } from './components/common/ErrorAlert'
 import { NotFoundPage } from './components/common/NotFoundPage'
+
 
 // ── DOMAINS ─────────────────────────────────────────────────────────────────
 interface Domain {
@@ -121,11 +123,11 @@ const DOMAINS: Domain[] = [
   },
 ]
 
-const DOMAIN_ICON_COLORS: Record<string, string> = {
-  technical: '#2563EB',
-  hr: '#7C3AED',
-  aptitude: '#059669',
-  'group-discussion': '#D97706',
+const DOMAIN_CHIP_BG: Record<string, string> = {
+  technical: '#fea619',
+  hr: '#d5e3ff',
+  aptitude: '#ffddb8',
+  'group-discussion': '#ffffff',
 }
 
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced']
@@ -444,15 +446,8 @@ function GlassCard({
   return (
     <div
       onClick={onClick}
-      className="brutal-card"
-      style={{
-        background: '#ffffff',
-        border: '2px solid #0b1b33',
-        padding: '1.25rem',
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'box-shadow 0.2s',
-        ...style,
-      }}
+      className={`neo-card neo-card--lifted${onClick ? ' neo-card--click' : ''}`}
+      style={style}
     >
       {children}
     </div>
@@ -467,14 +462,7 @@ function SolidCard({
   style?: React.CSSProperties
 }) {
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '2px solid #0b1b33',
-        padding: '1.25rem',
-        ...style,
-      }}
-    >
+    <div className="neo-card" style={style}>
       {children}
     </div>
   )
@@ -500,42 +488,23 @@ function Btn({
   type?: React.ButtonHTMLAttributes<HTMLButtonElement>['type']
   style?: React.CSSProperties
 }) {
-  const pad = size === 'sm' ? '6px 16px' : size === 'lg' ? '13px 28px' : '9px 20px'
-  const fs = size === 'sm' ? 12 : size === 'lg' ? 15 : 13
-
-  let bg: string, color: string, border: string
-  if (disabled) {
-    bg = T.bgMid; color = T.txtMut; border = 'none'
-  } else if (variant === 'primary') {
-    bg = T.gold; color = T.onGold; border = 'none'
-  } else if (variant === 'navy') {
-    bg = T.primary; color = '#fff'; border = 'none'
-  } else if (variant === 'ghost') {
-    bg = T.bgLow; color = T.primary; border = `1px solid ${T.outlineVar}`
-  } else {
-    bg = 'transparent'; color = T.primary; border = `1px solid ${T.outlineVar}`
-  }
+  const pad = size === 'sm' ? '6px 14px' : size === 'lg' ? '14px 28px' : '9px 18px'
+  const fs = size === 'sm' ? 13 : size === 'lg' ? 16 : 14
 
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      className={`neo-btn neo-btn--${variant}`}
       style={{
         padding: pad,
         fontSize: fs,
-        fontWeight: 600,
-        borderRadius: 30,
-        border,
-        background: bg,
-        color,
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
-        transition: 'opacity 0.15s',
         whiteSpace: 'nowrap',
-        fontFamily: 'inherit',
         ...style,
       }}
     >
@@ -555,11 +524,10 @@ function Pill({
 }) {
   return (
     <span
+      className="neo-pill"
       style={{
         fontSize: 11,
-        fontWeight: 700,
-        padding: '3px 10px',
-        borderRadius: 20,
+        padding: '2px 8px',
         background: bg,
         color,
         display: 'inline-flex',
@@ -588,21 +556,21 @@ function ScoreRing({
   size?: number
   color?: string
 }) {
-  const r = (size - 10) / 2
+  const r = (size - 14) / 2
   const circ = 2 * Math.PI * r
   const dash = (score / 100) * circ
   return (
     <svg width={size} height={size}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.bgHigh} strokeWidth={6} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.bgHigh} strokeWidth={10} />
       <circle
         cx={size / 2}
         cy={size / 2}
         r={r}
         fill="none"
         stroke={color}
-        strokeWidth={6}
+        strokeWidth={10}
         strokeDasharray={`${dash} ${circ}`}
-        strokeLinecap="round"
+        strokeLinecap="butt"
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
         style={{ transition: 'stroke-dasharray 0.6s ease' }}
       />
@@ -611,7 +579,7 @@ function ScoreRing({
         y={size / 2 + 8}
         textAnchor="middle"
         fontSize={size * 0.32}
-        fontWeight="800"
+        fontFamily="var(--font-display)"
         fill={color}
       >
         {score}
@@ -1033,228 +1001,184 @@ function MicButton({
 
 // ── LANDING PAGE ─────────────────────────────────────────────────────────────
 function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
+  const features = [
+    {
+      icon: <Settings size={26} />,
+      bg: T.gold,
+      title: 'Real-time AI mock interviews',
+      desc: 'An interviewer that asks follow-ups, flags weak answers as you give them, and scores each response straight away.',
+    },
+    {
+      icon: <User size={26} />,
+      bg: T.primaryFix,
+      title: 'Four domains, one place',
+      desc: 'Technical DSA, behavioral HR, quantitative aptitude and group discussion topics, all in the same portal.',
+    },
+    {
+      icon: <AlertTriangle size={26} />,
+      bg: T.goldFixed,
+      title: 'Live proctoring',
+      desc: 'Face detection and tab tracking run during the session, so your score reflects how the real assessment feels.',
+    },
+    {
+      icon: <CheckCircle size={26} />,
+      bg: '#ffffff',
+      title: 'Reports your placement cell can use',
+      desc: 'A skills radar, strengths, an action plan and a verification step for the placement officer after every session.',
+    },
+  ]
+
+  const steps = [
+    { step: '01', title: 'Sign in', desc: 'Open your student dashboard and complete your profile.' },
+    { step: '02', title: 'Introduce yourself', desc: 'Your intro sets the context for the questions that follow.' },
+    { step: '03', title: 'Run the mock', desc: 'Answer five dynamic questions with live mic transcription.' },
+    { step: '04', title: 'Read the review', desc: 'Get ratings, a delivery breakdown and a plan for next time.' },
+  ]
+
   return (
     <div style={{ minHeight: '100vh', background: T.bg, color: T.txtPri, fontFamily: 'inherit' }}>
       {/* Public Navbar */}
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-          background: 'rgba(255,255,255,0.9)',
-          backdropFilter: 'blur(16px)',
-          borderBottom: `1px solid ${T.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-          height: 60,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: T.primary, letterSpacing: '-0.3px' }}>
-            PrepHire<span style={{ color: T.gold }}>.</span>AI
+      <header className="nb-nav">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className="nb-logo">
+            PrepHire<i>.</i>AI
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-            <Pill color={T.onGold} bg={T.goldFixed}>MIT AoE</Pill>
-          </span>
+          <Pill color={T.onGold} bg={T.goldFixed}>MIT AoE</Pill>
         </div>
 
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <a href="#features" style={{ fontSize: 13, fontWeight: 600, color: T.txtSec, textDecoration: 'none' }}>Features</a>
-          <a href="#how-it-works" style={{ fontSize: 13, fontWeight: 600, color: T.txtSec, textDecoration: 'none' }}>How it Works</a>
-          <a href="#stats" style={{ fontSize: 13, fontWeight: 600, color: T.txtSec, textDecoration: 'none' }}>Statistics</a>
-          <Btn onClick={onEnterPortal} variant="navy" size="sm">Access Portal</Btn>
+        <nav className="nb-nav__links">
+          <a className="nb-link" href="#features">Features</a>
+          <a className="nb-link" href="#how-it-works">How it works</a>
+          <a className="nb-link" href="#stats">Results</a>
+          <Btn onClick={onEnterPortal} variant="navy" size="sm">Access portal</Btn>
         </nav>
       </header>
 
-      {/* Hero Section */}
-      <section className="landing-hero-grid">
-        {/* Left Side: Copy */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: T.primaryFix, padding: '6px 14px', borderRadius: 30, width: 'fit-content' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.onPrimFxV, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              MIT AoE Placement Cell Simulator
-            </span>
-          </div>
+      {/* Hero */}
+      <section className="nb-hero">
+        <h1 className="nb-hero__title">
+          Practice the interview. <span className="nb-mark">Land the offer.</span>
+        </h1>
 
-          <h1 style={{ fontSize: 38, fontWeight: 800, color: T.primary, lineHeight: 1.2, letterSpacing: '-1px' }}>
-            Ace Your Campus Placement Interviews with <span style={{ color: T.gold }}>PrepHire.AI</span>
-          </h1>
-
-          <p style={{ fontSize: 15, color: T.txtSec, lineHeight: 1.6 }}>
-            Practice real-time mock interviews tailored specifically for engineering candidates. Receive instant AI-generated performance reports, granular skill evaluation, and live proctoring checks.
-          </p>
-
-          <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
-            <Btn onClick={onEnterPortal} size="lg">Start Mock Interview <ArrowRight size={16} /></Btn>
-            <a href="#features" style={{ textDecoration: 'none' }}>
-              <Btn variant="outline" size="lg">Explore Features</Btn>
-            </a>
-          </div>
-        </div>
-
-        {/* Right Side: Visual Mockup */}
-        <div
-          style={{
-            background: '#ffffff',
-            border: `1.5px solid ${T.border}`,
-            borderRadius: 16,
-            padding: 20,
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02)',
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-          }}
-        >
-          {/* Visual video proctor box */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: T.error, animation: 'blink 1s infinite' }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: T.txtSec, textTransform: 'uppercase' }}>PROCTOR ACTIVE</span>
-            </div>
-            <span style={{ fontSize: 9, color: T.txtMut }}>Session: Technical DSA</span>
-          </div>
-
-          <div style={{ height: 140, background: '#0f172a', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(0,0,0,0.6)', padding: '2px 8px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 4, height: 4, borderRadius: '50%', background: T.green }} />
-              <span style={{ fontSize: 8, color: '#fff' }}>Face Detected</span>
-            </div>
-            {/* Visual soundwaves / silhouette */}
-            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '2px solid #3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'micPulse 1.5s infinite' }}>
-              <Mic size={18} style={{ color: '#3b82f6' }} />
+        <div className="landing-hero-grid">
+          <div>
+            <p className="nb-lede">
+              Real-time mock interviews built for engineering candidates. Every session ends with an
+              AI-written performance report, a skills breakdown and live proctoring checks.
+            </p>
+            <div className="nb-cta-row">
+              <Btn onClick={onEnterPortal} size="lg">Start mock interview <ArrowRight size={18} /></Btn>
+              <a href="#features" style={{ textDecoration: 'none' }}>
+                <Btn variant="outline" size="lg">See what’s inside</Btn>
+              </a>
             </div>
           </div>
 
-          {/* Visual QA Feed */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-            <div style={{ alignSelf: 'flex-start', background: T.bgLow, padding: '8px 12px', borderRadius: '12px 12px 12px 4px', fontSize: 11, maxWidth: '85%' }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: T.gold, display: 'block', marginBottom: 2 }}>PrepHire AI</span>
-              Explain the time complexity of Binary Search and when we should use it.
+          <div className="nb-preview" aria-hidden="true">
+            <div className="nb-preview__bar">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: T.error, border: `2px solid ${T.primary}`, animation: 'blink 1s infinite' }} />
+                Proctor active
+              </span>
+              <span>Technical · DSA</span>
             </div>
-            <div style={{ alignSelf: 'flex-end', background: T.primary, color: '#fff', padding: '8px 12px', borderRadius: '12px 12px 4px 12px', fontSize: 11, maxWidth: '85%' }}>
-              Binary search takes O(log n) time. It requires a sorted array to search through.
+
+            <div className="nb-preview__video">
+              <span className="nb-preview__tag">Face detected</span>
+              <div style={{ width: 52, height: 52, borderRadius: '50%', border: `3px solid ${T.gold}`, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'micPulse 1.5s infinite' }}>
+                <Mic size={22} style={{ color: T.gold }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="nb-bubble nb-bubble--ai">
+                <b>PrepHire AI</b>
+                Explain the time complexity of binary search and when you would use it.
+              </div>
+              <div className="nb-bubble nb-bubble--user">
+                <b>You</b>
+                O(log n). It needs a sorted array, and it halves the search space on every step.
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section id="stats" style={{ background: T.primary, color: '#fff', padding: '50px 24px' }}>
+      {/* Domain band */}
+      <div className="nb-band">
+        <span>Technical</span>
+        <span>HR</span>
+        <span>Aptitude</span>
+        <span>Group Discussion</span>
+      </div>
+
+      {/* Stats */}
+      <section id="stats" className="nb-stats">
         <div className="landing-stats-grid">
           {[
-            { value: '94%', label: 'Placement Success Rate' },
-            { value: '1,200+', label: 'Mock Sessions Run' },
-            { value: '15+', label: 'Engineering Branches' },
-            { value: 'O(log N)', label: 'Average Skill Growth' }
-          ].map((stat, idx) => (
-            <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 32, fontWeight: 800, color: T.gold }}>{stat.value}</span>
-              <span style={{ fontSize: 12, color: T.primaryFix, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stat.label}</span>
+            { value: '94%', label: 'Placement success rate' },
+            { value: '1,200+', label: 'Mock sessions run' },
+            { value: '15+', label: 'Engineering branches' },
+            { value: 'O(log N)', label: 'Average skill growth' },
+          ].map((stat) => (
+            <div key={stat.label} className="nb-stat">
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Feature Cards Section */}
-      <section id="features" style={{ padding: '70px 24px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: T.primary, marginBottom: 8 }}>Comprehensive Placement Toolkit</h2>
-          <p style={{ fontSize: 13, color: T.txtSec }}>Engineered to replicate actual corporate assessment environment standards.</p>
+      {/* Features */}
+      <section id="features" className="nb-section">
+        <div className="nb-section__head">
+          <h2 className="nb-section__title">Everything a placement season asks of you.</h2>
+          <p className="nb-section__sub">
+            Built to feel like a real corporate assessment, so the real one feels familiar.
+          </p>
         </div>
 
         <div className="landing-features-grid">
-          <GlassCard style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <div style={{ padding: 10, background: '#2563EB1A', color: '#2563EB', borderRadius: 10 }}><Settings size={22} /></div>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: T.primary, marginBottom: 4 }}>Real-Time AI Mock Interviews</h3>
-              <p style={{ fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>Dynamic interview coach providing personalized queries, micro-feedback, and instant evaluation.</p>
-            </div>
-          </GlassCard>
-
-          <GlassCard style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <div style={{ padding: 10, background: '#7C3AED1A', color: '#7C3AED', borderRadius: 10 }}><User size={22} /></div>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: T.primary, marginBottom: 4 }}>Multi-Domain Practice</h3>
-              <p style={{ fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>Simulations spanning Technical DSA, Behavioral HR interviews, Quantitative Aptitude, and GD topics.</p>
-            </div>
-          </GlassCard>
-
-          <GlassCard style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <div style={{ padding: 10, background: '#EF44441A', color: '#EF4444', borderRadius: 10 }}><AlertTriangle size={22} /></div>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: T.primary, marginBottom: 4 }}>Anti-Cheat Live Proctoring</h3>
-              <p style={{ fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>Integrated facial validation and active tab tracking to verify assessment integrity.</p>
-            </div>
-          </GlassCard>
-
-          <GlassCard style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <div style={{ padding: 10, background: '#0596691A', color: '#059669', borderRadius: 10 }}><CheckCircle size={22} /></div>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: T.primary, marginBottom: 4 }}>Placement Cell Analytics</h3>
-              <p style={{ fontSize: 12, color: T.txtSec, lineHeight: 1.5 }}>Detailed report card, skills radar, strengths profile, and placement officer verification check.</p>
-            </div>
-          </GlassCard>
+          {features.map((f) => (
+            <article key={f.title} className="nb-feature">
+              <div className="nb-icon" style={{ background: f.bg }}>{f.icon}</div>
+              <h3>{f.title}</h3>
+              <p>{f.desc}</p>
+            </article>
+          ))}
         </div>
       </section>
 
-      {/* How it Works Section */}
-      <section id="how-it-works" style={{ background: T.bgLow, padding: '70px 48px' }}>
-        <div style={{width: '100%'}}>
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
-            <h2 style={{ fontSize: 24, fontWeight: 700, color: T.primary, marginBottom: 8 }}>How to Prepare</h2>
-            <p style={{ fontSize: 13, color: T.txtSec }}>Four simple steps to absolute campus placement readiness.</p>
+      {/* How it works */}
+      <div className="nb-steps-wrap">
+        <section id="how-it-works" className="nb-section">
+          <div className="nb-section__head">
+            <h2 className="nb-section__title">Four steps to interview-ready.</h2>
           </div>
 
           <div className="landing-steps-grid">
-            {[
-              { step: '01', title: 'Portal Registration', desc: 'Sign in to access your customized student dashboard and profile.' },
-              { step: '02', title: 'Self-Introduction', desc: 'Submit a personal intro for the AI to align its interview context.' },
-              { step: '03', title: 'Conduct Mock', desc: 'Respond to 5 dynamic questions with live mic transcription.' },
-              { step: '04', title: 'Performance Review', desc: 'Obtain instant evaluation ratings and placement approvals.' }
-            ].map((step, idx) => (
-              <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: T.gold }}>{step.step}</span>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>{step.title}</h3>
-                <p style={{ fontSize: 11, color: T.txtSec, lineHeight: 1.5 }}>{step.desc}</p>
+            {steps.map((step) => (
+              <div key={step.step} className="nb-step">
+                <span className="nb-step__num">{step.step}</span>
+                <h3>{step.title}</h3>
+                <p>{step.desc}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
-      {/* Call to Action Footer */}
-      <section style={{ padding: '70px 48px', textAlign: 'center', background: T.bg }}>
-        <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: T.primary }}>Ready to Accelerate Your Placement Prep?</h2>
-          <p style={{ fontSize: 13, color: T.txtSec }}>Unlock premium mock sessions, proctored dashboards, and faculty remark feedback.</p>
-          <Btn onClick={onEnterPortal} size="lg" style={{ marginTop: 8 }}>Start Practicing Now</Btn>
-        </div>
+      {/* Closing call to action */}
+      <section className="nb-closer">
+        <h2 className="nb-closer__title">Make your first interview your fifth.</h2>
+        <p>Run proctored mock sessions, track your progress and collect faculty feedback before the real thing.</p>
+        <Btn onClick={onEnterPortal} variant="outline" size="lg">Start practicing now <ArrowRight size={18} /></Btn>
       </section>
 
       {/* Public Footer */}
-      <footer style={{ borderTop: `1px solid ${T.border}`, padding: '24px', background: T.bgWhite, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 11, color: T.txtMut }}>
-          © 2026 PrepHire.AI · MIT Academy of Engineering Alandi. Placement Cell Simulator.
-        </span>
-        <button
-          onClick={openCookiePreferences}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: T.primary,
-            fontSize: 11,
-            cursor: 'pointer',
-            textDecoration: 'underline',
-            fontFamily: 'inherit',
-            padding: 0,
-          }}
-        >
-          Cookie Preferences
-        </button>
+      <footer className="nb-footer">
+        <span>© 2026 PrepHire.AI · MIT Academy of Engineering, Alandi. Placement Cell Simulator.</span>
+        <button onClick={openCookiePreferences}>Cookie preferences</button>
       </footer>
     </div>
   )
@@ -1263,9 +1187,9 @@ function LandingPage({ onEnterPortal }: { onEnterPortal: () => void }) {
 // ── TOAST NOTIFICATION ───────────────────────────────────────────────────────
 function ToastNotification({ toast }: { toast: { message: string; type: 'success' | 'error' | 'info' } | null }) {
   if (!toast) return null
-  const bg = toast.type === 'success' ? '#ECFDF5' : toast.type === 'error' ? '#FEF2F2' : '#F3F4F6'
-  const border = toast.type === 'success' ? '#10B981' : toast.type === 'error' ? '#EF4444' : '#9CA3AF'
-  const color = toast.type === 'success' ? '#065F46' : toast.type === 'error' ? '#991B1B' : '#374151'
+  const bg = toast.type === 'success' ? '#BBF7D0' : toast.type === 'error' ? '#FECACA' : '#D5E3FF'
+  const border = '#001e40'
+  const color = '#001e40'
   const Icon = toast.type === 'success' ? CheckCircle2 : toast.type === 'error' ? AlertCircle : Info
 
   return (
@@ -1277,14 +1201,14 @@ function ToastNotification({ toast }: { toast: { message: string; type: 'success
         bottom: 24,
         right: 24,
         background: bg,
-        border: `1.5px solid ${border}`,
+        border: `3px solid ${border}`,
         color: color,
         padding: '12px 20px',
-        borderRadius: 12,
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
+        borderRadius: 4,
+        boxShadow: '6px 6px 0 #001e40',
         zIndex: 9999,
         fontSize: 14,
-        fontWeight: 600,
+        fontWeight: 700,
         display: 'flex',
         alignItems: 'center',
         gap: 10,
@@ -1356,8 +1280,8 @@ function LoginScreen() {
     width: '100%',
     boxSizing: 'border-box',
     padding: '12px 14px',
-    borderRadius: 10,
-    border: `1.5px solid ${T.outlineVar}`,
+    borderRadius: 4,
+    border: `2px solid ${T.primary}`,
     background: T.bgWhite,
     color: T.txtPri,
     fontSize: 15,
@@ -1365,66 +1289,36 @@ function LoginScreen() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundImage: 'linear-gradient(to bottom, rgba(7, 19, 39, 0.55), rgba(7, 19, 39, 0.75)), url("/login-bg.png")',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2rem 1rem',
-      }}
-    >
+    <div className="nb-login">
       <div style={{ width: '100%', maxWidth: 440 }}>
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+        <div style={{ marginBottom: '1.5rem' }}>
           <div
             style={{
-              fontSize: 36,
-              fontWeight: 800,
-              color: '#ffffff',
-              letterSpacing: '-0.5px',
-              textShadow: '0 2px 16px rgba(0, 195, 255, 0.5)',
+              fontFamily: 'var(--font-display)',
+              fontSize: 'clamp(44px, 9vw, 64px)',
+              lineHeight: 0.95,
+              color: T.primary,
+              letterSpacing: '-0.05em',
             }}
           >
-            PrepHire<span style={{ color: T.gold }}>.</span>AI
+            PrepHire.AI
           </div>
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'rgba(255, 255, 255, 0.9)',
-              textShadow: '0 1px 4px rgba(0, 0, 0, 0.6)',
-            }}
-          >
+          <div style={{ marginTop: 8, fontSize: 15, fontWeight: 700, color: T.primary }}>
             MIT Academy of Engineering, Alandi · Placement Prep
           </div>
         </div>
 
-        <div
-          style={{
-            background: 'rgba(255, 255, 255, 0.94)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            borderRadius: 16,
-            padding: '1.75rem',
-            border: '1px solid rgba(255, 255, 255, 0.6)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 25px rgba(0, 195, 255, 0.15)',
-          }}
-        >
+        <div className="nb-login__panel">
           {/* Tab toggle */}
           <div
             style={{
               display: 'flex',
               gap: 0,
               marginBottom: '1.5rem',
-              background: T.bgLow,
-              borderRadius: 10,
+              background: '#ffffff',
+              border: `2px solid ${T.primary}`,
+              borderRadius: 4,
               padding: 4,
             }}
           >
@@ -1439,14 +1333,15 @@ function LoginScreen() {
                 style={{
                   flex: 1,
                   padding: '8px',
-                  borderRadius: 8,
+                  borderRadius: 2,
                   border: 'none',
                   fontSize: 14,
                   fontWeight: 700,
                   cursor: 'pointer',
-                  background: mode === m ? T.primary : 'transparent',
-                  color: mode === m ? '#fff' : T.txtSec,
-                  transition: 'all 0.2s',
+                  background: mode === m ? T.gold : 'transparent',
+                  color: T.primary,
+                  boxShadow: mode === m ? `inset 0 0 0 2px ${T.primary}` : 'none',
+                  transition: 'background 0.1s',
                   fontFamily: 'inherit',
                 }}
               >
@@ -1578,42 +1473,24 @@ function LoginScreen() {
                 onDismiss={() => setErr('')}
               />
             )}
-            <button
+            <Btn
               type="submit"
+              size="lg"
               disabled={loading}
-              style={{
-                width: '100%',
-                padding: '14px',
-                borderRadius: 12,
-                border: 'none',
-                background: T.primary,
-                color: '#fff',
-                fontSize: 16,
-                fontWeight: 700,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                marginTop: 4,
-                opacity: loading ? 0.75 : 1,
-                transition: 'opacity 0.2s',
-                fontFamily: 'inherit',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
-              }}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}
             >
               {loading ? (
                 'Please wait…'
               ) : mode === 'login' ? (
                 <>
-                  Sign In <ArrowRight size={18} />
+                  Sign in <ArrowRight size={18} />
                 </>
               ) : (
                 <>
-                  Create Account <CheckCircle size={18} />
+                  Create account <CheckCircle size={18} />
                 </>
               )}
-            </button>
+            </Btn>
           </form>
         </div>
 
@@ -1623,13 +1500,11 @@ function LoginScreen() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              background: 'rgba(255, 255, 255, 0.18)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              borderRadius: 30,
-              padding: '8px 18px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+              background: '#ffffff',
+              border: `2px solid ${T.primary}`,
+              borderRadius: 4,
+              padding: '8px 16px',
+              boxShadow: `3px 3px 0 ${T.primary}`,
             }}
           >
             <img
@@ -1638,7 +1513,7 @@ function LoginScreen() {
               style={{ height: 20, objectFit: 'contain' }}
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>
               Powered by MIT AoE Placement Cell
             </span>
           </div>
@@ -1657,6 +1532,7 @@ function Navbar({
   timer,
   timerColor,
   onFeedback,
+  withMenu = false,
 }: {
   user: User | null
   onLogout: () => void
@@ -1665,19 +1541,20 @@ function Navbar({
   timer?: number
   timerColor?: string
   onFeedback?: () => void
+  /** Show the hamburger that slides the portal sidebar open and closed. */
+  withMenu?: boolean
 }) {
+  const sidebar = useSidebar()
   return (
+    <>
     <header
       className="app-navbar"
       style={{
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        background: 'rgba(255,255,255,0.88)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: `1px solid ${T.border}`,
-        boxShadow: '0 1px 3px rgba(0,30,64,0.06)',
+        background: '#ffffff',
+        borderBottom: `3px solid ${T.primary}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -1686,18 +1563,25 @@ function Navbar({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center' }}>
+        {withMenu && (
+          <button
+            type="button"
+            className={`nb-menu-btn${sidebar.open ? ' is-open' : ''}`}
+            onClick={sidebar.toggle}
+            aria-label={sidebar.open ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={sidebar.open}
+          >
+            <span className="nb-menu-btn__bar" />
+            <span className="nb-menu-btn__bar" />
+            <span className="nb-menu-btn__bar" />
+          </button>
+        )}
         <span
           onClick={onHome}
-          style={{
-            fontSize: 20,
-            fontWeight: 800,
-            color: T.primary,
-            cursor: 'pointer',
-            letterSpacing: '-0.3px',
-            userSelect: 'none',
-          }}
+          className="nb-logo"
+          style={{ cursor: 'pointer' }}
         >
-          PrepHire<span style={{ color: T.gold }}>.</span>AI
+          PrepHire<i>.</i>AI
         </span>
         {!inInterview && (
           <span className="navbar-pill-badge" style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center' }}>
@@ -1710,10 +1594,11 @@ function Navbar({
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              padding: '5px 14px',
-              background: T.primaryFix,
-              borderRadius: 30,
-              border: `1px solid ${T.primaryFixD}`,
+              padding: '4px 12px',
+              background: T.goldFixed,
+              borderRadius: 4,
+              border: `2px solid ${T.primary}`,
+              boxShadow: `3px 3px 0 ${T.primary}`,
               marginLeft: 16,
             }}
           >
@@ -1738,12 +1623,14 @@ function Navbar({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {onFeedback && !inInterview && user.role === 'Student' && (
             <button
+              className="navbar-feedback-btn"
               onClick={onFeedback}
               style={{
-                fontSize: 12,
+                fontSize: 13,
                 padding: '6px 14px',
-                borderRadius: 20,
-                border: `1px solid ${T.primary}22`,
+                borderRadius: 4,
+                border: `2px solid ${T.primary}`,
+                boxShadow: `3px 3px 0 ${T.primary}`,
                 background: T.primaryFix,
                 cursor: 'pointer',
                 color: T.primary,
@@ -1765,15 +1652,15 @@ function Navbar({
             style={{
               width: 36,
               height: 36,
-              borderRadius: '50%',
-              background: T.primaryFix,
-              border: `2px solid ${T.primaryFixD}`,
+              borderRadius: 4,
+              background: T.gold,
+              border: `2px solid ${T.primary}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 13,
-              fontWeight: 700,
-              color: T.onPrimFxV,
+              fontSize: 14,
+              fontFamily: 'var(--font-display)',
+              color: T.primary,
               flexShrink: 0,
             }}
           >
@@ -1782,14 +1669,15 @@ function Navbar({
           <button
             onClick={onLogout}
             style={{
-              fontSize: 12,
+              fontSize: 13,
               padding: '6px 14px',
-              borderRadius: 20,
-              border: `1px solid ${T.outlineVar}`,
-              background: T.bgLow,
+              borderRadius: 4,
+              border: `2px solid ${T.primary}`,
+              boxShadow: `3px 3px 0 ${T.primary}`,
+              background: '#ffffff',
               cursor: 'pointer',
-              color: T.txtSec,
-              fontWeight: 600,
+              color: T.primary,
+              fontWeight: 700,
               fontFamily: 'inherit',
             }}
           >
@@ -1798,6 +1686,10 @@ function Navbar({
         </div>
       )}
     </header>
+    {withMenu && (
+      <div className="portal-scrim" onClick={sidebar.close} aria-hidden="true" />
+    )}
+    </>
   )
 }
 
@@ -2159,7 +2051,7 @@ const addResource = (chapterIndex: number) => {
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg }}>
-      <Navbar user={user} onLogout={onLogout} onHome={() => {}} inInterview={false} />
+      <Navbar user={user} onLogout={onLogout} onHome={() => {}} inInterview={false} withMenu />
 
       <div className="portal-layout">
 
@@ -2194,14 +2086,15 @@ const addResource = (chapterIndex: number) => {
                 width: '100%',
                 textAlign: 'left',
                 padding: '10px 14px',
-                borderRadius: 8,
-                border: 'none',
-                fontSize: 12,
-                fontWeight: 600,
+                borderRadius: 4,
+                border: activeTab === tab.id ? `2px solid ${T.primary}` : '2px solid transparent',
+                fontSize: 13,
+                fontWeight: 700,
                 cursor: 'pointer',
-                background: activeTab === tab.id ? T.primaryFix : 'transparent',
-                color: activeTab === tab.id ? T.primary : T.txtSec,
-                transition: 'all 0.15s',
+                background: activeTab === tab.id ? T.gold : 'transparent',
+                boxShadow: activeTab === tab.id ? `3px 3px 0 ${T.primary}` : 'none',
+                color: T.primary,
+                transition: 'background 0.1s',
                 fontFamily: 'inherit',
               }}
             >
@@ -2962,7 +2855,7 @@ const addResource = (chapterIndex: number) => {
               width: '100%',
               maxHeight: '90vh',
               overflowY: 'auto',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              boxShadow: '8px 8px 0 #001e40',
               border: `1px solid ${T.border}`,
               padding: '24px',
               display: 'flex',
@@ -3416,7 +3309,7 @@ function AdminDashboard({
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg }}>
-      <Navbar user={user} onLogout={onLogout} onHome={() => {}} inInterview={false} />
+      <Navbar user={user} onLogout={onLogout} onHome={() => {}} inInterview={false} withMenu />
 
       <div className="portal-layout">
         
@@ -3444,14 +3337,15 @@ function AdminDashboard({
                 width: '100%',
                 textAlign: 'left',
                 padding: '10px 14px',
-                borderRadius: 8,
-                border: 'none',
-                fontSize: 12,
-                fontWeight: 600,
+                borderRadius: 4,
+                border: activeTab === tab.id ? `2px solid ${T.primary}` : '2px solid transparent',
+                fontSize: 13,
+                fontWeight: 700,
                 cursor: 'pointer',
-                background: activeTab === tab.id ? T.primaryFix : 'transparent',
-                color: activeTab === tab.id ? T.primary : T.txtSec,
-                transition: 'all 0.15s',
+                background: activeTab === tab.id ? T.gold : 'transparent',
+                boxShadow: activeTab === tab.id ? `3px 3px 0 ${T.primary}` : 'none',
+                color: T.primary,
+                transition: 'background 0.1s',
                 fontFamily: 'inherit',
               }}
             >
@@ -5402,6 +5296,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           }}
           inInterview={studentTakingQuiz}
           onFeedback={() => setShowFeedbackModal(true)}
+          withMenu={!studentTakingQuiz}
         />
 
         <div className={`portal-layout ${studentTakingQuiz ? 'assessment-focus-mode' : ''}`}>
@@ -5426,13 +5321,14 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                   style={{
                     textAlign: 'left',
                     padding: '10px 14px',
-                    borderRadius: 8,
-                    border: 'none',
+                    borderRadius: 4,
+                    border: studentTab === tab.id ? `2px solid ${T.primary}` : '2px solid transparent',
                     cursor: 'pointer',
                     fontSize: 13,
                     fontWeight: 700,
-                    background: studentTab === tab.id ? T.primaryFix : 'transparent',
-                    color: studentTab === tab.id ? T.primary : T.txtSec,
+                    background: studentTab === tab.id ? T.gold : 'transparent',
+                    boxShadow: studentTab === tab.id ? `3px 3px 0 ${T.primary}` : 'none',
+                    color: T.primary,
                     transition: 'all 0.2s',
                     fontFamily: 'inherit',
                   }}
@@ -5446,11 +5342,12 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                   textAlign: 'left',
                   padding: '10px 14px',
                   borderRadius: 8,
-                  border: `1px solid ${T.border}`,
+                  border: `2px solid ${T.primary}`,
+                  boxShadow: `3px 3px 0 ${T.primary}`,
                   cursor: 'pointer',
                   fontSize: 13,
                   fontWeight: 700,
-                  background: '#EFF6FF',
+                  background: '#ffffff',
                   color: T.primary,
                   marginTop: 8,
                   fontFamily: 'inherit',
@@ -5474,11 +5371,11 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                     paddingTop: 40,
                     paddingBottom: '1.5rem',
                     marginBottom: 16,
-                    borderBottom: `1px solid ${T.border}`,
+                    borderBottom: `3px solid ${T.primary}`,
                     textAlign: 'left',
                   }}
                 >
-                  <h1 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 8px', color: T.primary, letterSpacing: '-0.4px' }}>
+                  <h1 style={{ fontSize: 'clamp(28px, 3.4vw, 46px)', margin: '0 0 12px', color: T.primary, maxWidth: '22ch' }}>
                     Welcome back, {user?.name}. Ready to ace your placement interviews?
                   </h1>
                   <p className="text-body" style={{ color: T.txtSec }}>
@@ -5537,7 +5434,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                               borderRadius: 12,
                               padding: 16,
                               cursor: 'pointer',
-                              background: domain === d.id ? '#F0F2FF' : T.bgWhite,
+                              background: domain === d.id ? T.goldFixed : T.bgWhite,
                               minHeight: 120,
                               display: 'flex',
                               flexDirection: 'column',
@@ -5548,15 +5445,16 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                           >
                             <div
                               style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: '50%',
-                                background: `${DOMAIN_ICON_COLORS[d.id]}1A`,
+                                width: 36,
+                                height: 36,
+                                borderRadius: 4,
+                                border: `2px solid ${T.primary}`,
+                                background: DOMAIN_CHIP_BG[d.id],
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 margin: '0 auto 10px auto',
-                                color: DOMAIN_ICON_COLORS[d.id],
+                                color: T.primary,
                               }}
                             >
                               {d.icon}
@@ -5657,7 +5555,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                               padding: '10px 0',
                               borderRadius: 10,
                               border: `2px solid ${level === l ? T.primary : T.outlineVar}`,
-                              background: level === l ? '#F0F2FF' : T.bgWhite,
+                              background: level === l ? T.goldFixed : T.bgWhite,
                               color: level === l ? T.primary : T.txtSec,
                               fontWeight: level === l ? 700 : 500,
                               cursor: 'pointer',
@@ -5673,7 +5571,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                     </GlassCard>
 
                     {/* Voice toggle */}
-                    <GlassCard style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: `3px solid ${T.gold}` }}>
+                    <GlassCard style={{ marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: T.goldFixed }}>
                       <div>
                         <div className="text-body" style={{ fontWeight: 600, color: T.txtPri }}>AI Voice Responses</div>
                         <div className="text-caption" style={{ marginTop: 2, fontSize: 11 }}>Questions read aloud by PrepHire AI</div>
@@ -5708,7 +5606,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                             borderRadius: '50%',
                             background: voiceEnabled ? '#fff' : T.outline,
                             transition: 'left 0.2s',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                            boxShadow: '3px 3px 0 #001e40',
                           }}
                         />
                       </div>
@@ -6413,7 +6311,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                 padding: '24px',
                 maxWidth: 480,
                 width: '90%',
-                boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+                boxShadow: '8px 8px 0 #001e40',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 16,
@@ -6754,7 +6652,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                 padding: '4px 10px',
                 borderRadius: 20,
                 border: '1px solid rgba(0, 30, 64, 0.1)',
-                boxShadow: '0 1px 4px rgba(0, 30, 64, 0.04)',
+                boxShadow: '3px 3px 0 #001e40',
               }}
             >
               <span style={{ fontSize: 11, fontWeight: 800, color: T.primary, letterSpacing: '-0.01em' }}>
@@ -6860,7 +6758,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
                     borderRadius: 14,
                     width: 'fit-content',
                     border: '1px solid rgba(0, 30, 64, 0.1)',
-                    boxShadow: '0 2px 10px rgba(0, 30, 64, 0.05)',
+                    boxShadow: '3px 3px 0 #001e40',
                     animation: 'fadeIn 0.3s ease',
                   }}
                 >
@@ -6996,7 +6894,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
               padding: '28px 32px',
               maxWidth: 400,
               width: '90%',
-              boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+              boxShadow: '8px 8px 0 #001e40',
               textAlign: 'center',
               display: 'flex',
               flexDirection: 'column',
@@ -7235,7 +7133,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
 
         {/* Strengths / improvements */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: '1.25rem' }}>
-          <SolidCard style={{ background: T.greenBg, borderColor: T.green + '44' }}>
+          <SolidCard style={{ background: T.greenBg }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.green, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Check size={18} /> Strengths
             </div>
@@ -7245,7 +7143,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
               </p>
             ))}
           </SolidCard>
-          <SolidCard style={{ background: T.amberBg, borderColor: T.amber + '44' }}>
+          <SolidCard style={{ background: T.amberBg }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.amber, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
               <TrendingUp size={18} /> Improve on
             </div>
@@ -7258,7 +7156,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         </div>
 
         {/* Action Plan */}
-        <SolidCard style={{ background: '#EFF6FF', borderColor: '#BFDBFE', marginBottom: '1.25rem' }}>
+        <SolidCard style={{ background: T.primaryFix, marginBottom: '1.25rem' }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: T.primary, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
             <BookOpen size={18} /> Action Plan
           </div>
@@ -7270,7 +7168,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         </SolidCard>
 
         {/* Pro tip */}
-        <GlassCard style={{ marginBottom: '1.5rem', display: 'flex', gap: 12, background: 'rgba(253,237,193,0.7)', borderColor: '#fea61955' }}>
+        <GlassCard style={{ marginBottom: '1.5rem', display: 'flex', gap: 12, background: T.goldFixed }}>
           <Lightbulb size={18} style={{ color: T.onGold, flexShrink: 0, marginTop: 2 }} />
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: T.onGold, marginBottom: 4 }}>Pro Tip</div>
@@ -7279,45 +7177,21 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
         </GlassCard>
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-          <button
+          <Btn
+            variant="outline"
+            size="lg"
             onClick={() => window.print()}
-            style={{
-              flex: 1,
-              padding: '14px',
-              borderRadius: 14,
-              border: `1px solid ${T.primary}`,
-              background: 'transparent',
-              color: T.primary,
-              fontSize: 15,
-              fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
+            style={{ flex: 1, justifyContent: 'center' }}
           >
             Download Report
-          </button>
-          <button
+          </Btn>
+          <Btn
+            size="lg"
             onClick={() => startInterview()}
-            style={{
-              flex: 1,
-              padding: '14px',
-              borderRadius: 14,
-              border: 'none',
-              background: T.primary,
-              color: '#fff',
-              fontSize: 15,
-              fontWeight: 800,
-              cursor: 'pointer',
-              boxShadow: '0 4px 16px rgba(0,30,64,0.25)',
-              fontFamily: 'inherit',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
+            style={{ flex: 1, justifyContent: 'center' }}
           >
-            Practice Again <ArrowRight size={15} />
-          </button>
+            Practice Again <ArrowRight size={16} />
+          </Btn>
         </div>
       </div>
     </div>

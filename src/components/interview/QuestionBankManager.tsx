@@ -553,7 +553,7 @@ export function QuestionBankManager({ userEmail, showToast }: QuestionBankManage
                 fontWeight: 600,
                 cursor: saving ? 'not-allowed' : 'pointer',
                 opacity: saving ? 0.7 : 1,
-                boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
+                boxShadow: '3px 3px 0 #001e40',
               }}
             >
               <Save size={16} />
@@ -630,7 +630,7 @@ export function QuestionBankManager({ userEmail, showToast }: QuestionBankManage
               fontSize: '0.85rem',
               fontWeight: 600,
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
+              boxShadow: '3px 3px 0 #001e40',
             }}
           >
             <Plus size={16} /> New Question

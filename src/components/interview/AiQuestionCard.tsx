@@ -56,11 +56,9 @@ export const AiQuestionCard: React.FC<AiQuestionCardProps> = ({
         maxWidth: '92%',
         width: '100%',
         background: '#ffffff',
-        borderRadius: 16,
-        border: '1px solid rgba(0, 30, 64, 0.1)',
-        boxShadow: isLatest
-          ? '0 6px 24px -4px rgba(0, 30, 64, 0.09), 0 2px 6px rgba(0, 30, 64, 0.04)'
-          : '0 2px 8px rgba(0, 30, 64, 0.05)',
+        borderRadius: 6,
+        border: '2px solid #001e40',
+        boxShadow: isLatest ? '5px 5px 0 #001e40' : '3px 3px 0 #001e40',
         overflow: 'hidden',
         animation: 'fadeIn 0.3s ease',
         position: 'relative',
@@ -70,9 +68,10 @@ export const AiQuestionCard: React.FC<AiQuestionCardProps> = ({
       {/* Top accent bar */}
       <div
         style={{
-          height: 3,
+          height: 8,
           width: '100%',
-          background: `linear-gradient(90deg, ${T.primary} 0%, ${category.color} 50%, ${T.gold} 100%)`,
+          background: T.gold,
+          borderBottom: '2px solid #001e40',
         }}
       />
 
@@ -86,7 +85,7 @@ export const AiQuestionCard: React.FC<AiQuestionCardProps> = ({
                 width: 34,
                 height: 34,
                 borderRadius: '50%',
-                background: `linear-gradient(135deg, ${T.primary} 0%, #1a365d 100%)`,
+                background: T.primary,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -245,11 +244,10 @@ export const AiQuestionCard: React.FC<AiQuestionCardProps> = ({
         <div
           style={{
             padding: '13px 15px',
-            borderRadius: 10,
-            background: 'linear-gradient(180deg, #ffffff 0%, rgba(247, 249, 251, 0.8) 100%)',
-            border: '1px solid rgba(0, 30, 64, 0.1)',
-            borderLeft: `3.5px solid ${category.color}`,
-            boxShadow: '0 2px 6px rgba(0, 30, 64, 0.03)',
+            borderRadius: 4,
+            background: '#d5e3ff',
+            border: '2px solid #001e40',
+            boxShadow: '3px 3px 0 #001e40',
             display: 'flex',
             flexDirection: 'column',
             gap: 7,
@@ -345,12 +343,13 @@ export const CandidateAnswerBubble: React.FC<CandidateAnswerBubbleProps> = ({
       <div
         style={{
           padding: '12px 16px',
-          borderRadius: '16px 16px 4px 16px',
-          background: `linear-gradient(135deg, ${T.primary} 0%, #1a365d 100%)`,
+          borderRadius: 4,
+          border: '2px solid #001e40',
+          background: T.primary,
           color: '#ffffff',
           fontSize: 13,
           lineHeight: 1.65,
-          boxShadow: '0 3px 10px rgba(0, 30, 64, 0.12)',
+          boxShadow: '3px 3px 0 #fea619',
           letterSpacing: '-0.005em',
         }}
       >

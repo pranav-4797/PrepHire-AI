@@ -97,7 +97,7 @@ export function NotFoundPage({
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
-              boxShadow: '0 4px 16px rgba(10, 37, 64, 0.25)',
+              boxShadow: '3px 3px 0 #001e40',
               transition: 'all 0.18s ease',
               fontFamily: 'inherit',
             }}
