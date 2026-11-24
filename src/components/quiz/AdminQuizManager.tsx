@@ -14,7 +14,6 @@ import {
   Share2,
   RotateCcw,
   Megaphone,
-  Radio,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -28,7 +27,6 @@ import {
 } from '../../services/quiz.service'
 import { AdminQuizEditor } from './AdminQuizEditor'
 import { QuizLeaderboardModal } from './QuizLeaderboardModal'
-import { AdminLiveInvigilationModal } from './AdminLiveInvigilationModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { parseQuizDocument } from '../../utils/quizDocParser'
 
@@ -78,7 +76,6 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
   const [viewingAttemptsQuiz, setViewingAttemptsQuiz] = useState<Quiz | null>(null)
   const [attempts, setAttempts] = useState<QuizAttempt[]>([])
   const [loadingAttempts, setLoadingAttempts] = useState(false)
-  const [liveInvigilationQuiz, setLiveInvigilationQuiz] = useState<Quiz | null>(null)
 
   function handleShareLink(quiz: Quiz) {
     const url = `${window.location.origin}/quiz/${quiz.id}`
@@ -705,28 +702,6 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                     <Users size={14} /> Submissions
                   </button>
 
-                  {q.published && (
-                    <button
-                      onClick={() => setLiveInvigilationQuiz(q)}
-                      title="Open Real-Time Invigilation & Surveillance Cockpit"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        background: '#FEF2F2',
-                        color: '#DC2626',
-                        border: '1.5px solid #FCA5A5',
-                        borderRadius: 8,
-                        padding: '0.45rem 0.75rem',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Radio size={14} /> Live Cockpit
-                    </button>
-                  )}
-
                   <button
                     onClick={() => handleTogglePublish(q)}
                     style={{
@@ -792,15 +767,6 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
           onClose={() => setViewingAttemptsQuiz(null)}
           onToggleDeclareResults={handleToggleDeclareResults}
           onResetAttempt={handleResetAttempt}
-          showToast={showToast}
-        />
-      )}
-
-      {/* Real-Time Live Invigilation & WebRTC Cockpit Modal */}
-      {liveInvigilationQuiz && (
-        <AdminLiveInvigilationModal
-          quiz={liveInvigilationQuiz}
-          onClose={() => setLiveInvigilationQuiz(null)}
           showToast={showToast}
         />
       )}

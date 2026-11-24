@@ -16,14 +16,11 @@ import { T } from '../../theme'
 import type { Quiz, QuizAttempt, SuspiciousFlag } from '../../types/quiz'
 import {
   submitQuizAttempt,
-  uploadQuizEvidenceToDrive,
-  updateQuizAttemptDriveLink,
 } from '../../services/quiz.service'
 import { QuizResultModal } from './QuizResultModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { QuizProctorCamera } from './QuizProctorCamera'
 import { generateShuffledQuiz, convertDisplayedAnswersToMaster } from '../../utils/quizShuffle'
-import { useStudentProctorSocket } from '../../services/proctorSocket.service'
 
 function GlassCard({
   children,
@@ -110,7 +107,6 @@ export function QuizPlayer({
   const startTimeRef = useRef<number>(Date.now())
   const hasMountedRef = useRef(false)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const [invigilatorWarning, setInvigilatorWarning] = useState<string | null>(null)
 
   const handleRegisterCapture = useCallback((fn: () => string | undefined) => {
     snapshotCaptureRef.current = fn
@@ -129,21 +125,6 @@ export function QuizPlayer({
 
   const totalQuestions = shuffledQuestions.length
   const currentQ = shuffledQuestions[currentIdx]
-
-  // ── Real-Time Proctoring WebSocket & WebRTC P2P Streamer ───────────────────
-  const { sendPulse, sendFlag } = useStudentProctorSocket({
-    quizId: quiz.id,
-    studentUid: user.uid,
-    studentName: user.name || user.email.split('@')[0],
-    studentEmail: user.email,
-    department: user.department,
-    rollNumber: user.rollNumber,
-    totalQuestions,
-    mediaStreamRef,
-    onWarningMessage: (msg) => {
-      setInvigilatorWarning(msg)
-    },
-  })
 
   // Track window resize for responsive layout
   useEffect(() => {
@@ -201,13 +182,6 @@ export function QuizPlayer({
         }
         suspiciousFlagsRef.current.push(flag)
         setSuspiciousFlags((prev) => [...prev, flag])
-
-        // Live notification to invigilation cockpit
-        sendFlag({
-          flagType: 'fullscreen_exit',
-          detail: flag.detail,
-          snapshot: snap,
-        })
       }
     }
 
@@ -221,7 +195,7 @@ export function QuizPlayer({
         doc.exitFullscreen().catch(() => {})
       }
     }
-  }, [completedAttempt, enterFullscreen, sendFlag])
+  }, [completedAttempt, enterFullscreen])
 
   // ── Tab Switch & Focus Loss Listener (Stealth Duration Tracking) ───────────
   useEffect(() => {
@@ -434,29 +408,11 @@ export function QuizPlayer({
       suspiciousFlagsRef.current.push(newFlag)
       setSuspiciousFlags((prev) => [...prev, newFlag])
 
-      // Real-time broadcast to Admin Invigilation Cockpit via WebSocket
-      sendFlag({
-        flagType,
-        detail: reason,
-        snapshot: snap,
-      })
-
       // Stealth Mode: Candidate is NOT alerted or given toasts,
       // ensuring natural behavior while complete forensic evidence is preserved.
     },
-    [sendFlag]
+    []
   )
-
-  // Real-time progress pulse to Admin Invigilation Cockpit
-  useEffect(() => {
-    if (completedAttempt) return
-    sendPulse({
-      currentQuestionIndex: currentIdx + 1,
-      answeredCount: Object.keys(answers).length,
-      elapsedSeconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
-      status: 'active',
-    })
-  }, [currentIdx, answers, completedAttempt, sendPulse])
 
   // ── Keyboard Shortcuts (A/B/C/D, 1/2/3/4, Arrows, M, C, DevTools Trap) ────
   useEffect(() => {
@@ -639,37 +595,6 @@ export function QuizPlayer({
 
       if (onCompleted) {
         onCompleted(fullAttempt)
-      }
-
-      // ── Step 3: Non-Blocking Background Google Drive Evidence Sync ──────────
-      // Runs silently in the background; updates Firestore attempt record with Drive link once done.
-      const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot).slice(0, 25)
-      if (snapshotsToUpload.length > 0) {
-        uploadQuizEvidenceToDrive({
-          attemptId,
-          quizId: quiz.id,
-          quizTitle: quiz.title,
-          studentName: user.name || user.email.split('@')[0],
-          studentEmail: user.email,
-          completedAt: attemptPayload.completedAt,
-          snapshots: snapshotsToUpload.map((s) => ({
-            timestamp: s.timestamp,
-            type: s.type,
-            detail: s.detail,
-            snapshot: s.snapshot,
-          })),
-        })
-          .then((driveRes) => {
-            if (driveRes?.driveFolderLink) {
-              updateQuizAttemptDriveLink(attemptId, driveRes.driveFolderLink)
-              setCompletedAttempt((prev) =>
-                prev ? { ...prev, driveEvidenceFolderLink: driveRes.driveFolderLink } : prev
-              )
-            }
-          })
-          .catch((err) => {
-            console.warn('Background Drive evidence upload failed:', err)
-          })
       }
     } catch (err) {
       showToast(sanitizeErrorMessage(err, 'Failed to submit assessment.'), 'error')
@@ -1090,51 +1015,6 @@ export function QuizPlayer({
             onRegisterMediaStream={handleRegisterMediaStream}
           />
         </GlassCard>
-      )}
-
-      {/* Invigilator Live Warning Banner */}
-      {invigilatorWarning && (
-        <div
-          style={{
-            background: '#FEF2F2',
-            border: '2px solid #EF4444',
-            borderRadius: 12,
-            padding: '1rem 1.25rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            color: '#991B1B',
-            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.18)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <AlertTriangle size={24} color="#DC2626" style={{ flexShrink: 0 }} />
-            <div>
-              <strong style={{ fontSize: '0.92rem', display: 'block' }}>⚠️ Official Notice from Assessment Invigilator:</strong>
-              <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', fontWeight: 550, color: '#B91C1C' }}>
-                {invigilatorWarning}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setInvigilatorWarning(null)}
-            style={{
-              background: '#DC2626',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '0.45rem 1rem',
-              fontSize: '0.8rem',
-              fontWeight: 650,
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            I Acknowledge
-          </button>
-        </div>
       )}
 
       {/* Main Grid: Question Card on Left, Palette & Proctoring on Right */}

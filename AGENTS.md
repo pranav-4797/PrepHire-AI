@@ -119,6 +119,12 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Live Invigilation Cockpit & WebRTC P2P Video Streaming**: Built zero-database-cost WebSocket gateway (`server/proctorSocket.js` on `/ws/proctor`) and admin surveillance interface (`AdminLiveInvigilationModal.tsx`) with 1-click live camera peer streaming, audio synthesized chime alerts, candidate telemetry grid, and administrative warning messaging.
 - **Anti-Cheating Deterministic Question & Option Shuffling**: Built Mulberry32 PRNG engine (`quizShuffle.ts`) randomizing questions and option keys uniquely per candidate to neutralize college computer lab peer-copying, while mapping answers back to master keys for transparent scoring.
 
+## Recent fixes (2026-11-24)
+
+- **Server Overhead & Drive De-bloating**: Dropped assessment flag snapshot uploads to Google Drive, eliminating high network I/O and memory usage on the backend server. Assessment submissions write straight to Firestore with zero server queuing or base64 photo processing.
+- **Removed Live Cockpit & WebRTC Gateway**: Dropped live invigilation cockpit, WebSocket gateway (`/ws/proctor`), and WebRTC P2P signaling, eliminating continuous student-side socket pulses, peer streaming overhead, and admin surveillance UI.
+- **Neo-Brutalist Editorial UI System**: Merged friend's editorial UI updates with Archivo Black / Space Grotesk typography, warm paper/navy ink palette, and bold 2px bordered geometry.
+
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit

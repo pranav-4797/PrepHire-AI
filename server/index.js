@@ -21,7 +21,6 @@ import { registerCodingRoutes } from './coding/routes.js'
 import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
 import { callGemini, streamGemini, isRateLimited } from './gemini.js'
 import { initDriveQueue } from './driveQueue.js'
-import { initProctorWebSocket } from './proctorSocket.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -173,16 +172,6 @@ const uploadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many video uploads from this network. Please wait a few minutes.' },
-})
-
-// Dedicated rate limiter for quiz forensic snapshot evidence uploads.
-// Lightweight (~80KB per student attempt); comfortably handles 30+ simultaneous submissions.
-const quizEvidenceLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 150,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many assessment submissions from this network. Please wait a moment.' },
 })
 
 // IP-level flood guard only; per-user limits (userRateLimit) do the fine-grained work.
@@ -466,67 +455,12 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
   }
 })
 
-// ── Proctored Assessment Evidence Upload to Google Drive ─────────────────────
-// Enqueues candidate evidence snapshots to the unified Drive queue.
-// Responds immediately to the client (<20ms) so testing and submission are instantaneous.
-// In the background, the queue worker uploads snapshots to Drive sequentially with rate-limit
-// protection and automatically patches the Firestore attempt document with the Drive folder link.
-app.post('/api/quiz/upload-evidence', quizEvidenceLimiter, express.json({ limit: '4mb' }), (req, res) => {
-  try {
-    const {
-      attemptId,
-      quizId = 'general',
-      quizTitle = 'Assessment',
-      studentName = 'Candidate',
-      studentEmail = 'anonymous',
-      completedAt = new Date().toISOString(),
-      snapshots = [],
-    } = req.body
-
-    const validSnapshots = (Array.isArray(snapshots) ? snapshots : []).slice(0, 25)
-
-    if (validSnapshots.length === 0) {
-      return res.json({ success: true, message: 'No snapshots provided', files: [] })
-    }
-
-    const job = driveQueue.enqueueEvidenceTask({
-      attemptId,
-      quizId,
-      quizTitle,
-      studentName,
-      studentEmail,
-      completedAt,
-      snapshots: validSnapshots,
-    })
-
-    return res.json({
-      success: true,
-      queued: true,
-      jobId: job.jobId,
-      folderName: job.folderName,
-      queuePosition: job.queuePosition,
-      message: 'Evidence snapshots queued for Google Drive background sync.',
-    })
-  } catch (err) {
-    console.error('❌ Failed to enqueue assessment evidence for Google Drive:', err.message || err)
-    return res.status(500).json({ error: 'Failed to upload test evidence to Google Drive.' })
-  }
-})
-
 // ── Google Drive Upload Queue Health & Diagnostics Endpoint ──────────────────
 app.get('/api/drive/queue-status', (_req, res) => {
   res.json({
     success: true,
     ...driveQueue.getQueueStats(),
   })
-})
-
-app.get('/api/quiz/upload-status/:jobId', (req, res) => {
-  const status = driveQueue.getEvidenceJobStatus(req.params.jobId)
-  if (!status) {
-    return res.status(404).json({ error: 'Job not found or expired' })
-  }
-  return res.json({ success: true, job: status })
 })
 
 // ── Courses CRUD API ──────────────────────────────────────────────────────────
@@ -718,5 +652,3 @@ const server = app.listen(PORT, () => {
   console.log(`   Drive folder: ${FOLDER_ID || '(mock mode — Drive not configured)'}`)
   console.log(`   CORS origin:  ${CORS_ORIGIN}`)
 })
-
-initProctorWebSocket(server)

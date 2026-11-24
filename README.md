@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🚀 **Performance & Server Optimization — Dropped Quiz Drive Snapshots & Live Cockpit**:
+  - **Zero Server Load on Assessment Submissions**: Removed candidate snapshot photo uploads to Google Drive. Eliminates heavy base64 image processing, multi-megabyte payloads, and background Drive queues from the backend Express server, allowing hundreds of candidates to submit assessments concurrently without stressing server memory or bandwidth.
+  - **Eliminated Live Cockpit & WebRTC WebSocket Overhead**: Removed the `/ws/proctor` WebSocket gateway, continuous background telemetry pulses, and WebRTC peer camera streaming. This drastically reduces browser CPU cycles on student machines and prevents server socket connection limits during large exam batches.
+  - **Clean & Fast Direct Firestore Submission**: Candidate attempts and computed integrity scores are committed straight to Firestore in <120ms with zero server hop latency.
+
 - ⚡ **Dual-Engine Real-Time BlazeFace Multi-Face & Sub-Second Mobile Detector (`QuizProctorCamera.tsx`)**:
   - **Instantaneous Multi-Face Detection (BlazeFace)**: Integrated Google's real-time BlazeFace neural network (~8ms inference) alongside object detection. It detects individual faces, head angles, and secondary people looking at the screen with microsecond precision, eliminating COCO-SSD's limitation of requiring full-body torsos.
   - **Sub-Second Mobile Phone Alerting**: Slashed detection interval from 1500ms down to 600ms and introduced tiered confidence scoring ($\ge 0.42$ instant confirmation, $\ge 0.28$ 2-frame verification). When a candidate brings up a phone, it is identified and logged in under 1 second.
