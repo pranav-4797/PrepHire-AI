@@ -1102,3 +1102,77 @@ body:has(.assessment-focus-mode) .nb-menu-btn { display: none; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ═══ MOBILE HARDENING — phones only, desktop untouched ═══════ */
+/* Never let the document scroll sideways on a phone. `clip`
+   (not `hidden`) keeps `position: sticky` navbars working. */
+html, body { max-width: 100%; overflow-x: clip; }
+img, video, canvas, iframe { max-width: 100%; }
+body { overflow-wrap: break-word; }
+
+@media (max-width: 640px) {
+  /* Fixed inline multi-column grids → two columns. These live in
+     style attributes, so they can only be reached this way. */
+  [style*="repeat(4, 1fr)"],
+  [style*="repeat(4,1fr)"],
+  [style*="repeat(3, 1fr)"],
+  [style*="repeat(3,1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Two-column / fixed-sidebar inline grids → single column */
+  [style*="1fr 1fr"],
+  [style*="1.1fr 1fr"],
+  [style*="1.2fr 1fr"],
+  [style*="2fr 1fr"],
+  [style*="1fr 200px"],
+  [style*="200px 1fr"],
+  [style*="320px 1fr"],
+  [style*="1fr 320px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Coding problem row: number / title / difficulty / action */
+  [style*="40px 1fr 110px 1fr"] {
+    grid-template-columns: 1fr !important;
+    row-gap: 4px;
+  }
+
+  /* Auto-fill card grids whose minimum track is wider than a phone */
+  [style*="minmax(320px, 1fr)"],
+  [style*="minmax(280px, 1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Let fixed min-width controls (search boxes, etc.) shrink.
+     Tables and their cells are excluded so wide tables can scroll. */
+  .portal-main [style*="min-width"]:not(table):not(th):not(td) {
+    min-width: 0 !important;
+  }
+
+  /* Any table that escaped its own scroll wrapper stays scrollable */
+  .portal-main table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .portal-main th,
+  .portal-main td { white-space: nowrap; }
+}
+
+@media (max-width: 420px) {
+  /* Public/landing navbar: wrap to a second row instead of squeezing */
+  .nb-nav {
+    height: auto;
+    min-height: 64px;
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .nb-nav__links { gap: 12px; }
+  .nb-logo { font-size: 20px; }
+  .nb-band { font-size: 17px; gap: 10px 18px; padding: 14px 16px; }
+  .nb-band span::after { margin-left: 18px; width: 8px; height: 8px; }
+  .nb-stat { padding: 24px 18px 22px; }
+}
