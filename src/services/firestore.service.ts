@@ -403,10 +403,7 @@ export async function createCourse(course: Omit<Course, 'id'>): Promise<string> 
 export async function updateCourse(id: string, updates: Partial<Course>): Promise<void> {
   // 1. Direct Firestore update
   try {
-    await updateDoc(doc(db, 'courses', id), {
-      ...updates,
-      status: 'pending', // Faculty edits always put course back into review
-    })
+    await updateDoc(doc(db, 'courses', id), updates)
 
     // Non-blocking sync to server
     courseAuthHeaders(true).then((headers) => {

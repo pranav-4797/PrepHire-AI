@@ -121,6 +121,7 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 
 ## Recent fixes (2026-11-24)
 
+- **Course Approval Persistence & Immediate Sync**: Fixed a regression in `src/services/firestore.service.ts` (`updateCourse`) where course updates had a hardcoded `status: 'pending'`, preventing Admin approval and rejection status changes from saving to Firestore. Added optimistic UI state updates in `src/App.tsx` (`handleApproveCourse` / `handleRejectCourse`) so course badges immediately update to Approved/Rejected and appear in the student library without manual browser refreshes.
 - **Server Overhead & Drive De-bloating**: Dropped assessment flag snapshot uploads to Google Drive, eliminating high network I/O and memory usage on the backend server. Assessment submissions write straight to Firestore with zero server queuing or base64 photo processing.
 - **Removed Live Cockpit & WebRTC Gateway**: Dropped live invigilation cockpit, WebSocket gateway (`/ws/proctor`), and WebRTC P2P signaling, eliminating continuous student-side socket pulses, peer streaming overhead, and admin surveillance UI.
 - **Neo-Brutalist Editorial UI System**: Merged friend's editorial UI updates with Archivo Black / Space Grotesk typography, warm paper/navy ink palette, and bold 2px bordered geometry.

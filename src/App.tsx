@@ -3216,23 +3216,27 @@ function AdminDashboard({
 
   const handleApproveCourse = async (id: string) => {
     try {
+      setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, status: 'approved' } : c)))
       await updateCourse(id, { status: 'approved' })
       showToast('Course approved successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to approve course:', error)
       showToast(sanitizeErrorMessage(error, 'Failed to approve course. Please try again.'), 'error')
+      await loadCourses()
     }
   }
 
   const handleRejectCourse = async (id: string) => {
     try {
+      setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, status: 'rejected' } : c)))
       await updateCourse(id, { status: 'rejected' })
       showToast('Course rejected successfully!', 'success')
       await loadCourses()
     } catch (error: any) {
       console.error('Failed to reject course:', error)
       showToast(sanitizeErrorMessage(error, 'Failed to reject course. Please try again.'), 'error')
+      await loadCourses()
     }
   }
 

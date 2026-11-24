@@ -26,6 +26,10 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🎓 **Admin Course Approval Persistence & Instant Catalog Sync (`firestore.service.ts` & `App.tsx`)**:
+  - **Firestore Status Persistence Fix**: Fixed a bug where `updateCourse` unconditionally reset course status to `pending`, preventing Admin approvals from persisting to Firestore.
+  - **Optimistic Approval & Rejection UX**: Admin course cards immediately switch badge states and action buttons upon clicking Approve/Reject, with immediate propagation to student course catalogs.
+
 - 🧠 **Zero-Failure Resume Analysis: NVIDIA NIM & Rule-Based Offline Parser (`resume.ts` & `server/index.js`)**:
   - **NVIDIA NIM Proxy Fallback**: Integrated NVIDIA NIM models (`meta/llama-3.1-8b-instruct`) into `/api/ai/generate` on the backend, activating automatically when Gemini encounters 429 quota exhaustion or 502 upstream errors.
   - **Client-Side Offline Rule-Based Extraction**: Built `offlineParseResume` covering 120+ software engineering skills, tech stacks (MERN, Django, Spring Boot, AI/ML), educational degrees, and project/experience extractors. Resume profile generation now operates with 100% guaranteed success even completely offline or with zero AI credits.
