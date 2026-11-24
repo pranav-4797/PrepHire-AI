@@ -13,11 +13,13 @@ import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
+  Lock,
 } from 'lucide-react'
 import { T } from '../../theme'
 import type { Quiz } from '../../types/quiz'
 import { getQuizById } from '../../services/quiz.service'
 import { QuizPlayer } from './QuizPlayer'
+import { prewarmProctorModels } from '../../utils/proctorPrewarm'
 import { BRANCHES } from '../../constants/branches'
 import { auth } from '../../firebase/firebase'
 
@@ -53,6 +55,36 @@ export function PublicQuizTake({
   const [started, setStarted] = useState(false)
   const [candidateUid, setCandidateUid] = useState<string>('')
 
+  // Real-time 1-second ticker for scheduled assessment countdowns
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  function formatCountdown(ms: number): string {
+    if (ms <= 0) return 'Starting now'
+    const totalSecs = Math.floor(ms / 1000)
+    const days = Math.floor(totalSecs / 86400)
+    const hours = Math.floor((totalSecs % 86400) / 3600)
+    const mins = Math.floor((totalSecs % 3600) / 60)
+    const secs = totalSecs % 60
+    if (days > 0) return `${days}d ${hours}h ${mins}m`
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`
+    return `${mins}m ${secs}s`
+  }
+
+  const isScheduledFuture = Boolean(
+    quiz?.scheduledStartTime && now !== null && new Date(quiz.scheduledStartTime).getTime() > now
+  )
+  const isWindowExpired = Boolean(
+    quiz?.scheduledEndTime &&
+    now !== null &&
+    new Date(quiz.scheduledEndTime).getTime() <= now &&
+    !isScheduledFuture
+  )
+
   // Pre-fill user information if already signed in
   useEffect(() => {
     const currentUser = auth.currentUser
@@ -64,6 +96,7 @@ export function PublicQuizTake({
 
   // Load Quiz Data
   useEffect(() => {
+    prewarmProctorModels().catch(() => {})
     async function fetchQuiz() {
       setLoading(true)
       try {
@@ -120,6 +153,14 @@ export function PublicQuizTake({
 
   // Start Assessment Handler
   function handleStartAssessment() {
+    if (isScheduledFuture) {
+      showToast(`This assessment opens on ${new Date(quiz!.scheduledStartTime!).toLocaleString()}.`, 'info')
+      return
+    }
+    if (isWindowExpired) {
+      showToast('The test window for this assessment has closed.', 'error')
+      return
+    }
     if (!name.trim()) {
       showToast('Please enter your full name.', 'error')
       return
@@ -207,7 +248,7 @@ export function PublicQuizTake({
             borderRadius: 16,
             padding: '2.5rem 2rem',
             textAlign: 'center',
-            boxShadow: '3px 3px 0 #001e40',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
             border: '1px solid #E2E8F0',
           }}
         >
@@ -299,7 +340,7 @@ export function PublicQuizTake({
           color: '#ffffff',
           borderRadius: 16,
           padding: '2rem',
-          boxShadow: '3px 3px 0 #001e40',
+          boxShadow: '0 10px 30px -5px rgba(10, 25, 47, 0.35)',
           border: '1px solid rgba(255, 255, 255, 0.12)',
           position: 'relative',
           overflow: 'hidden',
@@ -406,8 +447,123 @@ export function PublicQuizTake({
           >
             📊 {quiz.difficulty}
           </span>
+          {quiz.scheduledStartTime && (
+            <span
+              style={{
+                background: isScheduledFuture
+                  ? 'rgba(59, 130, 246, 0.25)'
+                  : isWindowExpired
+                  ? 'rgba(239, 68, 68, 0.25)'
+                  : 'rgba(16, 185, 129, 0.25)',
+                border: `1px solid ${
+                  isScheduledFuture
+                    ? 'rgba(147, 197, 253, 0.5)'
+                    : isWindowExpired
+                    ? 'rgba(252, 165, 165, 0.5)'
+                    : 'rgba(110, 231, 183, 0.5)'
+                }`,
+                backdropFilter: 'blur(8px)',
+                padding: '0.35rem 0.75rem',
+                borderRadius: 8,
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                color: '#ffffff',
+              }}
+            >
+              <Clock size={14} />
+              {isScheduledFuture
+                ? `Starts in ${formatCountdown(new Date(quiz.scheduledStartTime).getTime() - (now || 0))}`
+                : isWindowExpired
+                ? 'Window Closed'
+                : 'Live Now'}
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Scheduled Assessment Countdown Banner */}
+      {isScheduledFuture && (
+        <div
+          style={{
+            background: '#EFF6FF',
+            border: '2px solid #BFDBFE',
+            borderRadius: 16,
+            padding: '1.5rem',
+            textAlign: 'center',
+            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.08)',
+          }}
+        >
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#DBEAFE',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#1D4ED8',
+              margin: '0 auto 0.75rem',
+            }}
+          >
+            <Clock size={24} />
+          </div>
+          <h3 style={{ margin: '0 0 0.35rem', fontSize: '1.15rem', fontWeight: 800, color: '#1E40AF' }}>
+            Assessment Scheduled
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem', color: '#1E3A8A', margin: '0 0 1rem' }}>
+            <div>
+              <strong>📅 Start:</strong> {new Date(quiz.scheduledStartTime!).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+            </div>
+            {quiz.scheduledEndTime && (
+              <div>
+                <strong>⏳ End:</strong> {new Date(quiz.scheduledEndTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              display: 'inline-block',
+              background: '#1E40AF',
+              color: '#ffffff',
+              padding: '0.5rem 1.25rem',
+              borderRadius: 9999,
+              fontSize: '1rem',
+              fontWeight: 800,
+              letterSpacing: '0.04em',
+            }}
+          >
+            ⏱️ Starts in {formatCountdown(new Date(quiz.scheduledStartTime!).getTime() - (now || 0))}
+          </div>
+        </div>
+      )}
+
+      {isWindowExpired && (
+        <div
+          style={{
+            background: '#FEF2F2',
+            border: '2px solid #FECACA',
+            borderRadius: 16,
+            padding: '1.25rem',
+            textAlign: 'center',
+            color: '#991B1B',
+            fontWeight: 700,
+          }}
+        >
+          <div style={{ fontWeight: 800, fontSize: '1.05rem', marginBottom: '0.35rem' }}>
+            Assessment Window Closed
+          </div>
+          <div style={{ fontSize: '0.82rem', opacity: 0.9 }}>
+            {quiz.scheduledStartTime && (
+              <span>Start: {new Date(quiz.scheduledStartTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} • </span>
+            )}
+            <span>Closed: {new Date(quiz.scheduledEndTime!).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+          </div>
+        </div>
+      )}
 
       {/* Candidate Form Card */}
       <div
@@ -415,7 +571,7 @@ export function PublicQuizTake({
           background: '#ffffff',
           borderRadius: 16,
           padding: '1.75rem 2rem',
-          boxShadow: '3px 3px 0 #001e40',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
           border: '1px solid #E2E8F0',
           display: 'flex',
           flexDirection: 'column',
@@ -668,28 +824,46 @@ export function PublicQuizTake({
         {/* Action Button */}
         <button
           onClick={handleStartAssessment}
-          disabled={!consentAgreed || !name.trim() || !email.trim()}
+          disabled={!consentAgreed || !name.trim() || !email.trim() || isScheduledFuture || isWindowExpired}
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
-            background: !consentAgreed || !name.trim() || !email.trim()
+            background: !consentAgreed || !name.trim() || !email.trim() || isScheduledFuture || isWindowExpired
               ? '#CBD5E1'
               : 'linear-gradient(135deg, #1E40AF 0%, #2563EB 100%)',
-            color: '#ffffff',
+            color: !consentAgreed || !name.trim() || !email.trim() || isScheduledFuture || isWindowExpired
+              ? '#64748B'
+              : '#ffffff',
             border: 'none',
             borderRadius: 10,
             padding: '0.85rem 1.75rem',
             fontSize: '1rem',
             fontWeight: 800,
-            cursor: !consentAgreed || !name.trim() || !email.trim() ? 'not-allowed' : 'pointer',
-            boxShadow: '3px 3px 0 #001e40',
+            cursor: !consentAgreed || !name.trim() || !email.trim() || isScheduledFuture || isWindowExpired ? 'not-allowed' : 'pointer',
+            boxShadow: !consentAgreed || !name.trim() || !email.trim() || isScheduledFuture || isWindowExpired
+              ? 'none'
+              : '0 4px 14px rgba(37, 99, 235, 0.3)',
             transition: 'all 0.15s ease',
           }}
         >
-          <span>Begin Proctored Assessment</span>
-          <ArrowRight size={18} />
+          {isScheduledFuture ? (
+            <>
+              <Lock size={18} />
+              <span>Starts in {formatCountdown(new Date(quiz.scheduledStartTime!).getTime() - (now || 0))}</span>
+            </>
+          ) : isWindowExpired ? (
+            <>
+              <Lock size={18} />
+              <span>Assessment Window Closed</span>
+            </>
+          ) : (
+            <>
+              <span>Begin Proctored Assessment</span>
+              <ArrowRight size={18} />
+            </>
+          )}
         </button>
       </div>
     </div>

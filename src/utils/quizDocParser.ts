@@ -209,7 +209,9 @@ export async function extractDocumentPayload(file: File): Promise<ExtractedPaylo
 
 /**
  * High-Speed Deterministic Heuristic AST Parser (< 10ms execution).
- * Extracts questions, code blocks, 4 options (A-D), and answer keys directly in memory.
+ * Robustly extracts questions, code blocks, 4 options (A-D), and answer keys directly in memory.
+ * Calibrated with strict word boundaries and line anchoring to eliminate false matches on words
+ * like "Keyboard", "Keyword", "Means", "Translate", and "Brightness".
  */
 export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
   const questions: QuizQuestion[] = []
@@ -222,18 +224,22 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
     const block = rawBlocks[i].trim()
     if (!block) continue
 
-    // 1. Extract Answer Key Line:
+    // 1. Extract Answer Key Line: MUST be line-anchored and use word boundaries!
     // e.g. "Correct Option: B. Mars", "Correct Answer: (C)", "Ans: A", "Answer: D", "Key: B"
     let correctIndex = 0
     let hasExplicitAnswer = false
     let answerText = ''
 
-    const ansLineMatch = block.match(
-      /(?:(?:correct|right)\s*(?:option|choice|answer)?|ans(?:wer)?|key)\s*[:=-]?\s*([^\n\r]+)/i
-    )
-    if (ansLineMatch) {
+    const ansLineRegex = /(?:^|\r?\n)\s*(?:(?:\*+)?(?:correct|right)\s*(?:option|choice|answer)?(?:\*+)?|\b(?:ans(?:wer)?|key)\b)\s*[:=-]?\s*([^\r\n]+)/i
+    const ansLineMatch = block.match(ansLineRegex)
+
+    let ansLineIndex = -1
+    if (ansLineMatch && ansLineMatch.index !== undefined) {
+      ansLineIndex = ansLineMatch.index
       answerText = ansLineMatch[1].trim()
-      const letterMatch = answerText.match(/^(?:option\s*)?\(?([A-D])\)?(?:[.:\s]|$)/i)
+
+      // Look for explicit letter: "A", "B", "C", "D" or "option A" or "(B)"
+      const letterMatch = answerText.match(/^(?:option\s*)?\(?([A-D])\)?(?:[.:\s)-]|$)/i)
       if (letterMatch) {
         const char = letterMatch[1].toUpperCase()
         correctIndex = char.charCodeAt(0) - 65 // A=0, B=1, C=2, D=3
@@ -241,42 +247,58 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
       }
     }
 
-    // 2. Extract Explanation: e.g. "Explanation: ..." or "Solution: ..."
+    // 2. Extract Explanation: MUST be line-anchored with \b
     let explanation = ''
-    const expMatch = block.match(/(?:explanation|solution|rationale)\s*[:=-]?\s*([^\n\r]+(?:\n[^\n\r]+)*)/i)
+    const expMatch = block.match(/(?:^|\r?\n)\s*\b(?:explanation|solution|rationale)\b\s*[:=-]?\s*([^\r\n]+(?:\r?\n[^\r\n]+)*)/i)
     if (expMatch) {
       explanation = expMatch[1].trim()
     }
 
-    // 3. Extract Code Snippet if present (e.g. fenced code ```...```)
+    // 3. Extract Code Snippet if present (```...```)
     let codeSnippet: string | undefined
     const codeMatch = block.match(/```(?:[a-z]+)?\s*([\s\S]*?)```/i)
     if (codeMatch) {
       codeSnippet = codeMatch[1].trim()
     }
 
-    // 4. Extract Options: ONLY A, B, C, D (Exclude digits 1-4 so question numbers 1-4 are never confused with options!)
-    const optRegex = /(?:^|\n)\s*(?:\(?([A-D])\)|\b([A-D])[.:)])\s+([^\n]+)/g
-    const matches = Array.from(block.matchAll(optRegex))
+    // 4. Extract Options: Support line-anchored options first, then inline options
+    const lineOptRegex = /(?:^|\r?\n)\s*(?:\(([A-Da-d])\)|\[([A-Da-d])\]|\b([A-Da-d])[.:)-])\s+([^\r\n]+)/g
+    let matches = Array.from(block.matchAll(lineOptRegex))
 
-    // Filter out matches that belong to the Answer line itself (e.g. "Correct Option: B. Mars")
-    const validMatches = matches.filter((m) => {
+    // Filter out matches that belong to or are after the Answer line
+    let validMatches = matches.filter((m) => {
       const matchIdx = m.index ?? 0
-      if (ansLineMatch && ansLineMatch.index !== undefined) {
-        if (matchIdx >= ansLineMatch.index) return false
-      }
+      if (ansLineIndex !== -1 && matchIdx >= ansLineIndex) return false
       return true
     })
 
-    const options: [string, string, string, string] = ['', '', '', '']
-    if (validMatches.length >= 2) {
-      validMatches.slice(0, 4).forEach((m, idx) => {
-        const optText = (m[3] || '')
-          .replace(/(?:(?:correct|right)\s*(?:option|choice|answer)?|ans(?:wer)?|explanation|solution|key).*/i, '')
-          .trim()
-        options[idx] = optText
+    // If fewer than 2 found on separate lines, try matching inline options (e.g. "A. 1  B. 2  C. 3  D. 4")
+    if (validMatches.length < 2) {
+      const genericOptRegex = /(?:^|\s+)(?:\(([A-Da-d])\)|\[([A-Da-d])\]|\b([A-Da-d])[.:)-])\s+([^\r\n]+?)(?=(?:\s+(?:\([A-Da-d]\)|\[[A-Da-d]\]|\b[A-Da-d][.:)-])\s+)|\r?\n|$)/g
+      matches = Array.from(block.matchAll(genericOptRegex))
+      validMatches = matches.filter((m) => {
+        const matchIdx = m.index ?? 0
+        if (ansLineIndex !== -1 && matchIdx >= ansLineIndex) return false
+        return true
       })
     }
+
+    // If fewer than 2 valid options, this block is preamble/document header; skip it
+    if (validMatches.length < 2) {
+      continue
+    }
+
+    const options: [string, string, string, string] = ['', '', '', '']
+    validMatches.slice(0, 4).forEach((m, idx) => {
+      const letter = (m[1] || m[2] || m[3] || '').toUpperCase()
+      const targetIdx = letter ? letter.charCodeAt(0) - 65 : idx
+      const slot = targetIdx >= 0 && targetIdx < 4 ? targetIdx : idx
+
+      let optText = (m[4] || '').trim()
+      // Only strip trailing answer or explanation keywords if they occur as a distinct label
+      optText = optText.replace(/\s+(?:(?:correct|right)\s*(?:option|choice|answer)?|\b(?:ans(?:wer)?|key|explanation|solution)\b)\s*[:=-].*$/i, '').trim()
+      options[slot] = optText
+    })
 
     // If answer line did not have A/B/C/D letter prefix, match by option content
     if (!hasExplicitAnswer && answerText) {
@@ -313,13 +335,13 @@ export function parseQuizTextHeuristically(text: string): QuizQuestion[] {
 
     qText = qText
       .replace(/^(?:Q(?:uestion)?\s*\.?\s*\d+[.:)]|\b\d+[.:)]\s*)/i, '')
-      .replace(/(?:(?:correct|right)\s*(?:option|choice|answer)?|ans(?:wer)?|key)\s*[:=-]?.*/i, '')
+      .replace(/(?:^|\r?\n)\s*(?:(?:correct|right)\s*(?:option|choice|answer)?|\b(?:ans(?:wer)?|key)\b)\s*[:=-]?.*/i, '')
       .trim()
 
     // Accept if question statement exists and at least 2 options were extracted
-    if (qText.length > 0 && (validMatches.length >= 2 || hasExplicitAnswer)) {
+    if (qText.length > 0) {
       questions.push({
-        id: `q-doc-${Date.now()}-${i}`,
+        id: `q-doc-${Date.now()}-${questions.length + 1}`,
         question: qText,
         codeSnippet,
         options,
@@ -435,7 +457,7 @@ Look for answer indicators following each question, such as:
 - "Correct Option: A", "Ans: C", "Answer: B", "Key: D"
 Map option letters to indices: A = 0, B = 1, C = 2, D = 3.
 
-${rawText ? `Extracted Document Text:\n"""\n${rawText.slice(0, 15000)}\n"""\n` : ''}
+${rawText ? `Extracted Document Text:\n"""\n${rawText.slice(0, 50000)}\n"""\n` : ''}
 
 Return ONLY a valid JSON array of question objects matching this schema:
 [

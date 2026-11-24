@@ -11,6 +11,7 @@ import rateLimit from 'express-rate-limit'
 import multer from 'multer'
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { execFile, execSync } from 'node:child_process'
 import { google } from 'googleapis'
 import ffmpegStatic from 'ffmpeg-static'
@@ -20,8 +21,8 @@ import { initCleanup } from './cleanupService.js'
 import { registerCodingRoutes } from './coding/routes.js'
 import { requireAuth, requireFacultyOrAdmin } from './coding/authMiddleware.js'
 import { callGemini, streamGemini, isRateLimited } from './gemini.js'
+import { callNvidia } from './nvidia.js'
 import { initDriveQueue } from './driveQueue.js'
-import { initProctorWebSocket } from './proctorSocket.js'
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -175,16 +176,6 @@ const uploadLimiter = rateLimit({
   message: { error: 'Too many video uploads from this network. Please wait a few minutes.' },
 })
 
-// Dedicated rate limiter for quiz forensic snapshot evidence uploads.
-// Lightweight (~80KB per student attempt); comfortably handles 30+ simultaneous submissions.
-const quizEvidenceLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 150,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many assessment submissions from this network. Please wait a moment.' },
-})
-
 // IP-level flood guard only; per-user limits (userRateLimit) do the fine-grained work.
 const codingExecLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -321,11 +312,27 @@ app.post('/api/ai/generate', requireAuth(), async (req, res) => {
     const text = await callGemini(prompt, sys, null, images)
     res.json({ text })
   } catch (err) {
+    // If Gemini fails and request has no heavy images, attempt NVIDIA NIM fallback
+    if (!images || images.length === 0) {
+      try {
+        console.warn('⚠️ Gemini failed, attempting NVIDIA NIM fallback...')
+        const nvidiaText = await callNvidia(prompt, sys, {
+          model: process.env.NVIDIA_MODEL || 'meta/llama-3.1-8b-instruct',
+        })
+        if (nvidiaText) {
+          console.log('✅ NVIDIA NIM fallback succeeded for /api/ai/generate')
+          return res.json({ text: nvidiaText, fallback: 'nvidia' })
+        }
+      } catch (nvidiaErr) {
+        console.warn('⚠️ NVIDIA fallback also failed:', nvidiaErr.message)
+      }
+    }
+
     const status = err.status || 502
     if (status === 500) {
       return res.status(500).json({ error: err.message })
     }
-    console.error('❌ Gemini proxy call failed:', err.message || err)
+    console.error('❌ AI proxy call failed:', err.message || err)
     res.status(status).json({ error: status === 502 ? 'AI generation service unavailable.' : err.message })
   }
 })
@@ -466,53 +473,6 @@ app.post('/api/upload', uploadLimiter, requireAuth(), upload.single('video'), as
   }
 })
 
-// ── Proctored Assessment Evidence Upload to Google Drive ─────────────────────
-// Enqueues candidate evidence snapshots to the unified Drive queue.
-// Responds immediately to the client (<20ms) so testing and submission are instantaneous.
-// In the background, the queue worker uploads snapshots to Drive sequentially with rate-limit
-// protection and automatically patches the Firestore attempt document with the Drive folder link.
-app.post('/api/quiz/upload-evidence', quizEvidenceLimiter, express.json({ limit: '4mb' }), (req, res) => {
-  try {
-    const {
-      attemptId,
-      quizId = 'general',
-      quizTitle = 'Assessment',
-      studentName = 'Candidate',
-      studentEmail = 'anonymous',
-      completedAt = new Date().toISOString(),
-      snapshots = [],
-    } = req.body
-
-    const validSnapshots = (Array.isArray(snapshots) ? snapshots : []).slice(0, 25)
-
-    if (validSnapshots.length === 0) {
-      return res.json({ success: true, message: 'No snapshots provided', files: [] })
-    }
-
-    const job = driveQueue.enqueueEvidenceTask({
-      attemptId,
-      quizId,
-      quizTitle,
-      studentName,
-      studentEmail,
-      completedAt,
-      snapshots: validSnapshots,
-    })
-
-    return res.json({
-      success: true,
-      queued: true,
-      jobId: job.jobId,
-      folderName: job.folderName,
-      queuePosition: job.queuePosition,
-      message: 'Evidence snapshots queued for Google Drive background sync.',
-    })
-  } catch (err) {
-    console.error('❌ Failed to enqueue assessment evidence for Google Drive:', err.message || err)
-    return res.status(500).json({ error: 'Failed to upload test evidence to Google Drive.' })
-  }
-})
-
 // ── Google Drive Upload Queue Health & Diagnostics Endpoint ──────────────────
 app.get('/api/drive/queue-status', (_req, res) => {
   res.json({
@@ -521,12 +481,102 @@ app.get('/api/drive/queue-status', (_req, res) => {
   })
 })
 
-app.get('/api/quiz/upload-status/:jobId', (req, res) => {
-  const status = driveQueue.getEvidenceJobStatus(req.params.jobId)
-  if (!status) {
-    return res.status(404).json({ error: 'Job not found or expired' })
+// ── Cryptographic Quiz Submission Evaluation ─────────────────────────────────
+// Allows zero-trust server-side evaluation of candidate attempts without leaking
+// correct answers to client DevTools or network inspections.
+const MASTER_QUIZ_SALT = 'PrepHire_MIT_AoE_Encrypted_Quiz_Secret_2026_x89'
+
+async function decryptAnswerServer(cipherToken, quizId) {
+  if (!cipherToken) return null
+  if (cipherToken.startsWith('enc:v1:')) {
+    try {
+      const parts = cipherToken.split(':')
+      if (parts.length < 4) return null
+      const iv = Buffer.from(parts[2], 'base64')
+      const cipherData = Buffer.from(parts[3], 'base64')
+      const enc = new TextEncoder()
+      const seed = `${MASTER_QUIZ_SALT}:${quizId || 'global'}`
+      const subtle = crypto.webcrypto?.subtle || crypto.subtle
+      const keyHash = await subtle.digest('SHA-256', enc.encode(seed))
+      const key = await subtle.importKey('raw', keyHash, { name: 'AES-GCM' }, false, ['decrypt'])
+      const decrypted = await subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherData)
+      const dec = new TextDecoder()
+      return JSON.parse(dec.decode(decrypted))
+    } catch (e) {
+      console.warn('⚠️ Server answer decryption failed:', e.message)
+      return null
+    }
   }
-  return res.json({ success: true, job: status })
+  if (cipherToken.startsWith('enc:v0:')) {
+    try {
+      const b64 = cipherToken.replace('enc:v0:', '')
+      return JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+app.post('/api/quiz/evaluate', express.json(), async (req, res) => {
+  try {
+    const { quizId, answers = {} } = req.body
+    if (!quizId) {
+      return res.status(400).json({ error: 'quizId is required' })
+    }
+
+    if (!db) {
+      return res.status(503).json({ error: 'Firestore is not initialized on server' })
+    }
+
+    const quizDoc = await db.collection('quizzes').doc(quizId).get()
+    if (!quizDoc.exists) {
+      return res.status(404).json({ error: 'Quiz not found' })
+    }
+
+    const quizData = quizDoc.data()
+    const questions = quizData.questions || []
+
+    let score = 0
+    let maxScore = 0
+
+    for (let idx = 0; idx < questions.length; idx++) {
+      const q = questions[idx]
+      const qPoints = q.points || 1
+      maxScore += qPoints
+
+      let correctIndex = q.correctIndex
+      if (typeof correctIndex !== 'number' && q.answerCipher) {
+        const dec = await decryptAnswerServer(q.answerCipher, quizId)
+        if (dec && typeof dec.correctIndex === 'number') {
+          correctIndex = dec.correctIndex
+        }
+      }
+
+      const candidateChoice =
+        q.id && answers[q.id] !== undefined
+          ? answers[q.id]
+          : answers[`q-${idx}`]
+
+      if (candidateChoice !== undefined && candidateChoice === correctIndex) {
+        score += qPoints
+      }
+    }
+
+    const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
+    const passed = percentage >= (quizData.passingPercentage || 60)
+
+    return res.json({
+      success: true,
+      score,
+      maxScore,
+      percentage,
+      passed,
+    })
+  } catch (err) {
+    console.error('❌ Failed to evaluate quiz submission:', err.message || err)
+    return res.status(500).json({ error: 'Failed to evaluate quiz submission.' })
+  }
 })
 
 // ── Courses CRUD API ──────────────────────────────────────────────────────────
@@ -718,5 +768,3 @@ const server = app.listen(PORT, () => {
   console.log(`   Drive folder: ${FOLDER_ID || '(mock mode — Drive not configured)'}`)
   console.log(`   CORS origin:  ${CORS_ORIGIN}`)
 })
-
-initProctorWebSocket(server)

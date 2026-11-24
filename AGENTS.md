@@ -119,6 +119,15 @@ Server has its own `server/package.json`. Run `cd server && npm install` separat
 - **Live Invigilation Cockpit & WebRTC P2P Video Streaming**: Built zero-database-cost WebSocket gateway (`server/proctorSocket.js` on `/ws/proctor`) and admin surveillance interface (`AdminLiveInvigilationModal.tsx`) with 1-click live camera peer streaming, audio synthesized chime alerts, candidate telemetry grid, and administrative warning messaging.
 - **Anti-Cheating Deterministic Question & Option Shuffling**: Built Mulberry32 PRNG engine (`quizShuffle.ts`) randomizing questions and option keys uniquely per candidate to neutralize college computer lab peer-copying, while mapping answers back to master keys for transparent scoring.
 
+## Recent fixes (2026-11-24)
+
+- **Institutional DOCX Gradebook Export**: Added `exportQuizLeaderboardToDocx` in `quizDocxExport.ts` and integrated a 1-click **Export DOCX** button into `QuizLeaderboardModal.tsx`. Generates formatted Word tables with candidate names, questions attempted, questions correct, marks/percentages, and integrity scores. Added `vendor-docs` chunk in `vite.config.ts`.
+- **Comprehensive Resume Parser & Dossier Display**: Fixed spatial line-flattening in `extractResumeText` by tracking PDF item coordinates and `hasEOL`. Fixed `offlineParseResume` to detect section headings strictly at line starts, eliminating unintended matches against summary sentences. Added complete profile display in `src/App.tsx` showcasing Education, Skills & Tools, Projects, Achievements, and Certifications.
+- **Course Approval Persistence & Immediate Sync**: Fixed a regression in `src/services/firestore.service.ts` (`updateCourse`) where course updates had a hardcoded `status: 'pending'`, preventing Admin approval and rejection status changes from saving to Firestore. Added optimistic UI state updates in `src/App.tsx` (`handleApproveCourse` / `handleRejectCourse`) so course badges immediately update to Approved/Rejected and appear in the student library without manual browser refreshes.
+- **Server Overhead & Drive De-bloating**: Dropped assessment flag snapshot uploads to Google Drive, eliminating high network I/O and memory usage on the backend server. Assessment submissions write straight to Firestore with zero server queuing or base64 photo processing.
+- **Removed Live Cockpit & WebRTC Gateway**: Dropped live invigilation cockpit, WebSocket gateway (`/ws/proctor`), and WebRTC P2P signaling, eliminating continuous student-side socket pulses, peer streaming overhead, and admin surveillance UI.
+- **Neo-Brutalist Editorial UI System**: Merged friend's editorial UI updates with Archivo Black / Space Grotesk typography, warm paper/navy ink palette, and bold 2px bordered geometry.
+
 ## Gotchas
 
 - `.env.local` contains live Firebase + Gemini keys — do not commit

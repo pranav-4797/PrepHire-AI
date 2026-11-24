@@ -20,6 +20,7 @@ import {
 } from '../../services/quiz.service'
 import { QuizPlayer } from './QuizPlayer'
 import { QuizResultModal } from './QuizResultModal'
+import { prewarmProctorModels } from '../../utils/proctorPrewarm'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 
 function GlassCard({
@@ -60,6 +61,26 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
   const [attempts, setAttempts] = useState<QuizAttempt[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Real-time 1-second ticker for scheduled assessment countdowns
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  function formatCountdown(ms: number): string {
+    if (ms <= 0) return 'Starting now'
+    const totalSecs = Math.floor(ms / 1000)
+    const days = Math.floor(totalSecs / 86400)
+    const hours = Math.floor((totalSecs % 86400) / 3600)
+    const mins = Math.floor((totalSecs % 3600) / 60)
+    const secs = totalSecs % 60
+    if (days > 0) return `${days}d ${hours}h ${mins}m`
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`
+    return `${mins}m ${secs}s`
+  }
+
   // Active Quiz State
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null)
   const [reviewAttempt, setReviewAttempt] = useState<{
@@ -72,6 +93,17 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
   }, [activeQuiz, onActiveQuizChange])
 
   const handleStartQuiz = (q: Quiz) => {
+    if (q.scheduledStartTime && new Date(q.scheduledStartTime).getTime() > Date.now()) {
+      showToast(
+        `This assessment is scheduled to start on ${new Date(q.scheduledStartTime).toLocaleString()}.`,
+        'info'
+      )
+      return
+    }
+    if (q.scheduledEndTime && new Date(q.scheduledEndTime).getTime() <= Date.now()) {
+      showToast('The test window for this assessment has closed.', 'error')
+      return
+    }
     try {
       const el = document.documentElement as any
       if (el.requestFullscreen) {
@@ -109,6 +141,7 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
 
   useEffect(() => {
     loadData()
+    prewarmProctorModels().catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.uid])
 
@@ -480,6 +513,15 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
           {filtered.map((q) => {
             const attempt = latestAttemptMap.get(q.id)
             const branchLabel = q.targetBranch === 'all' || !q.targetBranch ? 'All Branches' : q.targetBranch
+            const isScheduledFuture = Boolean(
+              q.scheduledStartTime && now !== null && new Date(q.scheduledStartTime).getTime() > now
+            )
+            const isWindowExpired = Boolean(
+              q.scheduledEndTime &&
+              now !== null &&
+              new Date(q.scheduledEndTime).getTime() <= now &&
+              !isScheduledFuture
+            )
 
             return (
               <GlassCard
@@ -552,6 +594,80 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                     </span>
                     <span>📊 {q.difficulty}</span>
                   </div>
+
+                  {(q.scheduledStartTime || q.scheduledEndTime) && (
+                    <div
+                      style={{
+                        marginTop: '0.65rem',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: 8,
+                        fontSize: '0.78rem',
+                        background: isScheduledFuture ? '#EFF6FF' : isWindowExpired ? '#FEF2F2' : '#ECFDF5',
+                        color: isScheduledFuture ? '#1D4ED8' : isWindowExpired ? '#991B1B' : '#065F46',
+                        border: `1px solid ${isScheduledFuture ? '#BFDBFE' : isWindowExpired ? '#FECACA' : '#A7F3D0'}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 800 }}>
+                          <Clock size={13} />
+                          {isScheduledFuture
+                            ? `Starts in ${formatCountdown(new Date(q.scheduledStartTime!).getTime() - (now || 0))}`
+                            : isWindowExpired
+                            ? 'Assessment Window Closed'
+                            : '🟢 Live Assessment Open'}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '0.12rem 0.45rem',
+                            borderRadius: 4,
+                            background: isScheduledFuture ? '#DBEAFE' : isWindowExpired ? '#FEE2E2' : '#D1FAE5',
+                          }}
+                        >
+                          {isScheduledFuture ? 'Scheduled' : isWindowExpired ? 'Closed' : 'Active'}
+                        </span>
+                      </div>
+
+                      {/* Explicit Start and End Date & Time Details */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.2rem',
+                          fontSize: '0.74rem',
+                          borderTop: '1px solid rgba(0,0,0,0.06)',
+                          paddingTop: '0.35rem',
+                        }}
+                      >
+                        {q.scheduledStartTime && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontWeight: 700, color: '#334155' }}>📅 Start:</span>
+                            <span>
+                              {new Date(q.scheduledStartTime).toLocaleString([], {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })}
+                            </span>
+                          </div>
+                        )}
+                        {q.scheduledEndTime && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontWeight: 700, color: '#334155' }}>⏳ End:</span>
+                            <span>
+                              {new Date(q.scheduledEndTime).toLocaleString([], {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom Actions & Status */}
@@ -634,7 +750,46 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                     </span>
                   )}
 
-                  {attempt && q.allowRetake === false ? (
+                  {isScheduledFuture ? (
+                    <button
+                      disabled
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        background: '#F1F5F9',
+                        color: '#64748B',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 8,
+                        padding: '0.5rem 0.9rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'not-allowed',
+                      }}
+                      title={`Assessment opens on ${new Date(q.scheduledStartTime!).toLocaleString()}`}
+                    >
+                      <Lock size={12} color="#64748B" /> Starts in {formatCountdown(new Date(q.scheduledStartTime!).getTime() - (now || 0))}
+                    </button>
+                  ) : isWindowExpired ? (
+                    <button
+                      disabled
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        background: '#FEF2F2',
+                        color: '#991B1B',
+                        border: '1px solid #FECACA',
+                        borderRadius: 8,
+                        padding: '0.5rem 0.9rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'not-allowed',
+                      }}
+                    >
+                      <Lock size={12} color="#991B1B" /> Window Closed
+                    </button>
+                  ) : attempt && q.allowRetake === false ? (
                     <button
                       onClick={() => setReviewAttempt({ quiz: q, attempt })}
                       style={{

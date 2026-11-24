@@ -5,7 +5,8 @@ export interface QuizQuestion {
   question: string
   codeSnippet?: string
   options: [string, string, string, string] // Exactly 4 options: A, B, C, D
-  correctIndex: number // 0, 1, 2, or 3
+  correctIndex?: number // 0, 1, 2, or 3 (optional if encrypted)
+  answerCipher?: string // AES-256-GCM encrypted correct answer + explanation token
   explanation?: string
   points: number
 }
@@ -38,6 +39,8 @@ export interface Quiz {
   resultsDeclared?: boolean // Whether assessment results & correct answers are released to students (default: false)
   shuffleQuestions?: boolean // Randomize question order per student (default: true)
   shuffleOptions?: boolean // Randomize option positions (A,B,C,D) per question (default: true)
+  scheduledStartTime?: string // Optional ISO string for scheduled quiz start
+  scheduledEndTime?: string // Optional ISO string for quiz end window
 }
 
 export interface LiveCandidateSession {

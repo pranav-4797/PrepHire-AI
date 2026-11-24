@@ -315,6 +315,17 @@ async function courseAuthHeaders(json = false): Promise<Record<string, string>> 
 }
 
 export async function getCourse(id: string): Promise<Course | null> {
+  // 1. Direct Firestore read
+  try {
+    const snap = await getDoc(doc(db, 'courses', id))
+    if (snap.exists()) {
+      return { id: snap.id, ...(snap.data() as Omit<Course, 'id'>) }
+    }
+  } catch (err) {
+    console.warn('Direct Firestore getCourse failed, attempting server API fallback:', err)
+  }
+
+  // 2. Server API fallback
   const headers = await courseAuthHeaders(false)
   const res = await fetch(`${API_URL}/api/courses/${id}`, { headers })
   if (res.status === 404) return null
@@ -323,41 +334,130 @@ export async function getCourse(id: string): Promise<Course | null> {
 }
 
 export async function listCourses(): Promise<Course[]> {
-  const headers = await courseAuthHeaders(false)
-  const res = await fetch(`${API_URL}/api/courses`, { headers })
-  if (!res.ok) throw new Error('Failed to list courses')
-  return res.json()
+  // 1. Direct Firestore read (always accessible, instant, zero dependency on server cold boot)
+  try {
+    const snap = await getDocs(collection(db, 'courses'))
+    if (!snap.empty) {
+      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Course, 'id'>) }))
+      return list.sort((a, b) => new Date(String(b.createdAt || 0)).getTime() - new Date(String(a.createdAt || 0)).getTime())
+    }
+  } catch (err) {
+    console.warn('Direct Firestore listCourses failed, attempting server API fallback:', err)
+  }
+
+  // 2. Server API fallback
+  try {
+    const headers = await courseAuthHeaders(false)
+    const res = await fetch(`${API_URL}/api/courses`, { headers })
+    if (res.ok) {
+      return await res.json()
+    }
+  } catch {
+    // Return empty list if both fail
+  }
+  return []
 }
 
 export async function createCourse(course: Omit<Course, 'id'>): Promise<string> {
-  const headers = await courseAuthHeaders(true)
-  const res = await fetch(`${API_URL}/api/courses`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(course)
-  })
-  if (!res.ok) throw new Error('Failed to create course')
-  const data = await res.json()
-  return data.id
+  // 1. Direct Firestore creation (zero dependency on Render server cold-start / service-account)
+  try {
+    const courseRef = doc(collection(db, 'courses'))
+    const newCourseData: Course = {
+      ...course,
+      id: courseRef.id,
+      createdAt: new Date().toISOString(),
+      createdByEmail: auth.currentUser?.email || undefined,
+      status: 'pending',
+    }
+    await setDoc(courseRef, newCourseData)
+
+    // Non-blocking background sync to server JSON file backup
+    courseAuthHeaders(true).then((headers) => {
+      fetch(`${API_URL}/api/courses`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(newCourseData),
+      }).catch(() => {})
+    })
+
+    return courseRef.id
+  } catch (firestoreErr: any) {
+    console.warn('Direct Firestore course creation failed, attempting server API fallback...', firestoreErr)
+
+    // 2. Server API fallback
+    const headers = await courseAuthHeaders(true)
+    const res = await fetch(`${API_URL}/api/courses`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(course),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.error || `Failed to create course: ${firestoreErr.message || 'Permission denied'}`)
+    }
+    const data = await res.json()
+    return data.id
+  }
 }
 
 export async function updateCourse(id: string, updates: Partial<Course>): Promise<void> {
-  const headers = await courseAuthHeaders(true)
-  const res = await fetch(`${API_URL}/api/courses/${id}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(updates)
-  })
-  if (!res.ok) throw new Error('Failed to update course')
+  // 1. Direct Firestore update
+  try {
+    await updateDoc(doc(db, 'courses', id), updates)
+
+    // Non-blocking sync to server
+    courseAuthHeaders(true).then((headers) => {
+      fetch(`${API_URL}/api/courses/${id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(updates),
+      }).catch(() => {})
+    })
+    return
+  } catch (firestoreErr: any) {
+    console.warn('Direct Firestore updateCourse failed, attempting server API fallback:', firestoreErr)
+
+    // 2. Server API fallback
+    const headers = await courseAuthHeaders(true)
+    const res = await fetch(`${API_URL}/api/courses/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(updates),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.error || `Failed to update course: ${firestoreErr.message}`)
+    }
+  }
 }
 
 export async function deleteCourse(id: string): Promise<void> {
-  const headers = await courseAuthHeaders(false)
-  const res = await fetch(`${API_URL}/api/courses/${id}`, {
-    method: 'DELETE',
-    headers
-  })
-  if (!res.ok) throw new Error('Failed to delete course')
+  // 1. Direct Firestore deletion
+  try {
+    await deleteDoc(doc(db, 'courses', id))
+
+    // Non-blocking sync to server
+    courseAuthHeaders(false).then((headers) => {
+      fetch(`${API_URL}/api/courses/${id}`, {
+        method: 'DELETE',
+        headers,
+      }).catch(() => {})
+    })
+    return
+  } catch (firestoreErr: any) {
+    console.warn('Direct Firestore deleteCourse failed, attempting server API fallback:', firestoreErr)
+
+    // 2. Server API fallback
+    const headers = await courseAuthHeaders(false)
+    const res = await fetch(`${API_URL}/api/courses/${id}`, {
+      method: 'DELETE',
+      headers,
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.error || `Failed to delete course: ${firestoreErr.message}`)
+    }
+  }
 }
 
 // ===== FEEDBACK =====

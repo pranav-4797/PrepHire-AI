@@ -16,14 +16,12 @@ import { T } from '../../theme'
 import type { Quiz, QuizAttempt, SuspiciousFlag } from '../../types/quiz'
 import {
   submitQuizAttempt,
-  uploadQuizEvidenceToDrive,
-  updateQuizAttemptDriveLink,
 } from '../../services/quiz.service'
 import { QuizResultModal } from './QuizResultModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { QuizProctorCamera } from './QuizProctorCamera'
 import { generateShuffledQuiz, convertDisplayedAnswersToMaster } from '../../utils/quizShuffle'
-import { useStudentProctorSocket } from '../../services/proctorSocket.service'
+import { stripAnswersForStudent, evaluateQuizSubmission } from '../../utils/quizCipher'
 
 function GlassCard({
   children,
@@ -110,7 +108,6 @@ export function QuizPlayer({
   const startTimeRef = useRef<number>(Date.now())
   const hasMountedRef = useRef(false)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const [invigilatorWarning, setInvigilatorWarning] = useState<string | null>(null)
 
   const handleRegisterCapture = useCallback((fn: () => string | undefined) => {
     snapshotCaptureRef.current = fn
@@ -120,30 +117,20 @@ export function QuizPlayer({
   }, [])
 
   // ── Anti-Cheating Deterministic Question & Option Shuffling ────────────────
+  // Sanitizes questions so candidates NEVER receive plaintext answer keys in memory or state.
+  const candidateSafeQuestions = useMemo(() => {
+    return stripAnswersForStudent(quiz.questions)
+  }, [quiz.questions])
+
   const { shuffledQuestions, questionMap } = useMemo(() => {
-    return generateShuffledQuiz(quiz.questions, `${user.uid}_${quiz.id}`, {
+    return generateShuffledQuiz(candidateSafeQuestions, `${user.uid}_${quiz.id}`, {
       shuffleQuestions: quiz.shuffleQuestions !== false,
       shuffleOptions: quiz.shuffleOptions !== false,
     })
-  }, [quiz.questions, quiz.id, quiz.shuffleQuestions, quiz.shuffleOptions, user.uid])
+  }, [candidateSafeQuestions, quiz.id, quiz.shuffleQuestions, quiz.shuffleOptions, user.uid])
 
   const totalQuestions = shuffledQuestions.length
   const currentQ = shuffledQuestions[currentIdx]
-
-  // ── Real-Time Proctoring WebSocket & WebRTC P2P Streamer ───────────────────
-  const { sendPulse, sendFlag } = useStudentProctorSocket({
-    quizId: quiz.id,
-    studentUid: user.uid,
-    studentName: user.name || user.email.split('@')[0],
-    studentEmail: user.email,
-    department: user.department,
-    rollNumber: user.rollNumber,
-    totalQuestions,
-    mediaStreamRef,
-    onWarningMessage: (msg) => {
-      setInvigilatorWarning(msg)
-    },
-  })
 
   // Track window resize for responsive layout
   useEffect(() => {
@@ -201,13 +188,6 @@ export function QuizPlayer({
         }
         suspiciousFlagsRef.current.push(flag)
         setSuspiciousFlags((prev) => [...prev, flag])
-
-        // Live notification to invigilation cockpit
-        sendFlag({
-          flagType: 'fullscreen_exit',
-          detail: flag.detail,
-          snapshot: snap,
-        })
       }
     }
 
@@ -221,7 +201,7 @@ export function QuizPlayer({
         doc.exitFullscreen().catch(() => {})
       }
     }
-  }, [completedAttempt, enterFullscreen, sendFlag])
+  }, [completedAttempt, enterFullscreen])
 
   // ── Tab Switch & Focus Loss Listener (Stealth Duration Tracking) ───────────
   useEffect(() => {
@@ -434,29 +414,11 @@ export function QuizPlayer({
       suspiciousFlagsRef.current.push(newFlag)
       setSuspiciousFlags((prev) => [...prev, newFlag])
 
-      // Real-time broadcast to Admin Invigilation Cockpit via WebSocket
-      sendFlag({
-        flagType,
-        detail: reason,
-        snapshot: snap,
-      })
-
       // Stealth Mode: Candidate is NOT alerted or given toasts,
       // ensuring natural behavior while complete forensic evidence is preserved.
     },
-    [sendFlag]
+    []
   )
-
-  // Real-time progress pulse to Admin Invigilation Cockpit
-  useEffect(() => {
-    if (completedAttempt) return
-    sendPulse({
-      currentQuestionIndex: currentIdx + 1,
-      answeredCount: Object.keys(answers).length,
-      elapsedSeconds: Math.floor((Date.now() - startTimeRef.current) / 1000),
-      status: 'active',
-    })
-  }, [currentIdx, answers, completedAttempt, sendPulse])
 
   // ── Keyboard Shortcuts (A/B/C/D, 1/2/3/4, Arrows, M, C, DevTools Trap) ────
   useEffect(() => {
@@ -552,23 +514,14 @@ export function QuizPlayer({
         Math.floor((Date.now() - startTimeRef.current) / 1000)
       )
 
-      let score = 0
-      let maxScore = 0
-
-      shuffledQuestions.forEach((q, idx) => {
-        const qPoints = q.points || 1
-        maxScore += qPoints
-        const ans = (q.id && answers[q.id] !== undefined) ? answers[q.id] : answers[`q-${idx}`]
-        if (ans === q.correctIndex) {
-          score += qPoints
-        }
-      })
-
-      const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
-      const passed = percentage >= (quiz.passingPercentage || 60)
-
       // Convert displayed option selections back to master question keys for clean Firestore records
       const masterAnswers = convertDisplayedAnswersToMaster(answers, questionMap)
+
+      // Cryptographically evaluate submission without exposing answers prior to submission
+      const { score, maxScore, percentage, passed } = await evaluateQuizSubmission(
+        quiz,
+        masterAnswers
+      )
 
       // Calculate Forensic Integrity Score (0..100)
       let integrityScore = 100
@@ -640,37 +593,6 @@ export function QuizPlayer({
       if (onCompleted) {
         onCompleted(fullAttempt)
       }
-
-      // ── Step 3: Non-Blocking Background Google Drive Evidence Sync ──────────
-      // Runs silently in the background; updates Firestore attempt record with Drive link once done.
-      const snapshotsToUpload = suspiciousFlagsRef.current.filter((f) => !!f.snapshot).slice(0, 25)
-      if (snapshotsToUpload.length > 0) {
-        uploadQuizEvidenceToDrive({
-          attemptId,
-          quizId: quiz.id,
-          quizTitle: quiz.title,
-          studentName: user.name || user.email.split('@')[0],
-          studentEmail: user.email,
-          completedAt: attemptPayload.completedAt,
-          snapshots: snapshotsToUpload.map((s) => ({
-            timestamp: s.timestamp,
-            type: s.type,
-            detail: s.detail,
-            snapshot: s.snapshot,
-          })),
-        })
-          .then((driveRes) => {
-            if (driveRes?.driveFolderLink) {
-              updateQuizAttemptDriveLink(attemptId, driveRes.driveFolderLink)
-              setCompletedAttempt((prev) =>
-                prev ? { ...prev, driveEvidenceFolderLink: driveRes.driveFolderLink } : prev
-              )
-            }
-          })
-          .catch((err) => {
-            console.warn('Background Drive evidence upload failed:', err)
-          })
-      }
     } catch (err) {
       showToast(sanitizeErrorMessage(err, 'Failed to submit assessment.'), 'error')
     } finally {
@@ -692,6 +614,53 @@ export function QuizPlayer({
     return !!((q.id && markedForReview[q.id]) || markedForReview[`q-${idx}`])
   }).length
   const unansweredCount = totalQuestions - answeredCount
+
+  // ── Scheduling Security Gate ───────────────────────────────────────────────
+  const isScheduledInFuture = useMemo(() => {
+    if (!quiz.scheduledStartTime) return false
+    return new Date(quiz.scheduledStartTime).getTime() > Date.now()
+  }, [quiz.scheduledStartTime])
+
+  if (isScheduledInFuture) {
+    return (
+      <div
+        style={{
+          maxWidth: 620,
+          margin: '3rem auto',
+          padding: '2.5rem 2rem',
+          textAlign: 'center',
+          background: '#ffffff',
+          border: '2px solid #0b1b33',
+          boxShadow: '5px 5px 0 0 #0b1b33',
+        }}
+      >
+        <Clock size={48} color="#D97706" style={{ margin: '0 auto 1rem' }} />
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0b1b33', margin: '0 0 0.5rem' }}>
+          Assessment Scheduled
+        </h2>
+        <p style={{ color: '#475569', fontSize: '0.95rem', lineHeight: 1.5, margin: '0 0 1.5rem' }}>
+          This assessment is scheduled to open on{' '}
+          <strong>{new Date(quiz.scheduledStartTime!).toLocaleString()}</strong>.
+          The evaluation cockpit cannot be accessed before the scheduled start time.
+        </p>
+        <button
+          onClick={onBack}
+          style={{
+            padding: '0.65rem 1.5rem',
+            background: '#0b2545',
+            color: '#ffffff',
+            border: '2px solid #0b1b33',
+            borderRadius: 0,
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '3px 3px 0 0 #fea619',
+          }}
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -720,7 +689,7 @@ export function QuizPlayer({
               borderRadius: 16,
               padding: '2.5rem 2rem',
               textAlign: 'center',
-              boxShadow: '8px 8px 0 #001e40',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
               border: '1px solid #E2E8F0',
             }}
           >
@@ -811,7 +780,7 @@ export function QuizPlayer({
                 fontSize: '0.95rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                boxShadow: '3px 3px 0 #001e40',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.28)',
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
@@ -869,7 +838,7 @@ export function QuizPlayer({
           position: 'sticky',
           top: 0,
           zIndex: 40,
-          boxShadow: '3px 3px 0 #001e40',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -1039,7 +1008,7 @@ export function QuizPlayer({
                 fontSize: '0.85rem',
                 fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: '3px 3px 0 #001e40',
+                boxShadow: '0 2px 8px rgba(0, 30, 64, 0.25)',
               }}
             >
               <Send size={15} /> Submit Assessment
@@ -1090,51 +1059,6 @@ export function QuizPlayer({
             onRegisterMediaStream={handleRegisterMediaStream}
           />
         </GlassCard>
-      )}
-
-      {/* Invigilator Live Warning Banner */}
-      {invigilatorWarning && (
-        <div
-          style={{
-            background: '#FEF2F2',
-            border: '2px solid #EF4444',
-            borderRadius: 12,
-            padding: '1rem 1.25rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            color: '#991B1B',
-            boxShadow: '3px 3px 0 #001e40',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <AlertTriangle size={24} color="#DC2626" style={{ flexShrink: 0 }} />
-            <div>
-              <strong style={{ fontSize: '0.92rem', display: 'block' }}>⚠️ Official Notice from Assessment Invigilator:</strong>
-              <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', fontWeight: 550, color: '#B91C1C' }}>
-                {invigilatorWarning}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setInvigilatorWarning(null)}
-            style={{
-              background: '#DC2626',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '0.45rem 1rem',
-              fontSize: '0.8rem',
-              fontWeight: 650,
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            I Acknowledge
-          </button>
-        </div>
       )}
 
       {/* Main Grid: Question Card on Left, Palette & Proctoring on Right */}
@@ -1383,7 +1307,7 @@ export function QuizPlayer({
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     cursor: 'pointer',
-                    boxShadow: '3px 3px 0 #001e40',
+                    boxShadow: '0 2px 8px rgba(0, 30, 64, 0.2)',
                   }}
                   title="Next question (Hot-key: →)"
                 >
@@ -1404,7 +1328,7 @@ export function QuizPlayer({
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     cursor: 'pointer',
-                    boxShadow: '3px 3px 0 #001e40',
+                    boxShadow: '0 2px 8px rgba(5, 150, 105, 0.25)',
                   }}
                 >
                   Review & Submit <Send size={15} />
@@ -1600,7 +1524,7 @@ export function QuizPlayer({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.4rem',
-                  boxShadow: '3px 3px 0 #001e40',
+                  boxShadow: '0 2px 6px rgba(0, 30, 64, 0.2)',
                 }}
               >
                 <Send size={14} /> Submit Assessment
@@ -1719,7 +1643,7 @@ export function QuizPlayer({
               padding: '1.5rem',
               maxWidth: 420,
               width: '100%',
-              boxShadow: '8px 8px 0 #001e40',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>

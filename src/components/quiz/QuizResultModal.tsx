@@ -421,19 +421,25 @@ export function QuizResultModal({
                         gap: '0.4rem',
                       }}
                     >
-                      {isCorrect ? (
-                        <>
-                          <CheckCircle2 size={14} /> You answered correctly: Option {String.fromCharCode(65 + (selectedOpt as number))} ({q.options[selectedOpt as number]})
-                        </>
-                      ) : hasAnswered ? (
-                        <>
-                          <XCircle size={14} /> You chose: Option {String.fromCharCode(65 + (selectedOpt as number))} ({q.options[selectedOpt as number]}) — Correct was: Option {String.fromCharCode(65 + q.correctIndex)} ({q.options[q.correctIndex]})
-                        </>
-                      ) : (
-                        <>
-                          <span>⚠️ Not answered — Correct was: Option {String.fromCharCode(65 + q.correctIndex)} ({q.options[q.correctIndex]})</span>
-                        </>
-                      )}
+                      {(() => {
+                        const correctLabel =
+                          typeof q.correctIndex === 'number' && q.options[q.correctIndex]
+                            ? `Option ${String.fromCharCode(65 + q.correctIndex)} (${q.options[q.correctIndex]})`
+                            : 'Recorded securely'
+                        return isCorrect ? (
+                          <>
+                            <CheckCircle2 size={14} /> You answered correctly: Option {String.fromCharCode(65 + (selectedOpt as number))} ({q.options[selectedOpt as number]})
+                          </>
+                        ) : hasAnswered ? (
+                          <>
+                            <XCircle size={14} /> You chose: Option {String.fromCharCode(65 + (selectedOpt as number))} ({q.options[selectedOpt as number]}) — Correct was: {correctLabel}
+                          </>
+                        ) : (
+                          <>
+                            <span>⚠️ Not answered — Correct was: {correctLabel}</span>
+                          </>
+                        )
+                      })()}
                     </div>
 
                     {/* Explanation */}
