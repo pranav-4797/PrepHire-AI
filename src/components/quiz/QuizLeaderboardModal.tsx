@@ -18,8 +18,10 @@ import {
   Camera,
   CheckCircle2,
   XCircle,
+  FileText,
 } from 'lucide-react'
 import type { Quiz, QuizAttempt } from '../../types/quiz'
+import { exportQuizLeaderboardToDocx } from '../../utils/quizDocxExport'
 
 interface RankedAttempt extends QuizAttempt {
   rank: number
@@ -64,6 +66,7 @@ export function QuizLeaderboardModal({
   const [sortBy, setSortBy] = useState<'rank' | 'fastest' | 'integrity' | 'latest'>('rank')
   const [expandedAttemptId, setExpandedAttemptId] = useState<string | null>(null)
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [exportingDocx, setExportingDocx] = useState(false)
 
   // Rank attempts: score desc, time asc
   const rankedAttempts: RankedAttempt[] = useMemo(() => {
@@ -206,6 +209,21 @@ export function QuizLeaderboardModal({
     showToast?.('Leaderboard gradebook exported as CSV', 'success')
   }
 
+  // DOCX Export
+  async function handleExportDocx() {
+    if (rankedAttempts.length === 0) return
+    try {
+      setExportingDocx(true)
+      await exportQuizLeaderboardToDocx(quiz, attempts, stats)
+      showToast?.('Examination report exported as Word Document (.docx)', 'success')
+    } catch (err: any) {
+      console.error('Failed to export DOCX:', err)
+      showToast?.('Failed to export DOCX report. Please try again.', 'error')
+    } finally {
+      setExportingDocx(false)
+    }
+  }
+
   return (
     <div
       style={{
@@ -296,6 +314,29 @@ export function QuizLeaderboardModal({
             )}
 
             <button
+              onClick={handleExportDocx}
+              disabled={rankedAttempts.length === 0 || exportingDocx}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: '#1D4ED8',
+                color: '#ffffff',
+                border: '1px solid #2563EB',
+                borderRadius: 6,
+                padding: '0.4rem 0.75rem',
+                fontSize: '0.78rem',
+                fontWeight: 650,
+                cursor: rankedAttempts.length === 0 || exportingDocx ? 'not-allowed' : 'pointer',
+                opacity: exportingDocx ? 0.7 : 1,
+              }}
+              title="Export complete assessment gradebook to Word Document (.docx) format"
+            >
+              <FileText size={13} />
+              <span>{exportingDocx ? 'Generating…' : 'Export DOCX'}</span>
+            </button>
+
+            <button
               onClick={handleExportCSV}
               disabled={rankedAttempts.length === 0}
               style={{
@@ -311,6 +352,7 @@ export function QuizLeaderboardModal({
                 fontWeight: 600,
                 cursor: rankedAttempts.length === 0 ? 'not-allowed' : 'pointer',
               }}
+              title="Export leaderboard as CSV spreadsheet"
             >
               <Download size={13} />
               <span>Export CSV</span>

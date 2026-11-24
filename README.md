@@ -26,6 +26,11 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📑 **Institutional Word Document (.docx) Gradebook Export (`quizDocxExport.ts` & `QuizLeaderboardModal.tsx`)**:
+  - **Formatted Word Gradebook Generation**: Added a 1-click **Export DOCX** button in the Quiz Leaderboard alongside CSV export.
+  - **Comprehensive Tabular Breakdown**: Generates an executive examination report with executive statistics banner, institutional table styling, candidate full names, branch & roll numbers, questions attempted count, questions correct count, total marks/percentage, and proctoring integrity scores.
+  - **Optimized Bundle Splitting**: Isolated document processing into a dedicated `vendor-docs` chunk in `vite.config.ts`.
+
 - 📄 **High-Fidelity Structured Resume Parser & Comprehensive Profile Showcase (`resume.ts` & `App.tsx`)**:
   - **Spatial Multi-Line PDF Reconstitution**: Upgraded `extractResumeText` with Y-coordinate change tracking and `hasEOL` detection, preserving line and paragraph breaks across all pages.
   - **Section-Isolated Extraction & Heading Disambiguation**: Restructured `offlineParseResume` to match section headings at line beginnings, preventing mid-sentence keywords from capturing unintended prose.
