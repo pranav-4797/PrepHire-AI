@@ -21,6 +21,7 @@ import { QuizResultModal } from './QuizResultModal'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { QuizProctorCamera } from './QuizProctorCamera'
 import { generateShuffledQuiz, convertDisplayedAnswersToMaster } from '../../utils/quizShuffle'
+import { stripAnswersForStudent, evaluateQuizSubmission } from '../../utils/quizCipher'
 
 function GlassCard({
   children,
@@ -116,12 +117,17 @@ export function QuizPlayer({
   }, [])
 
   // ── Anti-Cheating Deterministic Question & Option Shuffling ────────────────
+  // Sanitizes questions so candidates NEVER receive plaintext answer keys in memory or state.
+  const candidateSafeQuestions = useMemo(() => {
+    return stripAnswersForStudent(quiz.questions)
+  }, [quiz.questions])
+
   const { shuffledQuestions, questionMap } = useMemo(() => {
-    return generateShuffledQuiz(quiz.questions, `${user.uid}_${quiz.id}`, {
+    return generateShuffledQuiz(candidateSafeQuestions, `${user.uid}_${quiz.id}`, {
       shuffleQuestions: quiz.shuffleQuestions !== false,
       shuffleOptions: quiz.shuffleOptions !== false,
     })
-  }, [quiz.questions, quiz.id, quiz.shuffleQuestions, quiz.shuffleOptions, user.uid])
+  }, [candidateSafeQuestions, quiz.id, quiz.shuffleQuestions, quiz.shuffleOptions, user.uid])
 
   const totalQuestions = shuffledQuestions.length
   const currentQ = shuffledQuestions[currentIdx]
@@ -508,23 +514,14 @@ export function QuizPlayer({
         Math.floor((Date.now() - startTimeRef.current) / 1000)
       )
 
-      let score = 0
-      let maxScore = 0
-
-      shuffledQuestions.forEach((q, idx) => {
-        const qPoints = q.points || 1
-        maxScore += qPoints
-        const ans = (q.id && answers[q.id] !== undefined) ? answers[q.id] : answers[`q-${idx}`]
-        if (ans === q.correctIndex) {
-          score += qPoints
-        }
-      })
-
-      const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
-      const passed = percentage >= (quiz.passingPercentage || 60)
-
       // Convert displayed option selections back to master question keys for clean Firestore records
       const masterAnswers = convertDisplayedAnswersToMaster(answers, questionMap)
+
+      // Cryptographically evaluate submission without exposing answers prior to submission
+      const { score, maxScore, percentage, passed } = await evaluateQuizSubmission(
+        quiz,
+        masterAnswers
+      )
 
       // Calculate Forensic Integrity Score (0..100)
       let integrityScore = 100
@@ -617,6 +614,53 @@ export function QuizPlayer({
     return !!((q.id && markedForReview[q.id]) || markedForReview[`q-${idx}`])
   }).length
   const unansweredCount = totalQuestions - answeredCount
+
+  // ── Scheduling Security Gate ───────────────────────────────────────────────
+  const isScheduledInFuture = useMemo(() => {
+    if (!quiz.scheduledStartTime) return false
+    return new Date(quiz.scheduledStartTime).getTime() > Date.now()
+  }, [quiz.scheduledStartTime])
+
+  if (isScheduledInFuture) {
+    return (
+      <div
+        style={{
+          maxWidth: 620,
+          margin: '3rem auto',
+          padding: '2.5rem 2rem',
+          textAlign: 'center',
+          background: '#ffffff',
+          border: '2px solid #0b1b33',
+          boxShadow: '5px 5px 0 0 #0b1b33',
+        }}
+      >
+        <Clock size={48} color="#D97706" style={{ margin: '0 auto 1rem' }} />
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0b1b33', margin: '0 0 0.5rem' }}>
+          Assessment Scheduled
+        </h2>
+        <p style={{ color: '#475569', fontSize: '0.95rem', lineHeight: 1.5, margin: '0 0 1.5rem' }}>
+          This assessment is scheduled to open on{' '}
+          <strong>{new Date(quiz.scheduledStartTime!).toLocaleString()}</strong>.
+          The evaluation cockpit cannot be accessed before the scheduled start time.
+        </p>
+        <button
+          onClick={onBack}
+          style={{
+            padding: '0.65rem 1.5rem',
+            background: '#0b2545',
+            color: '#ffffff',
+            border: '2px solid #0b1b33',
+            borderRadius: 0,
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '3px 3px 0 0 #fea619',
+          }}
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    )
+  }
 
   return (
     <>

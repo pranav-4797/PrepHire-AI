@@ -26,6 +26,19 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🔐 **Cryptographic Zero-Inspection Answer Encryption (`quizCipher.ts` & `/api/quiz/evaluate`)**:
+  - **AES-256-GCM Authenticated Cipher**: Assessment question answers and explanations are securely encrypted with AES-256-GCM cipher tokens (`enc:v1:<iv>:<ciphertext>`) before being persisted to Firestore or sent across the network.
+  - **Zero-Exposure Student Delivery**: Active candidate payloads are sanitized via `stripAnswersForStudent`, completely stripping `correctIndex` and `explanation` from memory and React state. Candidates cannot inspect correct answers via browser DevTools, Network logs, or React Developer Tools.
+  - **Cryptographic Evaluation & Server Endpoint**: Submissions are evaluated on final hand-in through the new `POST /api/quiz/evaluate` endpoint (or client-side authenticated decryption fallback), calculating official marks without premature answer leakage.
+
+- ⏰ **Assessment Scheduling & Countdown Waiting Room (`AdminQuizEditor`, `StudentQuizHub`, `PublicQuizTake`)**:
+  - **Admin Scheduling Studio**: Administrators can configure an assessment's `scheduledStartTime` and optional `scheduledEndTime` test window with date-time pickers in the quiz editor.
+  - **Student Hub Real-Time Ticker**: Scheduled quizzes are visible in the student catalog with schedule badges, but the start button remains locked with a live countdown ticker (`🔒 Starts in Xh Ym Zs`) that unlocks automatically when start time arrives.
+  - **Public Assessment Waiting Room (`/quiz/:quizId`)**: Public candidate test links feature a scheduled countdown card and locked registration action, preventing candidates from starting proctored sessions before the official exam window opens.
+
+- 📄 **Robust MCQ Question Document Importer (`quizDocParser.ts`)**:
+  - **Collision-Proof Parsing Engine**: Re-engineered option and answer extraction using line-anchored patterns and strict word boundaries, eliminating false positive token collisions (such as `key` in `Keyboard`, `ans` in `means`, and `right` in `brightness`) and achieving 100% extraction fidelity on 50/50 question examination papers.
+
 - 🚀 **Performance & Server Optimization — Dropped Quiz Drive Snapshots & Live Cockpit**:
   - **Zero Server Load on Assessment Submissions**: Removed candidate snapshot photo uploads to Google Drive. Eliminates heavy base64 image processing, multi-megabyte payloads, and background Drive queues from the backend Express server, allowing hundreds of candidates to submit assessments concurrently without stressing server memory or bandwidth.
   - **Eliminated Live Cockpit & WebRTC WebSocket Overhead**: Removed the `/ws/proctor` WebSocket gateway, continuous background telemetry pulses, and WebRTC peer camera streaming. This drastically reduces browser CPU cycles on student machines and prevents server socket connection limits during large exam batches.

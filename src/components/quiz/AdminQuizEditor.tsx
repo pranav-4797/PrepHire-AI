@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   FileText,
   RotateCcw,
   Megaphone,
+  Clock,
 } from 'lucide-react'
 import { T } from '../../theme'
 import { BRANCHES } from '../../constants/branches'
@@ -21,6 +22,7 @@ import { createQuiz, updateQuiz } from '../../services/quiz.service'
 import { sanitizeErrorMessage } from '../../utils/errorSanitizer'
 import { parseQuizDocument } from '../../utils/quizDocParser'
 import { auth } from '../../firebase/firebase'
+import { encryptQuizQuestions, decryptQuizQuestions } from '../../utils/quizCipher'
 
 function GlassCard({
   children,
@@ -94,6 +96,20 @@ export function AdminQuizEditor({
   const [resultsDeclared, setResultsDeclared] = useState(
     initialQuiz?.resultsDeclared !== undefined ? initialQuiz.resultsDeclared : false
   )
+
+  // Scheduling State
+  const [isScheduled, setIsScheduled] = useState(!!initialQuiz?.scheduledStartTime)
+  const [scheduledStartTime, setScheduledStartTime] = useState(
+    initialQuiz?.scheduledStartTime
+      ? new Date(initialQuiz.scheduledStartTime).toISOString().slice(0, 16)
+      : ''
+  )
+  const [scheduledEndTime, setScheduledEndTime] = useState(
+    initialQuiz?.scheduledEndTime
+      ? new Date(initialQuiz.scheduledEndTime).toISOString().slice(0, 16)
+      : ''
+  )
+
   const [questions, setQuestions] = useState<QuizQuestion[]>(
     initialQuiz?.questions && initialQuiz.questions.length > 0
       ? initialQuiz.questions
@@ -110,6 +126,15 @@ export function AdminQuizEditor({
           },
         ]
   )
+
+  // Decrypt questions for authenticated Admin editing view if encrypted
+  useEffect(() => {
+    if (initialQuiz?.questions && initialQuiz.questions.length > 0) {
+      decryptQuizQuestions(initialQuiz.questions, initialQuiz.id).then((dec) => {
+        setQuestions(dec)
+      })
+    }
+  }, [initialQuiz])
 
   const [saving, setSaving] = useState(false)
   const [showAiModal, setShowAiModal] = useState(false)
@@ -363,9 +388,16 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
       }
     }
 
+    if (isScheduled && !scheduledStartTime) {
+      showToast('Please select a scheduled start date & time or disable scheduled mode.', 'error')
+      return
+    }
+
     setSaving(true)
     try {
       const now = new Date().toISOString()
+      const secureQuestions = await encryptQuizQuestions(questions, initialQuiz?.id)
+
       const payload: Omit<Quiz, 'id'> = {
         title: title.trim(),
         description: description.trim(),
@@ -376,7 +408,9 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
         passingPercentage: Math.max(1, Math.min(100, passingPercentage)),
         allowRetake,
         resultsDeclared,
-        questions,
+        questions: secureQuestions,
+        scheduledStartTime: isScheduled && scheduledStartTime ? new Date(scheduledStartTime).toISOString() : undefined,
+        scheduledEndTime: isScheduled && scheduledEndTime ? new Date(scheduledEndTime).toISOString() : undefined,
         createdBy: userEmail || 'admin',
         createdAt: initialQuiz?.createdAt || now,
         updatedAt: now,
@@ -758,6 +792,106 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
               fontFamily: 'inherit',
             }}
           />
+        </div>
+
+        {/* Assessment Scheduling Section */}
+        <div
+          style={{
+            marginTop: '1.25rem',
+            padding: '1rem',
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: 8,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              marginBottom: isScheduled ? '1rem' : 0,
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Clock size={16} color="#0b2545" />
+                <strong style={{ fontSize: '0.92rem', color: T.txtPri }}>
+                  Assessment Scheduling (Timed Release)
+                </strong>
+              </div>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.78rem', color: T.txtSec }}>
+                Schedule this assessment for a specific date & time. The quiz will show on student dashboards with a live countdown, but candidates cannot begin until the scheduled start time.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsScheduled(!isScheduled)}
+              style={{
+                padding: '0.4rem 0.85rem',
+                borderRadius: 6,
+                border: `1px solid ${isScheduled ? '#10B981' : '#CBD5E1'}`,
+                background: isScheduled ? '#ECFDF5' : '#FFFFFF',
+                color: isScheduled ? '#047857' : '#64748B',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {isScheduled ? '✓ Scheduled Mode Active' : '+ Enable Schedule'}
+            </button>
+          </div>
+
+          {isScheduled && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '1rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid #E2E8F0',
+              }}
+            >
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 650, color: T.txtPri, marginBottom: '0.35rem' }}>
+                  Scheduled Start Date & Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduledStartTime}
+                  onChange={(e) => setScheduledStartTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: 6,
+                    border: '1px solid #D1D5DB',
+                    fontSize: '0.88rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 650, color: T.txtPri, marginBottom: '0.35rem' }}>
+                  Cutoff / End Window (Optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduledEndTime}
+                  onChange={(e) => setScheduledEndTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: 6,
+                    border: '1px solid #D1D5DB',
+                    fontSize: '0.88rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </GlassCard>
 

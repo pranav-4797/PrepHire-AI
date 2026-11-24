@@ -789,7 +789,7 @@ export function QuizLeaderboardModal({
                                                   ? q.options[candidateChoice]
                                                   : 'Unanswered'}
                                               </strong>
-                                              {!isCorrect && (
+                                              {!isCorrect && typeof q.correctIndex === 'number' && q.options[q.correctIndex] && (
                                                 <span style={{ color: '#059669', marginLeft: 6 }}>
                                                   (Correct: {q.options[q.correctIndex]})
                                                 </span>

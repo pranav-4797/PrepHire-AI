@@ -11,6 +11,7 @@ import rateLimit from 'express-rate-limit'
 import multer from 'multer'
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { execFile, execSync } from 'node:child_process'
 import { google } from 'googleapis'
 import ffmpegStatic from 'ffmpeg-static'
@@ -461,6 +462,104 @@ app.get('/api/drive/queue-status', (_req, res) => {
     success: true,
     ...driveQueue.getQueueStats(),
   })
+})
+
+// ── Cryptographic Quiz Submission Evaluation ─────────────────────────────────
+// Allows zero-trust server-side evaluation of candidate attempts without leaking
+// correct answers to client DevTools or network inspections.
+const MASTER_QUIZ_SALT = 'PrepHire_MIT_AoE_Encrypted_Quiz_Secret_2026_x89'
+
+async function decryptAnswerServer(cipherToken, quizId) {
+  if (!cipherToken) return null
+  if (cipherToken.startsWith('enc:v1:')) {
+    try {
+      const parts = cipherToken.split(':')
+      if (parts.length < 4) return null
+      const iv = Buffer.from(parts[2], 'base64')
+      const cipherData = Buffer.from(parts[3], 'base64')
+      const enc = new TextEncoder()
+      const seed = `${MASTER_QUIZ_SALT}:${quizId || 'global'}`
+      const subtle = crypto.webcrypto?.subtle || crypto.subtle
+      const keyHash = await subtle.digest('SHA-256', enc.encode(seed))
+      const key = await subtle.importKey('raw', keyHash, { name: 'AES-GCM' }, false, ['decrypt'])
+      const decrypted = await subtle.decrypt({ name: 'AES-GCM', iv }, key, cipherData)
+      const dec = new TextDecoder()
+      return JSON.parse(dec.decode(decrypted))
+    } catch (e) {
+      console.warn('⚠️ Server answer decryption failed:', e.message)
+      return null
+    }
+  }
+  if (cipherToken.startsWith('enc:v0:')) {
+    try {
+      const b64 = cipherToken.replace('enc:v0:', '')
+      return JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+app.post('/api/quiz/evaluate', express.json(), async (req, res) => {
+  try {
+    const { quizId, answers = {} } = req.body
+    if (!quizId) {
+      return res.status(400).json({ error: 'quizId is required' })
+    }
+
+    if (!db) {
+      return res.status(503).json({ error: 'Firestore is not initialized on server' })
+    }
+
+    const quizDoc = await db.collection('quizzes').doc(quizId).get()
+    if (!quizDoc.exists) {
+      return res.status(404).json({ error: 'Quiz not found' })
+    }
+
+    const quizData = quizDoc.data()
+    const questions = quizData.questions || []
+
+    let score = 0
+    let maxScore = 0
+
+    for (let idx = 0; idx < questions.length; idx++) {
+      const q = questions[idx]
+      const qPoints = q.points || 1
+      maxScore += qPoints
+
+      let correctIndex = q.correctIndex
+      if (typeof correctIndex !== 'number' && q.answerCipher) {
+        const dec = await decryptAnswerServer(q.answerCipher, quizId)
+        if (dec && typeof dec.correctIndex === 'number') {
+          correctIndex = dec.correctIndex
+        }
+      }
+
+      const candidateChoice =
+        q.id && answers[q.id] !== undefined
+          ? answers[q.id]
+          : answers[`q-${idx}`]
+
+      if (candidateChoice !== undefined && candidateChoice === correctIndex) {
+        score += qPoints
+      }
+    }
+
+    const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
+    const passed = percentage >= (quizData.passingPercentage || 60)
+
+    return res.json({
+      success: true,
+      score,
+      maxScore,
+      percentage,
+      passed,
+    })
+  } catch (err) {
+    console.error('❌ Failed to evaluate quiz submission:', err.message || err)
+    return res.status(500).json({ error: 'Failed to evaluate quiz submission.' })
+  }
 })
 
 // ── Courses CRUD API ──────────────────────────────────────────────────────────

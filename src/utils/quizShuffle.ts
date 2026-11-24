@@ -112,7 +112,10 @@ export function generateShuffledQuiz(
       ...q,
       originalQuestionIndex: originalIndex,
       options: finalOptions,
-      correctIndex: originalToDisplayed[q.correctIndex],
+      correctIndex:
+        typeof q.correctIndex === 'number'
+          ? originalToDisplayed[q.correctIndex]
+          : undefined,
       displayedToOriginalOptionIndex: displayedToOriginal,
       originalToDisplayedOptionIndex: originalToDisplayed,
     }

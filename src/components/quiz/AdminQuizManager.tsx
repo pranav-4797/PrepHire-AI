@@ -598,6 +598,22 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                     >
                       🏛️ {branchLabel}
                     </span>
+
+                    {q.scheduledStartTime && (
+                      <span
+                        style={{
+                          background: '#EFF6FF',
+                          color: '#1D4ED8',
+                          padding: '0.2rem 0.55rem',
+                          borderRadius: 6,
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          border: '1px solid #BFDBFE',
+                        }}
+                      >
+                        📅 Scheduled: {new Date(q.scheduledStartTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    )}
                   </div>
 
                   <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: T.txtPri }}>
