@@ -77,6 +77,10 @@ const requestBody = (prompt, sys, images = null) => {
   return JSON.stringify({
     system_instruction: { parts: [{ text: sys || '' }] },
     contents: [{ role: 'user', parts }],
+    generationConfig: {
+      maxOutputTokens: 8192,
+      temperature: 0.1,
+    },
   })
 }
 
