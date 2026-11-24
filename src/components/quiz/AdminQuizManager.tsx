@@ -599,7 +599,7 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                       🏛️ {branchLabel}
                     </span>
 
-                    {q.scheduledStartTime && (
+                    {(q.scheduledStartTime || q.scheduledEndTime) && (
                       <span
                         style={{
                           background: '#EFF6FF',
@@ -611,7 +611,8 @@ export function AdminQuizManager({ userEmail, showToast }: AdminQuizManagerProps
                           border: '1px solid #BFDBFE',
                         }}
                       >
-                        📅 Scheduled: {new Date(q.scheduledStartTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                        📅 Start: {q.scheduledStartTime ? new Date(q.scheduledStartTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Immediate'}
+                        {q.scheduledEndTime ? ` • End: ${new Date(q.scheduledEndTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}` : ''}
                       </span>
                     )}
                   </div>

@@ -79,7 +79,10 @@ export function PublicQuizTake({
     quiz?.scheduledStartTime && now !== null && new Date(quiz.scheduledStartTime).getTime() > now
   )
   const isWindowExpired = Boolean(
-    quiz?.scheduledEndTime && now !== null && new Date(quiz.scheduledEndTime).getTime() <= now
+    quiz?.scheduledEndTime &&
+    now !== null &&
+    new Date(quiz.scheduledEndTime).getTime() <= now &&
+    !isScheduledFuture
   )
 
   // Pre-fill user information if already signed in
@@ -511,10 +514,16 @@ export function PublicQuizTake({
           <h3 style={{ margin: '0 0 0.35rem', fontSize: '1.15rem', fontWeight: 800, color: '#1E40AF' }}>
             Assessment Scheduled
           </h3>
-          <p style={{ margin: '0 0 0.85rem', fontSize: '0.88rem', color: '#1E3A8A' }}>
-            This proctored assessment will unlock on{' '}
-            <strong>{new Date(quiz.scheduledStartTime!).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</strong>
-          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem', color: '#1E3A8A', margin: '0 0 1rem' }}>
+            <div>
+              <strong>📅 Start:</strong> {new Date(quiz.scheduledStartTime!).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+            </div>
+            {quiz.scheduledEndTime && (
+              <div>
+                <strong>⏳ End:</strong> {new Date(quiz.scheduledEndTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+              </div>
+            )}
+          </div>
           <div
             style={{
               display: 'inline-block',
@@ -544,7 +553,15 @@ export function PublicQuizTake({
             fontWeight: 700,
           }}
         >
-          Assessment submission window closed on {new Date(quiz.scheduledEndTime!).toLocaleString()}.
+          <div style={{ fontWeight: 800, fontSize: '1.05rem', marginBottom: '0.35rem' }}>
+            Assessment Window Closed
+          </div>
+          <div style={{ fontSize: '0.82rem', opacity: 0.9 }}>
+            {quiz.scheduledStartTime && (
+              <span>Start: {new Date(quiz.scheduledStartTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} • </span>
+            )}
+            <span>Closed: {new Date(quiz.scheduledEndTime!).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+          </div>
         </div>
       )}
 

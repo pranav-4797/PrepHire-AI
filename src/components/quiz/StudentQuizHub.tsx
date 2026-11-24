@@ -517,7 +517,10 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
               q.scheduledStartTime && now !== null && new Date(q.scheduledStartTime).getTime() > now
             )
             const isWindowExpired = Boolean(
-              q.scheduledEndTime && now !== null && new Date(q.scheduledEndTime).getTime() <= now
+              q.scheduledEndTime &&
+              now !== null &&
+              new Date(q.scheduledEndTime).getTime() <= now &&
+              !isScheduledFuture
             )
 
             return (
@@ -592,30 +595,77 @@ export function StudentQuizHub({ user, showToast, onActiveQuizChange }: StudentQ
                     <span>📊 {q.difficulty}</span>
                   </div>
 
-                  {q.scheduledStartTime && (
+                  {(q.scheduledStartTime || q.scheduledEndTime) && (
                     <div
                       style={{
                         marginTop: '0.65rem',
-                        padding: '0.35rem 0.65rem',
-                        borderRadius: 6,
-                        fontSize: '0.76rem',
-                        fontWeight: 600,
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: 8,
+                        fontSize: '0.78rem',
                         background: isScheduledFuture ? '#EFF6FF' : isWindowExpired ? '#FEF2F2' : '#ECFDF5',
-                        color: isScheduledFuture ? '#1D4ED8' : isWindowExpired ? '#B91C1C' : '#047857',
+                        color: isScheduledFuture ? '#1D4ED8' : isWindowExpired ? '#991B1B' : '#065F46',
                         border: `1px solid ${isScheduledFuture ? '#BFDBFE' : isWindowExpired ? '#FECACA' : '#A7F3D0'}`,
                         display: 'flex',
-                        alignItems: 'center',
+                        flexDirection: 'column',
                         gap: '0.4rem',
                       }}
                     >
-                      <Clock size={12} />
-                      <span>
-                        {isScheduledFuture
-                          ? `Starts ${new Date(q.scheduledStartTime).toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${new Date(q.scheduledStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • In ${formatCountdown(new Date(q.scheduledStartTime).getTime() - (now || 0))}`
-                          : isWindowExpired
-                          ? 'Assessment Window Closed'
-                          : 'Assessment Live Now'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 800 }}>
+                          <Clock size={13} />
+                          {isScheduledFuture
+                            ? `Starts in ${formatCountdown(new Date(q.scheduledStartTime!).getTime() - (now || 0))}`
+                            : isWindowExpired
+                            ? 'Assessment Window Closed'
+                            : '🟢 Live Assessment Open'}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '0.12rem 0.45rem',
+                            borderRadius: 4,
+                            background: isScheduledFuture ? '#DBEAFE' : isWindowExpired ? '#FEE2E2' : '#D1FAE5',
+                          }}
+                        >
+                          {isScheduledFuture ? 'Scheduled' : isWindowExpired ? 'Closed' : 'Active'}
+                        </span>
+                      </div>
+
+                      {/* Explicit Start and End Date & Time Details */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.2rem',
+                          fontSize: '0.74rem',
+                          borderTop: '1px solid rgba(0,0,0,0.06)',
+                          paddingTop: '0.35rem',
+                        }}
+                      >
+                        {q.scheduledStartTime && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontWeight: 700, color: '#334155' }}>📅 Start:</span>
+                            <span>
+                              {new Date(q.scheduledStartTime).toLocaleString([], {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })}
+                            </span>
+                          </div>
+                        )}
+                        {q.scheduledEndTime && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontWeight: 700, color: '#334155' }}>⏳ End:</span>
+                            <span>
+                              {new Date(q.scheduledEndTime).toLocaleString([], {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

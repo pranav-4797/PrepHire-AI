@@ -66,6 +66,14 @@ interface AdminQuizEditorProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 }
 
+function toLocalDatetimeInput(dateStr?: string): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export function AdminQuizEditor({
   initialQuiz,
   initialQuestions,
@@ -97,17 +105,13 @@ export function AdminQuizEditor({
     initialQuiz?.resultsDeclared !== undefined ? initialQuiz.resultsDeclared : false
   )
 
-  // Scheduling State
+  // Scheduling State (synchronized with local browser timezone)
   const [isScheduled, setIsScheduled] = useState(!!initialQuiz?.scheduledStartTime)
   const [scheduledStartTime, setScheduledStartTime] = useState(
-    initialQuiz?.scheduledStartTime
-      ? new Date(initialQuiz.scheduledStartTime).toISOString().slice(0, 16)
-      : ''
+    toLocalDatetimeInput(initialQuiz?.scheduledStartTime)
   )
   const [scheduledEndTime, setScheduledEndTime] = useState(
-    initialQuiz?.scheduledEndTime
-      ? new Date(initialQuiz.scheduledEndTime).toISOString().slice(0, 16)
-      : ''
+    toLocalDatetimeInput(initialQuiz?.scheduledEndTime)
   )
 
   const [questions, setQuestions] = useState<QuizQuestion[]>(
@@ -391,6 +395,13 @@ No markdown wrapping, no conversational prefix or suffix, strictly valid JSON.`
     if (isScheduled && !scheduledStartTime) {
       showToast('Please select a scheduled start date & time or disable scheduled mode.', 'error')
       return
+    }
+
+    if (isScheduled && scheduledStartTime && scheduledEndTime) {
+      if (new Date(scheduledEndTime).getTime() <= new Date(scheduledStartTime).getTime()) {
+        showToast('Cutoff / End time must be after the Scheduled Start time.', 'error')
+        return
+      }
     }
 
     setSaving(true)
