@@ -26,6 +26,14 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📱 **Mobile-First Layout Hardening (2026-11-26)**: Comprehensive layout-only responsiveness for all pages including landing, without changing a single colour or the design language.
+  - `overflow-x: clip` on `html, body` prevents sideways scroll while preserving `position: sticky` navbars.
+  - Inline `grid-template-columns` collapsed via attribute selectors at `<640px`: `repeat(4,1fr)` / `repeat(3,1fr)` → 2 columns; `1fr 1fr`, `2fr 1fr`, `1fr 200px`, `320px 1fr`, `minmax(320px,1fr)` → 1 column. Coding problem row `40px 1fr 110px 1fr` stacks vertically.
+  - Tables inside `.portal-main` become `display:block; overflow-x:auto` for horizontal scroll when needed.
+  - Landing `.nb-nav` gains `flex-wrap: wrap` at `<420px` with reduced padding/logo size for tight phone screens.
+  - `body { overflow-wrap: break-word }` allows long words/URLs to wrap instead of overflowing.
+  - Full build + lint clean; no colours or design language altered, only responsive sizing and flow.
+
 - 📑 **Institutional Word Document (.docx) Gradebook Export (`quizDocxExport.ts` & `QuizLeaderboardModal.tsx`)**:
   - **Formatted Word Gradebook Generation**: Added a 1-click **Export DOCX** button in the Quiz Leaderboard alongside CSV export.
   - **Comprehensive Tabular Breakdown**: Generates an executive examination report with executive statistics banner, institutional table styling, candidate full names, branch & roll numbers, questions attempted count, questions correct count, total marks/percentage, and proctoring integrity scores.
