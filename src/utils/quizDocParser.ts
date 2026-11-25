@@ -41,8 +41,9 @@ export async function optimizeImageForOcr(
   blob: Blob | File,
   maxDim = 1600
 ): Promise<{ mimeType: string; data: string }> {
+  let bitmap: ImageBitmap | null = null
   try {
-    const bitmap = await createImageBitmap(blob)
+    bitmap = await createImageBitmap(blob)
     let { width, height } = bitmap
     if (width > maxDim || height > maxDim) {
       if (width > height) {
@@ -70,6 +71,8 @@ export async function optimizeImageForOcr(
     }
   } catch (err) {
     console.warn('Canvas pre-scaling fallback:', err)
+  } finally {
+    bitmap?.close()
   }
 
   const data = await fileToBase64(blob)
@@ -91,6 +94,9 @@ async function extractDocxPayload(file: File): Promise<ExtractedPayload> {
       { arrayBuffer },
       {
         convertImage: mammoth.images.imgElement((element) => {
+          if (images.length >= 6) {
+            return Promise.resolve({ src: '' })
+          }
           return element.read('base64').then((imgBase64) => {
             if (images.length < 6) {
               images.push({
@@ -117,9 +123,10 @@ async function extractPdfPayload(file: File): Promise<ExtractedPayload> {
   let text = ''
   const images: Array<{ mimeType: string; data: string }> = []
 
+  let doc: Awaited<ReturnType<typeof getDocument>['promise']> | null = null
   try {
     const buffer = new Uint8Array(await file.arrayBuffer())
-    const doc = await getDocument({ data: buffer }).promise
+    doc = await getDocument({ data: buffer }).promise
 
     // 1. Digital Text Stream Pass
     for (let i = 1; i <= Math.min(doc.numPages, 10); i++) {
@@ -159,6 +166,8 @@ async function extractPdfPayload(file: File): Promise<ExtractedPayload> {
     }
   } catch (err) {
     console.warn('PDF extraction failed:', err)
+  } finally {
+    await (doc as unknown as { destroy?: () => Promise<void> } | null)?.destroy?.().catch(() => {})
   }
 
   return { text: text.trim(), images }

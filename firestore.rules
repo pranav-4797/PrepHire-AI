@@ -63,8 +63,19 @@ service cloud.firestore {
     }
 
     match /courses/{courseId} {
-      allow read: if signedIn();
-      allow write: if signedIn() && (isAdmin() || isFaculty());
+      allow read: if signedIn() && (isAdmin() || isFaculty() || resource.data.status == 'approved');
+      allow create: if signedIn() && (
+        isAdmin() ||
+        (isFaculty() && request.resource.data.status == 'pending' && request.resource.data.createdByEmail == request.auth.token.email)
+      );
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (isFaculty() && resource.data.createdByEmail == request.auth.token.email && request.resource.data.status == resource.data.status)
+      );
+      allow delete: if signedIn() && (
+        isAdmin() ||
+        (isFaculty() && resource.data.createdByEmail == request.auth.token.email)
+      );
     }
 
     match /feedback/{feedbackId} {
@@ -73,7 +84,7 @@ service cloud.firestore {
     }
 
     match /quizzes/{quizId} {
-      allow read: if resource.data.published == true || signedIn();
+      allow read: if resource.data.published == true || (signedIn() && isAdmin());
       allow write: if signedIn() && isAdmin();
     }
 

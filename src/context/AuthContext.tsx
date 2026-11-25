@@ -49,6 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const nextProfile = await ensureUserProfile(nextUser.uid, nextUser.email, nextUser.displayName)
         if (mySeq !== seq) return
+        if (nextProfile?.disabled) {
+          safeStorage.remove('prephire_user_role')
+          setUser(null)
+          setProfile(null)
+          await logoutUser()
+          return
+        }
         setProfile(nextProfile)
         if (nextProfile?.role) safeStorage.set('prephire_user_role', nextProfile.role)
       } catch (error) {
@@ -127,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { credential, profile: nextProfile } = await registerWithEmail(input)
           setUser(credential.user)
           setProfile(nextProfile)
+          if (nextProfile?.role) safeStorage.set('prephire_user_role', nextProfile.role)
         } finally {
           setTimeout(() => {
             pendingRegistrationEmailRef.current = null

@@ -178,22 +178,31 @@ export function QuizLeaderboardModal({
       'Completed At',
     ]
 
-    const rows = rankedAttempts.map((a) => [
-      a.rank,
-      `"${(a.studentName || a.studentEmail.split('@')[0] || '').replace(/"/g, '""')}"`,
-      `"${a.studentEmail.replace(/"/g, '""')}"`,
-      `"${(a.department || '').replace(/"/g, '""')}"`,
-      `"${(a.rollNumber || '').replace(/"/g, '""')}"`,
-      a.score,
-      a.maxScore,
-      `${a.percentage}%`,
-      a.passed ? 'PASSED' : 'FAILED',
-      `"${formatDuration(a.timeSpentSeconds)}"`,
-      `${a.calculatedIntegrity}%`,
-      a.violationCount,
-      `"${(a.driveEvidenceFolderLink || '').replace(/"/g, '""')}"`,
-      `"${a.completedAt}"`,
-    ])
+    const csvCell = (val: unknown) => {
+      let s = String(val ?? '')
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+      return `"${s.replace(/"/g, '""')}"`
+    }
+
+    const rows = rankedAttempts.map((a) => {
+      const email = a.studentEmail || ''
+      return [
+        a.rank,
+        csvCell(a.studentName || email.split('@')[0] || ''),
+        csvCell(email),
+        csvCell(a.department || ''),
+        csvCell(a.rollNumber || ''),
+        a.score,
+        a.maxScore,
+        `${a.percentage}%`,
+        a.passed ? 'PASSED' : 'FAILED',
+        csvCell(formatDuration(a.timeSpentSeconds)),
+        `${a.calculatedIntegrity}%`,
+        a.violationCount,
+        csvCell(a.driveEvidenceFolderLink || ''),
+        csvCell(a.completedAt),
+      ]
+    })
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -828,7 +837,7 @@ export function QuizLeaderboardModal({
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 240, overflowY: 'auto' }}>
                                       {quiz.questions.map((q, qIdx) => {
                                         const candidateChoice = attempt.answers?.[q.id] ?? attempt.answers?.[`q-${qIdx}`] ?? attempt.answers?.[String(qIdx)] ?? attempt.answers?.[qIdx]
-                                        const isCorrect = candidateChoice === q.correctIndex
+                                        const isCorrect = typeof q.correctIndex === 'number' && candidateChoice === q.correctIndex
                                         return (
                                           <div
                                             key={q.id || qIdx}

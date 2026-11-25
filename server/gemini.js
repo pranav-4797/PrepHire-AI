@@ -31,9 +31,17 @@ const aiCallLog = new Map()
 export function isRateLimited(key) {
   const now = Date.now()
   const calls = (aiCallLog.get(key) || []).filter((t) => now - t < AI_RATE_WINDOW_MS)
+  if (calls.length >= AI_RATE_LIMIT) {
+    aiCallLog.set(key, calls)
+    return true
+  }
+  if (aiCallLog.size >= 5000 && !aiCallLog.has(key)) {
+    const oldestKey = aiCallLog.keys().next().value
+    if (oldestKey !== undefined) aiCallLog.delete(oldestKey)
+  }
   calls.push(now)
   aiCallLog.set(key, calls)
-  return calls.length > AI_RATE_LIMIT
+  return false
 }
 
 // Drop idle keys so the Map doesn't leak one entry per user forever.

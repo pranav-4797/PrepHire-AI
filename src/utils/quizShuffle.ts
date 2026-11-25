@@ -110,6 +110,7 @@ export function generateShuffledQuiz(
 
     return {
       ...q,
+      id: q.id || `q-${originalIndex}`,
       originalQuestionIndex: originalIndex,
       options: finalOptions,
       correctIndex:

@@ -27,33 +27,37 @@ export async function extractResumeText(file: File): Promise<string> {
   const doc = await getDocument({ data: buffer }).promise
   let fullText = ''
 
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i)
-    const content = await page.getTextContent()
-    let lastY: number | null = null
-    let pageText = ''
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i)
+      const content = await page.getTextContent()
+      let lastY: number | null = null
+      let pageText = ''
 
-    for (const item of content.items) {
-      if (!('str' in item)) continue
-      const str = item.str
-      if (!str) continue
+      for (const item of content.items) {
+        if (!('str' in item)) continue
+        const str = item.str
+        if (!str) continue
 
-      const transform = item.transform
-      const y = transform ? transform[5] : null
+        const transform = item.transform
+        const y = transform ? transform[5] : null
 
-      // If Y coordinate drops significantly (new line in visual layout)
-      if (lastY !== null && y !== null && Math.abs(y - lastY) > 4) {
-        pageText += '\n' + str
-      } else if (item.hasEOL) {
-        pageText += (pageText ? ' ' : '') + str + '\n'
-      } else {
-        pageText += (pageText && !pageText.endsWith('\n') ? ' ' : '') + str
+        // If Y coordinate drops significantly (new line in visual layout)
+        if (lastY !== null && y !== null && Math.abs(y - lastY) > 4) {
+          pageText += '\n' + str
+        } else if (item.hasEOL) {
+          pageText += (pageText ? ' ' : '') + str + '\n'
+        } else {
+          pageText += (pageText && !pageText.endsWith('\n') ? ' ' : '') + str
+        }
+        if (y !== null) lastY = y
       }
-      if (y !== null) lastY = y
-    }
 
-    fullText += pageText.trim() + '\n\n'
-    if (fullText.length >= MAX_RESUME_CHARS) break
+      fullText += pageText.trim() + '\n\n'
+      if (fullText.length >= MAX_RESUME_CHARS) break
+    }
+  } finally {
+    await (doc as unknown as { destroy?: () => Promise<void> })?.destroy?.().catch(() => {})
   }
 
   return fullText.trim().slice(0, MAX_RESUME_CHARS)

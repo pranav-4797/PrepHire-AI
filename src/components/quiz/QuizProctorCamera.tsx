@@ -10,10 +10,14 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Camera, AlertTriangle, ShieldCheck, UserX, Users, Smartphone, Mic } from 'lucide-react'
 import type { SuspiciousFlag } from '../../types/quiz'
 import { getCachedProctorModels, setCachedProctorModels } from '../../utils/proctorPrewarm'
+import { checkCameraHealth } from '../../utils/cameraMonitor'
+
+const CAMERA_BLOCK_LIMIT_SECONDS = 10
 
 interface QuizProctorCameraProps {
   active: boolean
   onFlag: (reason: string, type?: SuspiciousFlag['type'], snapshot?: string) => void
+  onCameraBlockedTimeout?: (reason: string) => void
   onFaceStatusChange?: (status: 'verified' | 'missing' | 'multiple' | 'phone' | 'detecting') => void
   compact?: boolean
   stealthMode?: boolean // If true (default true), never reveals flags or warnings to the candidate
@@ -24,6 +28,7 @@ interface QuizProctorCameraProps {
 export function QuizProctorCamera({
   active,
   onFlag,
+  onCameraBlockedTimeout,
   onFaceStatusChange,
   compact = false,
   stealthMode = true,
@@ -44,14 +49,21 @@ export function QuizProctorCamera({
   const multiplePersonsStreakRef = useRef<number>(0)
   const lastFaceSeenRef = useRef<number>(0)
   const lastWarnTimesRef = useRef<Record<string, number>>({})
+  const cameraHealthFailStreakRef = useRef<number>(0)
+  const cameraBlockedSinceRef = useRef<number | null>(null)
+  const cameraBlockFlaggedRef = useRef<boolean>(false)
+  const cameraBlockTimeoutFiredRef = useRef<boolean>(false)
+  const activeRunIdRef = useRef<number>(0)
 
   const onFlagRef = useRef(onFlag)
+  const onCameraBlockedTimeoutRef = useRef(onCameraBlockedTimeout)
   const onFaceStatusChangeRef = useRef(onFaceStatusChange)
   const onRegisterCaptureRef = useRef(onRegisterCapture)
   const onRegisterMediaStreamRef = useRef(onRegisterMediaStream)
 
   useEffect(() => {
     onFlagRef.current = onFlag
+    onCameraBlockedTimeoutRef.current = onCameraBlockedTimeout
     onFaceStatusChangeRef.current = onFaceStatusChange
     onRegisterCaptureRef.current = onRegisterCapture
     onRegisterMediaStreamRef.current = onRegisterMediaStream
@@ -61,6 +73,8 @@ export function QuizProctorCamera({
   const [faceStatus, setFaceStatus] = useState<'verified' | 'missing' | 'multiple' | 'phone' | 'detecting'>('detecting')
   const [violationCount, setViolationCount] = useState(0)
   const [_lastWarning, setLastWarning] = useState<string | null>(null)
+  const [cameraBlockSecondsLeft, setCameraBlockSecondsLeft] = useState<number | null>(null)
+  const [cameraBlockMessage, setCameraBlockMessage] = useState<string | null>(null)
   const lastCapturedFrameRef = useRef<string | undefined>(undefined)
 
   // Forensic snapshot capture - Ultra-optimized downscale (200x150 @ 0.38 JPEG)
@@ -104,6 +118,7 @@ export function QuizProctorCamera({
 
   // Initialize camera & microphone stream
   const startCamera = useCallback(async () => {
+    const runId = ++activeRunIdRef.current
     setCamStatus('requesting')
     let stream: MediaStream | null = null
 
@@ -127,10 +142,16 @@ export function QuizProctorCamera({
           audio: false,
         })
       } catch (err) {
+        if (runId !== activeRunIdRef.current) return
         console.warn('Camera access denied or unavailable:', err)
         setCamStatus('error')
         return
       }
+    }
+
+    if (runId !== activeRunIdRef.current) {
+      stream?.getTracks().forEach((t) => t.stop())
+      return
     }
 
     streamRef.current = stream
@@ -198,6 +219,7 @@ export function QuizProctorCamera({
   }, [captureSnapshot, triggerViolation])
 
   const stopCamera = useCallback(() => {
+    activeRunIdRef.current += 1
     onRegisterMediaStreamRef.current?.(null)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
@@ -208,10 +230,13 @@ export function QuizProctorCamera({
     }
     if (ivRef.current) {
       clearInterval(ivRef.current)
+      ivRef.current = null
     }
     if (audioIvRef.current) {
       clearInterval(audioIvRef.current)
+      audioIvRef.current = null
     }
+    analyserRef.current = null
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {})
       audioCtxRef.current = null
@@ -399,6 +424,77 @@ export function QuizProctorCamera({
     }
   }, [active, camStatus, triggerViolation, captureSnapshot])
 
+  // Continuous Camera Health & Obstruction Monitor (10s auto-close on block/off/black)
+  useEffect(() => {
+    if (!active || (camStatus !== 'active' && camStatus !== 'error')) {
+      cameraHealthFailStreakRef.current = 0
+      cameraBlockedSinceRef.current = null
+      cameraBlockFlaggedRef.current = false
+      if (!active) cameraBlockTimeoutFiredRef.current = false
+      setCameraBlockSecondsLeft(null)
+      setCameraBlockMessage(null)
+      return
+    }
+
+    const evaluateHealth = () => {
+      const result =
+        camStatus === 'error'
+          ? {
+              ok: false,
+              reason: 'permission_denied' as const,
+              message: 'Camera access blocked or unavailable',
+            }
+          : checkCameraHealth(videoRef.current, streamRef.current)
+
+      if (result.ok) {
+        cameraHealthFailStreakRef.current = 0
+        cameraBlockedSinceRef.current = null
+        cameraBlockFlaggedRef.current = false
+        cameraBlockTimeoutFiredRef.current = false
+        setCameraBlockSecondsLeft(null)
+        setCameraBlockMessage(null)
+        return
+      }
+
+      const immediate =
+        result.reason === 'permission_denied' ||
+        result.reason === 'track_ended' ||
+        result.reason === 'track_muted'
+
+      cameraHealthFailStreakRef.current += 1
+      if (!immediate && cameraHealthFailStreakRef.current < 2) {
+        return
+      }
+
+      const msg = result.message || 'Camera feed blocked or turned off'
+      const now = Date.now()
+
+      if (!cameraBlockFlaggedRef.current) {
+        cameraBlockFlaggedRef.current = true
+        const timestamp = new Date().toLocaleTimeString()
+        const snap = captureSnapshot()
+        triggerViolation(`Camera interrupted/blocked: ${msg} at ${timestamp}`, 'camera_blocked', snap)
+      }
+
+      if (cameraBlockedSinceRef.current === null) {
+        cameraBlockedSinceRef.current = now
+      }
+
+      const elapsedSec = Math.floor((now - cameraBlockedSinceRef.current) / 1000)
+      const remaining = Math.max(0, CAMERA_BLOCK_LIMIT_SECONDS - elapsedSec)
+      setCameraBlockSecondsLeft(remaining)
+      setCameraBlockMessage(msg)
+
+      if (remaining <= 0 && !cameraBlockTimeoutFiredRef.current) {
+        cameraBlockTimeoutFiredRef.current = true
+        onCameraBlockedTimeoutRef.current?.(msg)
+      }
+    }
+
+    const healthIv = setInterval(evaluateHealth, 1000)
+    return () => clearInterval(healthIv)
+  }, [active, camStatus, captureSnapshot, triggerViolation])
+
   const statusConfig = {
     verified: {
       label: stealthMode ? 'Proctor Active' : 'Face Verified',
@@ -444,16 +540,23 @@ export function QuizProctorCamera({
           padding: '0.85rem',
           borderRadius: 8,
           background: '#FEF2F2',
-          border: '1px solid #FECACA',
+          border: '2px solid #DC2626',
           fontSize: '0.78rem',
           color: '#991B1B',
           display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
+          flexDirection: 'column',
+          gap: '0.4rem',
         }}
       >
-        <AlertTriangle size={16} />
-        <span>Camera & audio permission required for proctored assessment.</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
+          <AlertTriangle size={16} />
+          <span>Camera &amp; audio permission required for proctored assessment.</span>
+        </div>
+        {cameraBlockSecondsLeft !== null && (
+          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#DC2626' }}>
+            Closing assessment in {cameraBlockSecondsLeft}s unless camera is enabled.
+          </div>
+        )}
       </div>
     )
   }
@@ -565,6 +668,32 @@ export function QuizProctorCamera({
           </div>
         )}
       </div>
+
+      {/* Camera Block / Interruption Countdown Warning */}
+      {cameraBlockSecondsLeft !== null && (
+        <div
+          role="alert"
+          style={{
+            padding: '0.55rem 0.65rem',
+            borderRadius: 6,
+            background: '#FEF2F2',
+            border: '2px solid #DC2626',
+            color: '#991B1B',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            lineHeight: 1.35,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.4rem',
+          }}
+        >
+          <AlertTriangle size={14} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            {cameraBlockMessage || 'Camera blocked or turned off.'} Assessment will close in{' '}
+            <strong>{cameraBlockSecondsLeft}s</strong>!
+          </span>
+        </div>
+      )}
 
       {/* Reassuring Candidate Guidance Note */}
       <div

@@ -64,10 +64,9 @@ export async function hydrateQuestionBank(forceRefresh = false): Promise<Questio
       const snapshot = await getDocs(collection(db, QUESTIONS_COLL))
       const records = snapshot.docs
         .map((d) => mapDoc(d.id, d.data() as Record<string, unknown>))
-        .filter((r) => r.active !== false)
       bankCache = records
       bankCacheAt = Date.now()
-      return records
+      return records.filter((r) => r.active !== false)
     } catch (err) {
       console.error('Failed to hydrate interview question bank:', err)
       return bankCache ?? []
@@ -85,7 +84,7 @@ export async function hydrateQuestionBank(forceRefresh = false): Promise<Questio
  * Kicks off a background hydration on first call so callers never block.
  */
 export function getActiveBankQuestions(): QuestionNode[] {
-  if (bankCache && bankCache.length > 0) return bankCache
+  if (bankCache && bankCache.length > 0) return bankCache.filter((r) => r.active !== false)
   if (!bankCache && !hydration) void hydrateQuestionBank()
   return QUESTION_BANK
 }
@@ -165,7 +164,7 @@ export async function listQuestions(options?: { forceRefresh?: boolean }): Promi
       .map((d) => mapDoc(d.id, d.data() as Record<string, unknown>))
       .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
 
-    bankCache = list.filter((r) => r.active !== false)
+    bankCache = list
     bankCacheAt = Date.now()
     return list
   } catch (err) {

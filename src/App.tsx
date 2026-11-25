@@ -53,6 +53,7 @@ import { SentenceBoundarySpeaker } from './utils/streamingVoice'
 import { sanitizeErrorMessage } from './utils/errorSanitizer'
 import { ErrorAlert } from './components/common/ErrorAlert'
 import { NotFoundPage } from './components/common/NotFoundPage'
+import { checkCameraHealth } from './utils/cameraMonitor'
 
 
 // ── DOMAINS ─────────────────────────────────────────────────────────────────
@@ -653,10 +654,12 @@ function RadarChart({ scores }: { scores: Record<string, number> }) {
 // ── PROCTORED CAMERA ─────────────────────────────────────────────────────────
 function ProctoredCamera({
   onWarning,
+  onCameraBlockedTimeout,
   active,
   onStreamReady,
 }: {
   onWarning?: (w: string) => void
+  onCameraBlockedTimeout?: (reason: string) => void
   active: boolean
   onStreamReady?: (stream: MediaStream) => void
 }) {
@@ -667,9 +670,19 @@ function ProctoredCamera({
   const [warnCount, setWarnCount] = useState(0)
   const [warnLog, setWarnLog] = useState<string[]>([])
   const [blurCount, setBlurCount] = useState(0)
+  const [cameraBlockSecondsLeft, setCameraBlockSecondsLeft] = useState<number | null>(null)
+  const [cameraBlockMessage, setCameraBlockMessage] = useState<string | null>(null)
   const lastFace = useRef(0)
   const ivRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const modelRef = useRef<any>(null)
+  const cameraHealthFailStreakRef = useRef(0)
+  const cameraBlockedSinceRef = useRef<number | null>(null)
+  const cameraBlockFlaggedRef = useRef(false)
+  const cameraBlockTimeoutFiredRef = useRef(false)
+  const onCameraBlockedTimeoutRef = useRef(onCameraBlockedTimeout)
+  useEffect(() => {
+    onCameraBlockedTimeoutRef.current = onCameraBlockedTimeout
+  })
 
   const addWarn = useCallback(
     (w: string) => {
@@ -719,8 +732,14 @@ function ProctoredCamera({
 
   useEffect(() => {
     if (!active) return
+    let lastBlurWarn = 0
     const onBlur = () => {
       setBlurCount((c) => c + 1)
+      const now = Date.now()
+      if (now - lastBlurWarn > 2000) {
+        lastBlurWarn = now
+        addWarn('Window focus lost / tab switch detected')
+      }
     }
     const onFocus = () => {
       const el = document.activeElement as HTMLInputElement | null
@@ -734,7 +753,7 @@ function ProctoredCamera({
       window.removeEventListener('blur', onBlur)
       window.removeEventListener('focus', onFocus)
     }
-  }, [active])
+  }, [active, addWarn])
 
   useEffect(() => {
     if (!active || camStatus !== 'active') {
@@ -804,6 +823,72 @@ function ProctoredCamera({
     ivRef.current = setInterval(runDetection, 5000)
     
     return () => { if (ivRef.current) clearInterval(ivRef.current) }
+  }, [active, camStatus, addWarn])
+
+  useEffect(() => {
+    if (!active || (camStatus !== 'active' && camStatus !== 'error')) {
+      cameraHealthFailStreakRef.current = 0
+      cameraBlockedSinceRef.current = null
+      cameraBlockFlaggedRef.current = false
+      setCameraBlockSecondsLeft(null)
+      setCameraBlockMessage(null)
+      return
+    }
+
+    const evaluateHealth = () => {
+      const result =
+        camStatus === 'error'
+          ? {
+              ok: false,
+              reason: 'permission_denied' as const,
+              message: 'Camera access blocked or unavailable',
+            }
+          : checkCameraHealth(videoRef.current, streamRef.current)
+
+      if (result.ok) {
+        cameraHealthFailStreakRef.current = 0
+        cameraBlockedSinceRef.current = null
+        cameraBlockFlaggedRef.current = false
+        setCameraBlockSecondsLeft(null)
+        setCameraBlockMessage(null)
+        return
+      }
+
+      const immediate =
+        result.reason === 'permission_denied' ||
+        result.reason === 'track_ended' ||
+        result.reason === 'track_muted'
+
+      cameraHealthFailStreakRef.current += 1
+      if (!immediate && cameraHealthFailStreakRef.current < 2) {
+        return
+      }
+
+      const msg = result.message || 'Camera feed blocked or turned off'
+      const now = Date.now()
+
+      if (!cameraBlockFlaggedRef.current) {
+        cameraBlockFlaggedRef.current = true
+        addWarn(`Camera interrupted/blocked: ${msg}`)
+      }
+
+      if (cameraBlockedSinceRef.current === null) {
+        cameraBlockedSinceRef.current = now
+      }
+
+      const elapsedSec = Math.floor((now - cameraBlockedSinceRef.current) / 1000)
+      const remaining = Math.max(0, 10 - elapsedSec)
+      setCameraBlockSecondsLeft(remaining)
+      setCameraBlockMessage(msg)
+
+      if (remaining <= 0 && !cameraBlockTimeoutFiredRef.current) {
+        cameraBlockTimeoutFiredRef.current = true
+        onCameraBlockedTimeoutRef.current?.(msg)
+      }
+    }
+
+    const healthIv = setInterval(evaluateHealth, 1000)
+    return () => clearInterval(healthIv)
   }, [active, camStatus, addWarn])
 
   const sc =
@@ -915,6 +1000,31 @@ function ProctoredCamera({
           </div>
         </div>
       </div>
+
+      {cameraBlockSecondsLeft !== null && (
+        <div
+          role="alert"
+          style={{
+            background: '#FEF2F2',
+            border: '2px solid #DC2626',
+            borderRadius: 8,
+            padding: '8px 10px',
+            color: '#991B1B',
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: 1.35,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 6,
+          }}
+        >
+          <AlertTriangle size={14} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            {cameraBlockMessage || 'Camera blocked or turned off.'} Interview closes in{' '}
+            <strong>{cameraBlockSecondsLeft}s</strong>!
+          </span>
+        </div>
+      )}
 
       {warnLog.length > 0 && (
         <div style={{ background: T.errCont, border: `1px solid ${T.error}44`, borderRadius: 8, padding: '6px 10px', maxHeight: 60, overflowY: 'auto' }}>
@@ -1664,7 +1774,7 @@ function Navbar({
               flexShrink: 0,
             }}
           >
-            {user.name[0].toUpperCase()}
+            {(user.name || 'U').charAt(0).toUpperCase()}
           </div>
           <button
             onClick={onLogout}
@@ -3290,7 +3400,12 @@ function AdminDashboard({
   }
 
   async function handleRoleChange(userId: string, newRole: string) {
-    await onRoleChange(userId, newRole as UserRole)
+    try {
+      await onRoleChange(userId, newRole as UserRole)
+      showToast('User role updated.', 'success')
+    } catch (err: any) {
+      showToast(sanitizeErrorMessage(err, 'Failed to update user role.'), 'error')
+    }
   }
 
   async function handleDeleteUser(userId: string, email?: string) {
@@ -3307,7 +3422,12 @@ function AdminDashboard({
   }
 
   async function handleDepartmentChange(userId: string, newDept: string) {
-    await onDepartmentChange(userId, newDept)
+    try {
+      await onDepartmentChange(userId, newDept)
+      showToast('User department updated.', 'success')
+    } catch (err: any) {
+      showToast(sanitizeErrorMessage(err, 'Failed to update user department.'), 'error')
+    }
   }
 
   const filteredUsers = users.filter((u) => {
@@ -3459,7 +3579,7 @@ function AdminDashboard({
                   Highest Scoring Candidates
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {allSessions
+                  {[...allSessions]
                     .sort((a, b) => b.score - a.score)
                     .slice(0, 3)
                     .map((s, idx) => (
@@ -4463,6 +4583,7 @@ export default function App() {
       isPopStateRef.current = false
       return
     }
+    if (screen === 'loading') return
     const targetPath = getUrlPath(screen, user?.role, studentTab, facultyTab, adminTab, publicQuizId)
     if (window.location.pathname.toLowerCase() !== targetPath.toLowerCase()) {
       window.history.pushState({ screen, studentTab, facultyTab, adminTab, publicQuizId }, '', targetPath)
@@ -4608,7 +4729,11 @@ export default function App() {
     let cancelled = false
 
     async function activateFirebaseUser() {
-      if (!profile) return
+      if (!profile) {
+        setUser(null)
+        setHistory([])
+        return
+      }
       const nextUser: User = {
         uid: profile.uid,
         name: profile.name,
@@ -4618,16 +4743,6 @@ export default function App() {
         sessionId: uid(),
       }
       setUser(nextUser)
-      const studentHistory = allSessions
-        .filter((s) => s.studentEmail.toLowerCase() === profile.email.toLowerCase())
-        .map((s) => ({
-          domain: s.domain,
-          level: s.level,
-          score: s.score,
-          date: s.date,
-          warnings: s.warnings,
-        }))
-      setHistory(studentHistory)
       const activePath = parsePathname(window.location.pathname)
       if (screen === 'auth' || screen === 'landing') {
         if (activePath.screen !== 'landing' && activePath.screen !== 'auth') {
@@ -4650,7 +4765,26 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [allSessions, profile, screen])
+  }, [profile, screen])
+
+  useEffect(() => {
+    if (!profile?.email) {
+      setHistory([])
+      return
+    }
+    const emailLower = profile.email.toLowerCase()
+    setHistory(
+      allSessions
+        .filter((s) => s.studentEmail.toLowerCase() === emailLower)
+        .map((s) => ({
+          domain: s.domain,
+          level: s.level,
+          score: s.score,
+          date: s.date,
+          warnings: s.warnings,
+        }))
+    )
+  }, [allSessions, profile?.email])
 
   useEffect(() => {
     if (!profile) return
@@ -4934,9 +5068,13 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
   const handleTimeUp = useCallback(async () => {
     stopSpeaking()
     setMessages((p) => [...p, { role: 'system', text: "Time's up! Moving to next question." }])
-    setSessionData((p) => [...p, { q: messages[messages.length - 1]?.text || '', a: '[Time expired]' }])
+    const nextSessionData = [
+      ...sessionData,
+      { q: messages[messages.length - 1]?.text || '', a: '[Time expired]' },
+    ]
+    setSessionData(nextSessionData)
     if (qCount >= 5) {
-      await generateReport(sessionData)
+      await generateReport(nextSessionData)
       return
     }
     setLoading(true)
@@ -5093,7 +5231,23 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
     })
   }, [showToast])
 
+  const handleInterviewCameraBlockedTimeout = useCallback(
+    (reason: string) => {
+      setTimerActive(false)
+      setIntroTimerActive(false)
+      stopSpeaking()
+      showToast(`Interview closed: ${reason} for 10 seconds.`, 'error')
+      if (screen === 'interview') {
+        void generateReport(sessionData)
+      } else {
+        setScreen('home')
+      }
+    },
+    [generateReport, screen, sessionData, showToast, stopSpeaking]
+  )
+
   async function handleLogout() {
+    stopSpeaking()
     await firebaseLogout()
     setUser(null)
     setHistory([])
@@ -5115,10 +5269,33 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
   }
 
   // ── Camera stream handler (for recording & visualizer) ───────────────────
-  const handleStreamReady = useCallback((stream: MediaStream) => {
-    cameraStreamRef.current = stream
-    setActiveMediaStream(stream)
-  }, [])
+  const handleStreamReady = useCallback(
+    (stream: MediaStream) => {
+      cameraStreamRef.current = stream
+      setActiveMediaStream(stream)
+      if (
+        screen === 'interview' &&
+        (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive')
+      ) {
+        try {
+          const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+            ? 'video/webm;codecs=vp9,opus'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+              ? 'video/webm;codecs=vp8,opus'
+              : 'video/webm'
+          const recorder = new MediaRecorder(stream, { mimeType })
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunksRef.current.push(e.data)
+          }
+          recorder.start(1000)
+          mediaRecorderRef.current = recorder
+        } catch (err) {
+          console.warn('MediaRecorder init failed:', err)
+        }
+      }
+    },
+    [screen]
+  )
 
   async function sendAnswer(ans: string) {
     if (!ans?.trim() || loading) return
@@ -6464,6 +6641,10 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
     )
   }
 
+  if (!user && (screen === 'intro' || screen === 'consent' || screen === 'interview' || screen === 'loading' || screen === 'report')) {
+    return <LoginScreen />
+  }
+
   // ── INTRO ───────────────────────────────────────────────────────────────
   if (screen === 'intro') {
     const im = introTimer > 60 ? T.green : introTimer > 30 ? T.amber : T.error
@@ -6592,7 +6773,12 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
               </div>
             </div>
 
-            <ProctoredCamera onWarning={handleProcWarn} active={screen === 'intro'} onStreamReady={handleStreamReady} />
+            <ProctoredCamera
+              onWarning={handleProcWarn}
+              onCameraBlockedTimeout={handleInterviewCameraBlockedTimeout}
+              active={screen === 'intro'}
+              onStreamReady={handleStreamReady}
+            />
           </div>
         </div>
       </div>
@@ -6918,7 +7104,12 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
           </GlassCard>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <ProctoredCamera onWarning={handleProcWarn} active={screen === 'interview'} onStreamReady={handleStreamReady} />
+            <ProctoredCamera
+              onWarning={handleProcWarn}
+              onCameraBlockedTimeout={handleInterviewCameraBlockedTimeout}
+              active={screen === 'interview'}
+              onStreamReady={handleStreamReady}
+            />
             <AudioVisualizer isListening={isCandidateListening} isSpeaking={speaking} stream={activeMediaStream} />
           </div>
         </div>
@@ -7253,7 +7444,7 @@ Scoring rubric — be strict and calibrated: 90-100 = senior-interviewer-ready, 
   )
 }
 
-  return null
+  return <LoginScreen />
 }
 
   return (
