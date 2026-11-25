@@ -26,6 +26,14 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 📱 **Mobile-First Layout Hardening (2026-11-26)**: Comprehensive layout-only responsiveness for all pages including landing, without changing a single colour or the design language.
+  - `overflow-x: clip` on `html, body` prevents sideways scroll while preserving `position: sticky` navbars.
+  - Inline `grid-template-columns` collapsed via attribute selectors at `<640px>`: `repeat(4,1fr)` / `repeat(3,1fr)` → 2 columns; `1fr 1fr`, `2fr 1fr`, `1fr 200px`, `320px 1fr`, `minmax(320px,1fr)` → 1 column. Coding problem row `40px 1fr 110px 1fr` stacks vertically.
+  - Tables inside `.portal-main` become `display:block; overflow-x:auto` for horizontal scroll when needed.
+  - Landing `.nb-nav` gains `flex-wrap: wrap` at `<420px` with reduced padding/logo size for tight phone screens.
+  - `body { overflow-wrap: break-word }` allows long words/URLs to wrap instead of overflowing.
+  - Full build + lint clean; no colours or design language altered, only responsive sizing and flow.
+
 - 🛡️ **Camera Tamper & Black-Frame Auto-Close Proctoring (`cameraMonitor.ts`, `QuizProctorCamera.tsx` & `App.tsx`)**:
   - **Continuous Camera Health Detection**: Detects black frames, covered/obstructed lenses, muted/ended video tracks, and permission revocation across both **Mock Interviews** and **Quizzes**.
   - **Immediate Flagging & 10-Second Warning Countdown**: Logs a `camera_blocked` proctoring flag immediately and displays a live 10-second countdown warning; if the camera is not restored within 10 seconds, the interview or quiz automatically closes and submits with a warning.
