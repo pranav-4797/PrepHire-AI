@@ -16,6 +16,27 @@
 
 ---
 
+## 📖 Table of Contents
+
+- [What is PrepHire.AI?](#-what-is-prephireai)
+- [What's New in the Latest Release](#-whats-new-in-the-latest-release)
+- [Getting Started](#-getting-started)
+- [Environment Variables](#-environment-variables)
+- [Project Structure](#-project-structure)
+- [API Reference](#-api-reference)
+- [Mobile Responsiveness](#-mobile-responsiveness)
+- [Troubleshooting](#-troubleshooting)
+- [Who is PrepHire.AI For?](#-who-is-prephireai-for)
+- [User Flows & How to Use](#-user-flows--how-to-use)
+- [Key Highlights](#-key-highlights)
+- [Supported Engineering Programs](#-supported-engineering-programs)
+- [System Architecture](#-system-architecture--enterprise-infrastructure)
+- [Enterprise Security & Governance](#-enterprise-security--governance)
+- [Contributing](#-contributing)
+- [Institutional Governance & Legal Notice](#-institutional-governance--legal-notice)
+
+---
+
 ## 🌟 What is PrepHire.AI?
 
 **PrepHire.AI** is an all-in-one placement preparation and assessment platform designed to help students build confidence and excel in campus placement drives. 
