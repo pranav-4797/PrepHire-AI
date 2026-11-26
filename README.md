@@ -414,6 +414,72 @@ flowchart TD
 
 ---
 
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Node.js 20+** (enforced via `engines` in `package.json`)
+- **npm** (ships with Node)
+- A **Firebase project** with Auth + Firestore enabled
+- A **Gemini API key** for AI interview/quiz features (NVIDIA NIM is used as an automatic fallback)
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/pranav-4797/PrepHire-AI.git
+cd PrepHire-AI
+```
+
+### 2. Install dependencies
+
+The client and the Express backend keep separate dependency trees:
+
+```bash
+npm install
+cd server
+npm install
+cd ..
+```
+
+### 3. Configure environment variables
+
+Add the values documented in [Environment Variables](#-environment-variables) to `.env.local` (client) and `server/.env` (backend). These files are git-ignored and must never be committed.
+
+### 4. Run in development
+
+```bash
+npm run dev
+```
+
+`concurrently` starts both processes:
+
+| Process | Command | URL |
+|:---|:---|:---|
+| Vite client | `npm run dev:client` | `http://localhost:5173` |
+| Express API | `npm run dev:server` | `http://localhost:3001` |
+
+Vite proxies every `/api` request to `http://localhost:3001`, so the client only ever talks to a same-origin API.
+
+### 5. Quality gates
+
+```bash
+npm run build   # tsc -b && vite build
+npm run lint    # eslint .
+```
+
+Both commands must finish with zero errors before a pull request is opened.
+
+### 6. Preview a production build
+
+```bash
+npm run build
+npm run preview
+```
+
+> **Firestore rules:** after changing `firestore.rules`, deploy them with `firebase deploy --only firestore:rules`. Several features (quiz attempts, question bank, course approvals) depend on the current rules.
+
+---
+
 ## 🏛️ Institutional Governance & Legal Notice
 
 **PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
