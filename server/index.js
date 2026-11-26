@@ -185,6 +185,14 @@ const codingExecLimiter = rateLimit({
   message: { error: 'Too many code runs from this network. Please wait a moment.' },
 })
 
+const quizEvalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many quiz evaluation requests. Please wait a moment.' },
+})
+
 // Multer: store uploads temporarily in server/uploads/ before sending to Drive
 const uploadsDir = path.resolve(serverDir, 'uploads')
 if (!fs.existsSync(uploadsDir)) {
@@ -524,7 +532,7 @@ async function decryptAnswerServer(cipherToken, quizId) {
   return null
 }
 
-app.post('/api/quiz/evaluate', aiLimiter, async (req, res) => {
+app.post('/api/quiz/evaluate', quizEvalLimiter, async (req, res) => {
   try {
     const { quizId, answers = {} } = req.body || {}
     if (typeof quizId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(quizId)) {
