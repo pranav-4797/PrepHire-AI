@@ -26,6 +26,10 @@ By combining conversational AI, resume intelligence, interactive code execution,
 
 ## 🆕 What's New in the Latest Release
 
+- 🧪 **Daily Maintenance & Full-Page Mobile Verification (2026-11-27)**: Re-verified the responsive hardening across landing, auth, student/faculty/admin dashboards, the quiz cockpit, coding arena and modals on 320–430px viewports.
+  - Confirmed no horizontal page scroll, sticky navbars intact, and fixed-column grids collapsing correctly.
+  - Expanded the project documentation with setup, environment variables, structure, API surface, mobile breakpoints and troubleshooting guides.
+
 - 📱 **Mobile-First Layout Hardening (2026-11-26)**: Comprehensive layout-only responsiveness for all pages including landing, without changing a single colour or the design language.
   - `overflow-x: clip` on `html, body` prevents sideways scroll while preserving `position: sticky` navbars.
   - Inline `grid-template-columns` collapsed via attribute selectors at `<640px>`: `repeat(4,1fr)` / `repeat(3,1fr)` → 2 columns; `1fr 1fr`, `2fr 1fr`, `1fr 200px`, `320px 1fr`, `minmax(320px,1fr)` → 1 column. Coding problem row `40px 1fr 110px 1fr` stacks vertically.
