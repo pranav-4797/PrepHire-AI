@@ -676,6 +676,43 @@ Many layouts are authored with inline `gridTemplateColumns`. On phones (`≤ 640
 
 ---
 
+## 🤝 Contributing
+
+### Workflow
+
+1. **Branch** from up-to-date `main`:
+   ```bash
+   git checkout main
+   git pull
+   git checkout -b feat/short-description
+   ```
+2. **Implement** the change and keep it focused — one concern per commit.
+3. **Verify** the quality gates locally:
+   ```bash
+   npm run build
+   npm run lint
+   ```
+   Both must pass with zero errors.
+4. **Document** user-facing changes by adding a bullet under `## 🆕 What's New in the Latest Release` in this README.
+5. **Commit** using Conventional Commit prefixes:
+   - `feat:` new capability
+   - `fix:` bug fix
+   - `perf:` performance improvement
+   - `docs:` documentation only
+   - `chore:` tooling or housekeeping
+   - `style:` formatting with no behaviour change
+6. **Open a pull request** against `main` describing the problem, the approach and how it was verified.
+
+### Conventions
+
+- **Styling:** inline `style={}` objects with tokens from `src/theme.ts` (`T.primary`, `T.gold`, ...). Do not hardcode colours; the mobile layer assumes tokens.
+- **Responsiveness:** treat `≤ 640px` as the phone baseline. Add new layout overrides to the `MOBILE HARDENING` block in `src/index.css` rather than scattering media queries.
+- **Security:** never commit `.env.local`, `server/.env` or `server/service-account.json`. New privileged endpoints must verify the Firebase ID token server-side.
+- **Accessibility:** interactive controls need an accessible label; respect the existing `prefers-reduced-motion` rule.
+- **Scope:** avoid drive-by refactors unrelated to the change under review.
+
+---
+
 ## 🏛️ Institutional Governance & Legal Notice
 
 **PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
