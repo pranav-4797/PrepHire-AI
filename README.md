@@ -656,6 +656,26 @@ Many layouts are authored with inline `gridTemplateColumns`. On phones (`≤ 640
 
 ---
 
+## 🧯 Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|:---|:---|:---|
+| `FirebaseError: Missing or insufficient permissions` | Firestore rules not deployed or stale | `firebase deploy --only firestore:rules` |
+| AI features return 401/403 | Missing or expired Firebase ID token | Sign out/in; confirm `VITE_FIREBASE_*` values |
+| AI requests fail with quota errors | Gemini quota exhausted | The backend automatically falls back to NVIDIA NIM; set `NVIDIA_API_KEY` |
+| Resume parsing fails to start | pdf.js worker not resolving | Keep the `pdf.worker.min.mjs?url` import in `src/utils/resume.ts`; do not switch to a CDN worker |
+| Video upload silently skipped | No service-account configured | Add `server/service-account.json` or `GOOGLE_SERVICE_ACCOUNT`; otherwise uploads run in mock mode |
+| Code submissions time out | Judge provider unreachable | Check `GET /api/coding/judge-status`; set `JUDGE_PROVIDER` to `piston` or `judge0`, or enable the local adapter |
+| Deep links 404 on refresh | Hosting rewrite missing | Keep the `** → /index.html` rewrite in `firebase.json` |
+| Stale HTML after deploy | Browser/CDN caching | Ensure the `Cache-Control: no-cache` hosting headers remain configured |
+| `npm run build` fails on TypeScript | Type error introduced | Run `npx tsc -b` for the full trace; fix before committing |
+| `npm run lint` fails | Unused vars / hooks rules | Fix or justify; CI expects zero errors |
+| Layout scrolls sideways on a phone | A new fixed-width element overflowed | Add a mobile override in the `MOBILE HARDENING` section of `src/index.css` |
+
+> **No test runner is configured.** Behavioural verification is manual: run `npm run dev`, exercise the flow, then confirm `npm run build` and `npm run lint` are clean.
+
+---
+
 ## 🏛️ Institutional Governance & Legal Notice
 
 **PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
