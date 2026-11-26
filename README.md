@@ -480,6 +480,50 @@ npm run preview
 
 ---
 
+## ⚙️ Environment Variables
+
+Client variables **must** use the `VITE_` prefix, otherwise Vite will not expose them to the browser. Client values live in `.env.local`; backend values live in `server/.env`.
+
+### Client — `.env.local`
+
+| Variable | Purpose |
+|:---|:---|
+| `VITE_FIREBASE_API_KEY` | Firebase Web API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase Auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | Firestore project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase Storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Cloud Messaging sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase application ID |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics measurement ID |
+| `VITE_API_URL` | Optional API base URL (defaults to same-origin `/api`) |
+
+### Server — `server/.env`
+
+| Variable | Default | Purpose |
+|:---|:---|:---|
+| `PORT` | `3001` | Express API port |
+| `CORS_ORIGIN` | `http://localhost:5173` | Allowed browser origin |
+| `TRUST_PROXY` | `1` | Express `trust proxy` setting (set to `0` to disable) |
+| `GEMINI_API_KEY` | — | Primary AI provider key |
+| `GEMINI_MODEL` | provider default | Override the Gemini model |
+| `NVIDIA_API_KEY` | — | NVIDIA NIM fallback key |
+| `NVIDIA_KEY_META` / `NVIDIA_KEY_NEMOTRON` / `NVIDIA_KEY_QWEN` | — | Optional per-model NIM keys |
+| `NVIDIA_MODEL` | `meta/llama-3.1-8b-instruct` | NIM model override |
+| `NVIDIA_BASE_URL` | provider default | NIM base URL override |
+| `GOOGLE_SHARED_DRIVE_FOLDER_ID` | — | Drive folder that receives uploads |
+| `GOOGLE_SERVICE_ACCOUNT` | — | Inline service-account JSON |
+| `GOOGLE_SERVICE_ACCOUNT_PATH` | `./service-account.json` | Path to service-account JSON |
+| `JUDGE_PROVIDER` | `auto` | `auto` / `judge0` / `piston` / `local` |
+| `JUDGE0_API_URL` | — | Judge0 execution endpoint |
+| `PISTON_API_URL` | public demo instance | Piston execution endpoint |
+| `VIDEO_RETENTION_DAYS` | — | Recording retention window |
+| `ALLOW_INSECURE_DEV_AUTH` | — | Local-only auth bypass (never in production) |
+| `DEV_AUTH_ROLE` | — | Role used with the local auth bypass |
+
+> **Security:** `.env.local`, `server/.env` and `server/service-account.json` contain live credentials and are git-ignored. Never commit them or paste their contents into issues.
+
+---
+
 ## 🏛️ Institutional Governance & Legal Notice
 
 **PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
