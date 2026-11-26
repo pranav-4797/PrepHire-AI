@@ -574,6 +574,53 @@ PrepHire-AI/
 
 ---
 
+## 🔌 API Reference
+
+All routes are served by the Express backend. In development Vite proxies `/api` to `http://localhost:3001`. Protected routes expect a Firebase ID token:
+
+```http
+Authorization: Bearer <firebase-id-token>
+```
+
+The backend resolves the caller's identity and role from Firestore — clients cannot assert their own role.
+
+### Core API
+
+| Method | Endpoint | Access | Purpose |
+|:---|:---|:---|:---|
+| `GET` | `/api/health` | Public | Liveness probe |
+| `POST` | `/api/ai/generate` | Authenticated | One-shot AI completion (Gemini → NVIDIA failover) |
+| `POST` | `/api/ai/stream` | Authenticated | SSE token stream for low-latency voice synthesis |
+| `POST` | `/api/upload` | Authenticated | Multipart video upload → transcode → Google Drive |
+| `GET` | `/api/drive/queue-status` | Admin | Drive upload queue diagnostics |
+| `POST` | `/api/quiz/evaluate` | Rate-limited | Server-side quiz scoring with answer validation |
+| `GET` | `/api/courses` | Authenticated | List courses |
+| `GET` | `/api/courses/:id` | Authenticated | Read one course |
+| `POST` / `PUT` / `DELETE` | `/api/courses[/:id]` | Faculty / Admin | Create, update or delete courses |
+
+### Coding API — `/api/coding`
+
+| Method | Endpoint | Access | Purpose |
+|:---|:---|:---|:---|
+| `GET` | `/languages` | Public | Supported languages and runtime metadata |
+| `GET` | `/judge-status` | Admin | Active judge provider diagnostics |
+| `GET` | `/problems` | Public / optional | List published problems |
+| `GET` | `/problems/:id` | Public / optional | Problem detail (hidden tests stripped) |
+| `POST` | `/generate-problem` | Faculty / Admin | AI problem generation, pre-validated with Piston |
+| `POST` | `/problems` | Faculty / Admin | Create a problem |
+| `PUT` / `DELETE` | `/problems/:id` | Faculty / Admin | Update or delete a problem |
+| `POST` | `/problems/:id/run` | Authenticated | Run code against visible sample tests |
+| `POST` | `/problems/:id/submit` | Authenticated | Submit against the full judge suite |
+| `POST` | `/problems/:id/submit-stream` | Authenticated | SSE per-test judge progress |
+| `POST` | `/problems/:id/review` | Authenticated | AI code review |
+| `GET` | `/submissions` | Authenticated | Submission history |
+| `GET` | `/submissions/:id` | Authenticated | Single submission detail |
+| `GET` | `/dashboard/:email` | Authenticated | Coding dashboard aggregates |
+
+All paths above are relative to `/api/coding` (for example, `GET /api/coding/languages`).
+
+---
+
 ## 🏛️ Institutional Governance & Legal Notice
 
 **PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
