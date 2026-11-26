@@ -524,6 +524,56 @@ Client variables **must** use the `VITE_` prefix, otherwise Vite will not expose
 
 ---
 
+## 🗂️ Project Structure
+
+```text
+PrepHire-AI/
+├── src/
+│   ├── App.tsx                 # Landing, auth, student/faculty/admin dashboards, interview, coding, quizzes
+│   ├── index.css               # Global theme + responsive/mobile hardening layer
+│   ├── theme.ts                # Design tokens (import T instead of hardcoding colours)
+│   ├── components/
+│   │   ├── quiz/               # Quiz hub, player, proctoring camera, leaderboard, result modal
+│   │   ├── coding/             # Problem list/workspace/editor, dashboard, judge progress UI
+│   │   ├── interview/          # Question bank manager, AudioVisualizer
+│   │   └── ...                 # ErrorAlert, ErrorBoundary, CookieBanner and other shared UI
+│   ├── context/                # Auth context state
+│   ├── hooks/                  # useAuth, useSidebar, ...
+│   ├── services/               # Firestore, quiz and coding API clients
+│   ├── utils/                  # Resume parsing, ATS, quiz parser/shuffle/cipher, DOCX export
+│   ├── constants/              # Branch catalogue, company hiring tracks
+│   └── types/                  # Shared TypeScript types
+├── server/
+│   ├── index.js                # Express app: AI proxy, upload, courses, quiz evaluation
+│   ├── gemini.js / nvidia.js   # AI providers with automatic failover
+│   ├── driveQueue.js           # Serialized Google Drive upload queue
+│   ├── coding/                 # Problem CRUD + judge adapters (Judge0 / Piston / local)
+│   └── uploads/                # JSON persistence for courses, problems and submissions
+├── public/                     # Static assets (favicon, ...)
+├── index.html                  # Vite entry + viewport meta
+├── vite.config.ts              # Dev `/api` proxy + manual vendor chunking
+├── firestore.rules             # Role and branch access rules
+└── firebase.json               # Hosting config + SPA rewrites
+```
+
+### Key files
+
+| File | Responsibility |
+|:---|:---|
+| `src/App.tsx` | All UI screens and view state (monolithic, ~5.5k lines) |
+| `src/index.css` | Neo-brutalist theme, sidebar/drawer and mobile breakpoints |
+| `src/theme.ts` | Colour/spacing tokens — use these instead of literal colours |
+| `server/index.js` | Express API, auth middleware and AI proxy |
+| `server/coding/routes.js` | Coding platform REST API |
+| `server/coding/judge.js` | Sandboxed judge with multi-verdict support |
+| `src/services/firestore.service.ts` | Users, sessions, courses persistence |
+| `src/utils/quizDocParser.ts` | DOCX/PDF/image → MCQ parser |
+| `src/utils/resume.ts` | Client-side PDF extraction + profile analysis |
+| `vite.config.ts` | Dev proxy, chunk splitting |
+| `firestore.rules` | Zero-trust Firestore access control |
+
+---
+
 ## 🏛️ Institutional Governance & Legal Notice
 
 **PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
