@@ -621,6 +621,41 @@ All paths above are relative to `/api/coding` (for example, `GET /api/coding/lan
 
 ---
 
+## 📱 Mobile Responsiveness
+
+The interface is fully responsive across phone, tablet and desktop. Responsiveness is **layout-only** — colours, typography and the neo-brutalist design language never change between breakpoints.
+
+### Breakpoints
+
+| Width | What changes |
+|:---|:---|
+| `≤ 860px` | Portal sidebar becomes a fixed slide-in drawer with a scrim; `.portal-layout` switches to a column flow |
+| `≤ 768px` | Wide statistics grids drop from four columns to two |
+| `≤ 760px` | Landing navigation links are hidden, keeping the logo and portal button |
+| `≤ 640px` | Navbar compacts, fixed inline grids collapse (see below), wide tables scroll horizontally, fixed `min-width` controls shrink |
+| `≤ 520px` | The navbar feedback button is hidden to free up space |
+| `≤ 440px` | Coding statistics grid drops to a single column |
+| `≤ 420px` | Landing navbar wraps to a second row; hero band and stat padding tighten |
+
+### Inline grid hardening
+
+Many layouts are authored with inline `gridTemplateColumns`. On phones (`≤ 640px`) a targeted CSS layer in `src/index.css` collapses them without touching every component:
+
+- `repeat(4, 1fr)` and `repeat(3, 1fr)` → **two columns**
+- `1fr 1fr`, `2fr 1fr`, `1fr 200px`, `320px 1fr`, `minmax(320px, 1fr)` → **one column**
+- The coding problem row (`40px 1fr 110px 1fr`) stacks vertically
+
+### Global overflow safety
+
+- `html, body { max-width: 100%; overflow-x: clip }` — no sideways page scroll; `clip` (not `hidden`) keeps sticky navbars working
+- `img, video, canvas, iframe { max-width: 100% }` — media never overflows
+- `body { overflow-wrap: break-word }` — long words and URLs wrap
+- Tables inside `.portal-main` fall back to `display: block; overflow-x: auto` so they scroll instead of breaking the layout
+
+> To verify a change, use a 320–430px viewport and confirm there is no horizontal scrollbar while the desktop layout is unchanged above 640px.
+
+---
+
 ## 🏛️ Institutional Governance & Legal Notice
 
 **PrepHire.AI** is an institutional placement preparation and assessment platform developed exclusively for **MIT Academy of Engineering (MIT AoE), Alandi (Pune)** — Placement & Career Development Cell.
